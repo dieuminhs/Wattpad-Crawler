@@ -43,3 +43,10 @@ select = ["E", "F", "I", "UP", "W"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["wattpad_crawler"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["wattpad_crawler"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"wattpad_crawler/web/templates" = "wattpad_crawler/web/templates"
+"wattpad_crawler/web/static" = "wattpad_crawler/web/static"
