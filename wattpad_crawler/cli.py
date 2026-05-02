@@ -3,10 +3,13 @@ import logging
 import sys
 from pathlib import Path
 
+import uvicorn
+
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.client import RateLimitedClient
 from wattpad_crawler.config import load_config
 from wattpad_crawler.jobs import archive_many, archive_story, resolve_story_id
+from wattpad_crawler.web.app import build_app
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp_url.add_argument("target", help="Any Wattpad URL")
 
     sub.add_parser("status", help="Show archive status")
+    sp_serve = sub.add_parser("serve", help="Run the local web UI")
+    sp_serve.add_argument("--host", default="127.0.0.1")
+    sp_serve.add_argument("--port", type=int, default=8000)
     return p
 
 
@@ -86,6 +92,14 @@ def main(argv: list[str] | None = None) -> int:
             archive_many(cfg, client, manifest, ids)
         elif args.cmd == "status":
             _print_status(manifest)
+        elif args.cmd == "serve":
+            # serve owns its own client/manifest lifecycle inside JobRunner threads;
+            # close the ones main() opened so we don't leak them.
+            manifest.close()
+            client.close()
+            app = build_app(cfg)
+            uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+            return 0
         return 0
     finally:
         manifest.close()

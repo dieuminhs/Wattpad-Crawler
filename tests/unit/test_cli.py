@@ -130,3 +130,32 @@ def test_main_status_does_not_make_network_calls(output_dir, monkeypatch, capsys
     out = capsys.readouterr().out
     assert "Stories:" in out
     assert "Parts:" in out
+
+
+def test_parser_serve_command():
+    parser = build_parser()
+    args = parser.parse_args(["serve"])
+    assert args.cmd == "serve"
+    assert args.host == "127.0.0.1"
+    assert args.port == 8000
+
+
+def test_parser_serve_with_custom_host_port():
+    parser = build_parser()
+    args = parser.parse_args(["serve", "--host", "0.0.0.0", "--port", "9000"])
+    assert args.host == "0.0.0.0"
+    assert args.port == 9000
+
+
+def test_main_serve_invokes_uvicorn(output_dir, monkeypatch):
+    captured = {}
+
+    def fake_run(app, host, port, log_level):
+        captured["host"] = host
+        captured["port"] = port
+
+    monkeypatch.setattr("uvicorn.run", fake_run)
+    rc = main(["--output", str(output_dir), "serve", "--host", "127.0.0.1", "--port", "9000"])
+    assert rc == 0
+    assert captured["host"] == "127.0.0.1"
+    assert captured["port"] == 9000
