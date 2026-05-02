@@ -1,0 +1,30 @@
+{
+  "comments": [
+    {
+      "id": "c1",
+      "user": {"name": "bob"},
+      "body": "Loved this chapter!",
+      "createdAt": "2026-04-30T11:00:00Z",
+      "paragraphId": "p_42",
+      "replies": [
+        {
+          "id": "c1r1",
+          "user": {"name": "alice"},
+          "body": "Thanks!",
+          "createdAt": "2026-04-30T12:00:00Z",
+          "paragraphId": null,
+          "replies": []
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "user": {"name": "carol"},
+      "body": "When's the next?",
+      "createdAt": "2026-04-30T13:00:00Z",
+      "paragraphId": null,
+      "replies": []
+    }
+  ],
+  "nextUrl": null
+}
