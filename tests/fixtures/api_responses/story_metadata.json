@@ -1,0 +1,26 @@
+{
+  "id": "123456789",
+  "title": "Shadow & Bone Rewrite",
+  "user": { "name": "alice" },
+  "description": "What if the Darkling won?",
+  "cover": "https://img.wattpad.com/cover/123.jpg",
+  "tags": ["grishaverse", "fantasy"],
+  "modifyDate": "2026-04-30T10:00:00Z",
+  "voteCount": 1234,
+  "readCount": 56789,
+  "completed": false,
+  "parts": [
+    {
+      "id": "1001",
+      "title": "Chapter One",
+      "url": "https://www.wattpad.com/1001-chapter-one",
+      "modifyDate": "2026-04-29T10:00:00Z"
+    },
+    {
+      "id": "1002",
+      "title": "Chapter Two",
+      "url": "https://www.wattpad.com/1002-chapter-two",
+      "modifyDate": "2026-04-30T10:00:00Z"
+    }
+  ]
+}
