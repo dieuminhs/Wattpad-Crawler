@@ -68,9 +68,12 @@ def archive_story(
     manifest.upsert_parts(story)
     store.write_story_metadata(cfg.output_dir, story)
     if story.cover_url:
-        cover = deps.fetch_cover_bytes(client, story.cover_url)
-        if cover:
-            store.write_cover(cfg.output_dir, story, cover)
+        try:
+            cover = deps.fetch_cover_bytes(client, story.cover_url)
+            if cover:
+                store.write_cover(cfg.output_dir, story, cover)
+        except Exception as e:
+            logger.warning("cover fetch failed for %s: %s", story.story_id, e)
 
     for part in story.parts:
         existing = manifest.get_part(story.story_id, part.part_id)
@@ -96,9 +99,12 @@ def archive_story(
             )
 
     sd = store.story_dir(cfg.output_dir, story)
-    try:
-        render_txt.render_txt(sd)
-        render_html.render_html(sd)
-        render_epub.render_epub(sd)
-    except Exception as e:
-        logger.exception("render failed for %s: %s", story.story_id, e)
+    for name, fn in (
+        ("txt", render_txt.render_txt),
+        ("html", render_html.render_html),
+        ("epub", render_epub.render_epub),
+    ):
+        try:
+            fn(sd)
+        except Exception as e:
+            logger.exception("render(%s) failed for %s: %s", name, story.story_id, e)
