@@ -45,3 +45,26 @@ def test_extract_chapter_skips_empty_paragraphs():
     # but excluded from `text` (no extra newlines).
     assert len(result.paragraphs) == 2
     assert result.text == "hi"
+
+
+def test_extract_chapter_handles_p_tags_not_just_pre():
+    """Wattpad has been observed using <p data-p-id> in some chapter layouts."""
+    html = """
+    <html><body><div class="page-container">
+      <p data-p-id="p1">First.</p>
+      <p data-p-id="p2">Second.</p>
+    </div></body></html>
+    """
+    result = extract_chapter(html)
+    assert "First." in result.text
+    assert "Second." in result.text
+    assert len(result.paragraphs) == 2
+
+
+def test_extract_chapter_logs_warning_when_no_paragraphs(caplog):
+    import logging
+    html = "<html><body><div class='page-container'><span>no data-p-id</span></div></body></html>"
+    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.scrape.chapter_html"):
+        result = extract_chapter(html)
+    assert result.text == ""
+    assert any("data-p-id" in rec.message for rec in caplog.records)
