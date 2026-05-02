@@ -192,3 +192,68 @@ def test_archive_many_collects_results(output_dir: Path):
     assert results["fail"].startswith("failed:")
     assert results["2"] == "done"
     manifest.close()
+
+
+def test_archive_story_emits_progress_events(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+    events: list[tuple[str, dict]] = []
+
+    archive_story(
+        cfg, fake_client, manifest, "42",
+        deps=deps,
+        progress=lambda kind, data: events.append((kind, data)),
+    )
+
+    kinds = [k for k, _ in events]
+    assert "story.start" in kinds
+    assert "part.start" in kinds
+    assert "part.done" in kinds
+    assert "story.done" in kinds
+    part_start = next(d for k, d in events if k == "part.start")
+    assert part_start["part_id"] == "100"
+    assert part_start["ordinal"] == 1
+    manifest.close()
+
+
+def test_archive_story_emits_part_failed_on_error(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+    deps.fetch_chapter_html.side_effect = RuntimeError("bad")
+    events: list[tuple[str, dict]] = []
+
+    archive_story(
+        cfg, fake_client, manifest, "42",
+        deps=deps,
+        progress=lambda kind, data: events.append((kind, data)),
+    )
+
+    kinds = [k for k, _ in events]
+    assert "part.failed" in kinds
+    failed = next(d for k, d in events if k == "part.failed")
+    assert "bad" in failed["error"]
+    manifest.close()
+
+
+def test_archive_story_progress_default_is_noop(output_dir: Path):
+    """Calling without a progress callback must still work (CLI path)."""
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(story_id="42", title="Hi", author_username="bob",
+                  parts=[Part(part_id="100", ordinal=1, title="One", url="https://w")])
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+    archive_story(cfg, fake_client, manifest, "42", deps=deps)  # no progress=
+    manifest.close()

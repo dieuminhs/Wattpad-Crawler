@@ -53,6 +53,13 @@ def _default_deps() -> JobDeps:
     )
 
 
+ProgressCallback = Callable[[str, dict], None]
+
+
+def _noop_progress(_kind: str, _data: dict) -> None:
+    pass
+
+
 def archive_story(
     cfg: Config,
     client: RateLimitedClient,
@@ -60,10 +67,19 @@ def archive_story(
     story_id: str,
     *,
     deps: JobDeps | None = None,
+    progress: ProgressCallback | None = None,
 ) -> None:
     deps = deps or _default_deps()
+    emit = progress or _noop_progress
     logger.info("Archiving story %s", story_id)
+    emit("story.fetch", {"story_id": story_id})
     story: Story = deps.fetch_story(client, story_id)
+    emit("story.start", {
+        "story_id": story.story_id,
+        "title": story.title,
+        "author": story.author_username,
+        "parts_total": len(story.parts),
+    })
 
     manifest.upsert_story(story)
     manifest.upsert_parts(story)
@@ -79,7 +95,13 @@ def archive_story(
     for part in story.parts:
         existing = manifest.get_part(story.story_id, part.part_id)
         if existing and existing["status"] == "done":
+            emit("part.skipped", {"part_id": part.part_id, "ordinal": part.ordinal})
             continue
+        emit("part.start", {
+            "part_id": part.part_id,
+            "ordinal": part.ordinal,
+            "title": part.title,
+        })
         manifest.set_part_status(story.story_id, part.part_id, "in_progress")
         try:
             raw_html = deps.fetch_chapter_html(client, part.url)
@@ -93,13 +115,21 @@ def archive_story(
             manifest.set_part_status(
                 story.story_id, part.part_id, "done", body_hash=body_hash,
             )
+            emit("part.done", {
+                "part_id": part.part_id,
+                "ordinal": part.ordinal,
+                "inline_comments": len(inline),
+                "end_comments": len(end),
+            })
         except Exception as e:
             logger.exception("part %s failed: %s", part.part_id, e)
             manifest.set_part_status(
                 story.story_id, part.part_id, "failed", last_error=str(e),
             )
+            emit("part.failed", {"part_id": part.part_id, "error": str(e)})
 
     sd = store.story_dir(cfg.output_dir, story)
+    emit("render.start", {"story_id": story.story_id})
     for name, fn in (
         ("txt", render_txt.render_txt),
         ("html", render_html.render_html),
@@ -109,6 +139,8 @@ def archive_story(
             fn(sd)
         except Exception as e:
             logger.exception("render(%s) failed for %s: %s", name, story.story_id, e)
+            emit("render.failed", {"format": name, "error": str(e)})
+    emit("story.done", {"story_id": story.story_id})
 
 
 class ResolveError(Exception):
@@ -145,14 +177,20 @@ def archive_many(
     story_ids: list[str],
     *,
     deps: JobDeps | None = None,
+    progress: ProgressCallback | None = None,
 ) -> dict[str, str]:
     """Archive a list of stories sequentially. Returns {story_id: status}."""
+    emit = progress or _noop_progress
     results: dict[str, str] = {}
-    for sid in story_ids:
+    emit("batch.start", {"total": len(story_ids), "story_ids": list(story_ids)})
+    for i, sid in enumerate(story_ids):
+        emit("batch.story", {"index": i, "total": len(story_ids), "story_id": sid})
         try:
-            archive_story(cfg, client, manifest, sid, deps=deps)
+            archive_story(cfg, client, manifest, sid, deps=deps, progress=progress)
             results[sid] = "done"
         except Exception as e:
             logger.exception("story %s failed: %s", sid, e)
             results[sid] = f"failed: {e}"
+            emit("batch.failed", {"story_id": sid, "error": str(e)})
+    emit("batch.done", {"results": results})
     return results
