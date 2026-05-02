@@ -1,6 +1,7 @@
 import threading
+import time
 
-from wattpad_crawler.web.runner import Job, JobManager, JobStatus, ProgressEvent
+from wattpad_crawler.web.runner import Job, JobManager, JobRunner, JobStatus, ProgressEvent
 
 
 def test_progress_event_holds_fields():
@@ -78,3 +79,64 @@ def test_jobmanager_list_returns_recent_first():
     j3 = mgr.create("archive_story", {})
     listed = mgr.list_jobs()
     assert [j.job_id for j in listed] == [j3.job_id, j2.job_id, j1.job_id]
+
+
+def test_jobrunner_runs_callable_in_thread_and_marks_done():
+    mgr = JobManager()
+    job = mgr.create("test", {})
+    runner = JobRunner(mgr)
+
+    def work(emit):
+        emit("test.tick", {"n": 1})
+        emit("test.tick", {"n": 2})
+
+    runner.submit(job, work)
+    deadline = time.monotonic() + 2.0
+    while job.status not in (JobStatus.done, JobStatus.failed):
+        if time.monotonic() > deadline:
+            raise AssertionError("job did not complete")
+        time.sleep(0.01)
+    assert job.status == JobStatus.done
+    assert len(job.events) == 2
+
+
+def test_jobrunner_records_failure():
+    mgr = JobManager()
+    job = mgr.create("test", {})
+    runner = JobRunner(mgr)
+
+    def boom(emit):
+        emit("started", {})
+        raise RuntimeError("kaboom")
+
+    runner.submit(job, boom)
+    deadline = time.monotonic() + 2.0
+    while job.status not in (JobStatus.done, JobStatus.failed):
+        if time.monotonic() > deadline:
+            raise AssertionError("job did not finish")
+        time.sleep(0.01)
+    assert job.status == JobStatus.failed
+    assert "kaboom" in job.error
+
+
+def test_jobrunner_running_jobs_count():
+    mgr = JobManager()
+    runner = JobRunner(mgr)
+    started = threading.Event()
+    done = threading.Event()
+
+    def slow(emit):
+        started.set()
+        done.wait(timeout=2)
+
+    job = mgr.create("test", {})
+    runner.submit(job, slow)
+    started.wait(timeout=1)
+    assert runner.running_count() >= 1
+    done.set()
+    deadline = time.monotonic() + 2.0
+    while job.status != JobStatus.done:
+        if time.monotonic() > deadline:
+            raise AssertionError("job did not complete")
+        time.sleep(0.01)
+    assert runner.running_count() == 0

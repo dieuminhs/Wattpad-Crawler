@@ -1,6 +1,8 @@
+import logging
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -90,3 +92,44 @@ class JobManager:
         """Return jobs newest-first."""
         with self._lock:
             return [self._jobs[jid] for jid in reversed(self._order)]
+
+
+logger = logging.getLogger(__name__)
+
+
+JobWork = Callable[[Callable[[str, dict], None]], None]
+"""A unit of work for JobRunner.submit. Receives an `emit(kind, data)` callable."""
+
+
+class JobRunner:
+    """Runs Job functions in background threads. One thread per job."""
+
+    def __init__(self, manager: JobManager) -> None:
+        self.manager = manager
+        self._running: set[str] = set()
+        self._lock = threading.Lock()
+
+    def submit(self, job: Job, work: JobWork) -> None:
+        thread = threading.Thread(
+            target=self._run, args=(job, work), name=f"job-{job.job_id}", daemon=True
+        )
+        with self._lock:
+            self._running.add(job.job_id)
+        thread.start()
+
+    def _run(self, job: Job, work: JobWork) -> None:
+        try:
+            job.set_running()
+            work(job.emit)
+            job.set_done()
+        except Exception as e:
+            logger.exception("Job %s failed", job.job_id)
+            job.set_failed(str(e))
+        finally:
+            with self._lock:
+                self._running.discard(job.job_id)
+
+    def running_count(self) -> int:
+        """Return the number of currently running jobs."""
+        with self._lock:
+            return len(self._running)
