@@ -1,6 +1,7 @@
+import time
 from pathlib import Path
 
-from wattpad_crawler.client import build_client
+from wattpad_crawler.client import TokenBucket, build_client
 from wattpad_crawler.config import Config
 
 
@@ -32,3 +33,22 @@ def test_client_no_cookie_when_empty(tmp_path: Path):
         assert client.cookies.get("token", domain="wattpad.com") is None
     finally:
         client.close()
+
+
+def test_token_bucket_blocks_when_empty():
+    bucket = TokenBucket(rate_per_sec=10.0, capacity=2)
+    bucket.take()
+    bucket.take()
+    start = time.monotonic()
+    bucket.take()  # should sleep ~0.1s
+    elapsed = time.monotonic() - start
+    assert 0.05 < elapsed < 0.3
+
+
+def test_token_bucket_does_not_block_when_full():
+    bucket = TokenBucket(rate_per_sec=1.0, capacity=3)
+    start = time.monotonic()
+    for _ in range(3):
+        bucket.take()
+    elapsed = time.monotonic() - start
+    assert elapsed < 0.05
