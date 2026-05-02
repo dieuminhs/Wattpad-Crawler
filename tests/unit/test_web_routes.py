@@ -121,3 +121,46 @@ def test_post_jobs_invalid_kind_returns_400(output_dir: Path):
     client = TestClient(app)
     r = client.post("/jobs", data={"kind": "garbage"}, follow_redirects=False)
     assert r.status_code == 400
+
+
+def test_job_detail_page(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    job = app.state.job_manager.create("archive_story", {"story_id": "42"})
+    job.emit("story.start", {"story_id": "42", "title": "Hi"})
+    client = TestClient(app)
+    r = client.get(f"/jobs/{job.job_id}")
+    assert r.status_code == 200
+    assert "42" in r.text
+    assert "story.start" in r.text
+
+
+def test_job_detail_unknown_returns_404(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/jobs/nonexistent")
+    assert r.status_code == 404
+
+
+def test_sse_stream_replays_existing_events(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    job = app.state.job_manager.create("test", {})
+    job.emit("test.tick", {"n": 1})
+    job.emit("test.tick", {"n": 2})
+    job.set_done()
+    client = TestClient(app)
+    with client.stream("GET", f"/jobs/{job.job_id}/stream?after=0") as r:
+        assert r.status_code == 200
+        text = "".join(chunk for chunk in r.iter_text())
+    assert "test.tick" in text
+    assert '"n": 1' in text or '"n":1' in text
+
+
+def test_sse_stream_404_unknown_job(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/jobs/missing/stream")
+    assert r.status_code == 404

@@ -1,7 +1,9 @@
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
 from wattpad_crawler.archive.state import Manifest
@@ -139,3 +141,50 @@ async def submit_job(request: Request) -> RedirectResponse:
         raise HTTPException(status_code=400, detail=f"unknown kind: {kind}")
 
     return RedirectResponse(url=f"/jobs/{job.job_id}", status_code=303)
+
+
+@router.get("/jobs/{job_id}", response_class=HTMLResponse)
+def job_detail(request: Request, job_id: str) -> HTMLResponse:
+    mgr = request.app.state.job_manager
+    job = mgr.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="job.html",
+        context={"job": job},
+    )
+
+
+@router.get("/jobs/{job_id}/stream")
+async def job_stream(request: Request, job_id: str, after: int = 0):
+    mgr = request.app.state.job_manager
+    job = mgr.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    async def event_gen():
+        import asyncio
+        index = after
+        while True:
+            if await request.is_disconnected():
+                break
+            new_events = job.snapshot_events(index)
+            for ev in new_events:
+                index += 1
+                yield {
+                    "data": json.dumps({"kind": ev.kind, "data": ev.data, "ts": ev.timestamp})
+                }
+            if job.status.value in ("done", "failed"):
+                yield {
+                    "data": json.dumps({
+                        "kind": "__status__",
+                        "data": {"status": job.status.value, "error": job.error},
+                    })
+                }
+                return
+            # 250ms polling — fine for personal-use UI; threading.Event-to-asyncio
+            # bridge is fiddly and not worth the complexity for this scope.
+            await asyncio.sleep(0.25)
+
+    return EventSourceResponse(event_gen())

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.job_id }} — Wattpad Crawler{% endblock %}
+{% block content %}
+  <h1>
+    <span class="status-{{ job.status.value }}">[{{ job.status.value }}]</span>
+    {{ job.kind }}
+  </h1>
+  <p class="muted">
+    Job ID: <code>{{ job.job_id }}</code>
+    {% for k, v in job.args.items() %}— {{ k }}: <code>{{ v }}</code>{% endfor %}
+  </p>
+
+  {% if job.error %}
+    <div class="card status-failed">
+      <strong>Error:</strong> {{ job.error }}
+    </div>
+  {% endif %}
+
+  <h2>Progress</h2>
+  <div class="event-log" id="event-log">
+    {% for ev in job.events %}
+      <div class="ev"><code>{{ ev.kind }}</code> {{ ev.data }}</div>
+    {% endfor %}
+  </div>
+
+  {% if job.status.value not in ("done", "failed") %}
+    <script>
+      (function () {
+        var log = document.getElementById('event-log');
+        var es = new EventSource("/jobs/{{ job.job_id }}/stream?after={{ job.events|length }}");
+        es.onmessage = function (e) {
+          var data = JSON.parse(e.data);
+          if (data.kind === '__status__') {
+            es.close();
+            setTimeout(function () { location.reload(); }, 500);
+            return;
+          }
+          var div = document.createElement('div');
+          div.className = 'ev';
+          div.innerHTML = '<code>' + data.kind + '</code> ' + JSON.stringify(data.data);
+          log.appendChild(div);
+          log.scrollTop = log.scrollHeight;
+        };
+        es.onerror = function () { es.close(); };
+      })();
+    </script>
+  {% endif %}
+
+  <p><a href="/">← Dashboard</a></p>
+{% endblock %}
