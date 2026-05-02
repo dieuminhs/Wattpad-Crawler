@@ -31,3 +31,32 @@ def test_load_config_rejects_bad_toml(output_dir: Path):
     (output_dir / "_config.toml").write_text("not a [valid toml")
     with pytest.raises(ConfigError):
         load_config(output_dir)
+
+
+def test_load_config_rejects_invalid_value_type(output_dir: Path):
+    (output_dir / "_config.toml").write_text('workers_per_story = "lots"\n')
+    with pytest.raises(ConfigError):
+        load_config(output_dir)
+
+
+def test_load_config_rejects_non_positive_rate_limit(output_dir: Path):
+    (output_dir / "_config.toml").write_text("rate_limit_per_sec = 0\n")
+    with pytest.raises(ConfigError):
+        load_config(output_dir)
+
+
+def test_load_config_rejects_zero_workers(output_dir: Path):
+    (output_dir / "_config.toml").write_text("workers_per_story = 0\n")
+    with pytest.raises(ConfigError):
+        load_config(output_dir)
+
+
+def test_config_is_frozen():
+    import dataclasses
+    from pathlib import Path as _P
+
+    from wattpad_crawler.config import Config
+
+    cfg = Config(output_dir=_P("/tmp"))
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        cfg.cookie = "mutated"
