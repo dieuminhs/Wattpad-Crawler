@@ -165,3 +165,37 @@ def test_write_part_files_serializes_comment_replies(output_dir: Path):
     assert data[0]["body"] == "parent"
     assert len(data[0]["replies"]) == 1
     assert data[0]["replies"][0]["body"] == "reply"
+
+
+def test_write_part_files_sanitizes_evil_part_id(output_dir: Path):
+    """part_id like '../../../evil' must not escape the parts/ directory."""
+    s = Story(story_id="42", title="Hi", author_username="bob")
+    bad_part = Part(part_id="../../../evil", ordinal=1, title="X", url="https://w")
+    content = ChapterContent(text="x", paragraphs=[], images=[])
+    write_part_files(output_dir, s, bad_part, content, "<html/>", [], [])
+    # Output dir's parts/ directory should still contain the file
+    parts_dir = output_dir / "stories" / "bob" / "42_hi" / "parts"
+    files = list(parts_dir.glob("*"))
+    assert len(files) == 5, f"expected 5 files in parts/, found: {[f.name for f in files]}"
+    # No file outside parts_dir was created
+    for f in files:
+        assert f.resolve().is_relative_to(parts_dir.resolve())
+
+
+def test_write_part_files_handles_surrogate_in_comment(output_dir: Path):
+    """Lone surrogate halves in comment body must not crash the write."""
+    s = Story(story_id="42", title="Hi", author_username="bob",
+              parts=[Part(part_id="100", ordinal=1, title="X", url="https://w")])
+    content = ChapterContent(text="x", paragraphs=[], images=[])
+    bad = Comment(
+        comment_id="c1",
+        user="bob",
+        body="hello \ud800 weird",  # lone high surrogate
+        created_at="t",
+    )
+    # Must not raise UnicodeEncodeError
+    write_part_files(output_dir, s, s.parts[0], content, "<html/>", [bad], [])
+    out = (output_dir / "stories" / "bob" / "42_hi" / "parts" / "01_100_comments-inline.json")
+    data = json.loads(out.read_text())
+    assert "weird" in data[0]["body"]
+    assert "\ud800" not in data[0]["body"]

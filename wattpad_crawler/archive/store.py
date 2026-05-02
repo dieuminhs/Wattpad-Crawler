@@ -34,6 +34,16 @@ def _safe_path_part(s: str) -> str:
     return cleaned[:80]
 
 
+def _scrub_surrogates(s: str) -> str:
+    """Replace lone UTF-16 surrogates with U+FFFD.
+
+    Python `str` allows surrogate halves but `Path.write_text(..., encoding='utf-8')`
+    rejects them. We'd rather lose one weird character than fail to archive
+    a comment.
+    """
+    return s.encode("utf-8", errors="replace").decode("utf-8")
+
+
 def _tmp_path(path: Path) -> Path:
     """Per-process, per-thread tmp filename — avoids collisions if two writers
     race on the same target path."""
@@ -74,20 +84,22 @@ def story_dir(output_dir: Path, story: Story) -> Path:
 
 
 def _part_basename(part: Part) -> str:
-    return f"{part.ordinal:02d}_{part.part_id}_{slugify(part.title)}"
+    pid = _safe_path_part(part.part_id)
+    return f"{part.ordinal:02d}_{pid}_{slugify(part.title)}"
 
 
 def _comments_basename(part: Part) -> str:
-    return f"{part.ordinal:02d}_{part.part_id}"
+    pid = _safe_path_part(part.part_id)
+    return f"{part.ordinal:02d}_{pid}"
 
 
 def _comment_to_dict(c: Comment) -> dict:
     return {
-        "comment_id": c.comment_id,
-        "user": c.user,
-        "body": c.body,
-        "created_at": c.created_at,
-        "paragraph_id": c.paragraph_id,
+        "comment_id": _scrub_surrogates(c.comment_id),
+        "user": _scrub_surrogates(c.user),
+        "body": _scrub_surrogates(c.body),
+        "created_at": _scrub_surrogates(c.created_at),
+        "paragraph_id": _scrub_surrogates(c.paragraph_id) if c.paragraph_id else None,
         "replies": [_comment_to_dict(r) for r in c.replies],
     }
 
