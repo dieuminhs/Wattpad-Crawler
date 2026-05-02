@@ -210,3 +210,86 @@ def library_cover(request: Request, author: str, dir_name: str) -> FileResponse:
     if not target.is_relative_to(stories_root) or not target.exists():
         raise HTTPException(status_code=404, detail="cover not found")
     return FileResponse(target, media_type="image/jpeg")
+
+
+def _resolve_story_dir(cfg, author: str, dir_name: str) -> Path:
+    """Resolve a (author, dir_name) request to an absolute path under stories/.
+    Rejects path traversal."""
+    stories_root = (cfg.output_dir / "stories").resolve()
+    target = (cfg.output_dir / "stories" / author / dir_name).resolve()
+    if not target.is_relative_to(stories_root):
+        raise HTTPException(status_code=400, detail="invalid path")
+    if not target.exists() or not (target / "metadata.json").exists():
+        raise HTTPException(status_code=404, detail="story not found")
+    return target
+
+
+@router.get("/read/{author}/{dir_name}", response_class=HTMLResponse)
+def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    sd = _resolve_story_dir(cfg, author, dir_name)
+    meta = json.loads((sd / "metadata.json").read_text(encoding="utf-8"))
+    out = sd / "output"
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="reader.html",
+        context={
+            "author": author,
+            "dir_name": dir_name,
+            "meta": meta,
+            "chapter": None,
+            "has_epub": any(out.glob("*.epub")) if out.exists() else False,
+            "has_html": any(out.glob("*.html")) if out.exists() else False,
+            "has_txt": any(out.glob("*.txt")) if out.exists() else False,
+        },
+    )
+
+
+@router.get("/read/{author}/{dir_name}/{ordinal}", response_class=HTMLResponse)
+def reader_chapter(
+    request: Request, author: str, dir_name: str, ordinal: int
+) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    sd = _resolve_story_dir(cfg, author, dir_name)
+    meta = json.loads((sd / "metadata.json").read_text(encoding="utf-8"))
+    parts = sorted(meta.get("parts", []), key=lambda p: p.get("ordinal", 0))
+    p = next((q for q in parts if int(q.get("ordinal", 0)) == ordinal), None)
+    if p is None:
+        raise HTTPException(status_code=404, detail="chapter not found")
+    prefix = f"{ordinal:02d}_{p['part_id']}_"
+    txt_files = list((sd / "parts").glob(f"{prefix}*.txt"))
+    body = txt_files[0].read_text(encoding="utf-8") if txt_files else "(missing chapter body)"
+
+    ords = [int(q["ordinal"]) for q in parts]
+    prev_ord = max((o for o in ords if o < ordinal), default=None)
+    next_ord = min((o for o in ords if o > ordinal), default=None)
+
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="reader.html",
+        context={
+            "author": author,
+            "dir_name": dir_name,
+            "meta": meta,
+            "chapter": {
+                "title": p.get("title", ""),
+                "body": body,
+                "prev_ord": prev_ord,
+                "next_ord": next_ord,
+            },
+        },
+    )
+
+
+@router.get("/library/output/{author}/{dir_name}/{fmt}")
+def library_output(request: Request, author: str, dir_name: str, fmt: str) -> FileResponse:
+    """Serve the EPUB / HTML / TXT artifact from <story>/output/."""
+    if fmt not in ("epub", "html", "txt"):
+        raise HTTPException(status_code=404, detail="unknown format")
+    cfg = request.app.state.cfg
+    sd = _resolve_story_dir(cfg, author, dir_name)
+    candidates = list((sd / "output").glob(f"*.{fmt}"))
+    if not candidates:
+        raise HTTPException(status_code=404, detail=f"no .{fmt} artifact")
+    media = {"epub": "application/epub+zip", "html": "text/html", "txt": "text/plain"}[fmt]
+    return FileResponse(candidates[0], media_type=media, filename=candidates[0].name)

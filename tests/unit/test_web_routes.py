@@ -222,3 +222,85 @@ def test_library_cover_blocks_path_traversal(output_dir: Path):
     client = TestClient(app)
     r = client.get("/library/cover/..%2F..%2F/x")
     assert r.status_code in (400, 404)
+
+
+def test_reader_story_toc(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    (sd / "parts").mkdir(parents=True)
+    (sd / "parts" / "01_100_one.txt").write_text("Body of chapter one.")
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "",
+        "parts": [{"part_id": "100", "ordinal": 1, "title": "One"}],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/read/alice/42_my-tale")
+    assert r.status_code == 200
+    assert "My Tale" in r.text
+    assert "One" in r.text
+
+
+def test_reader_chapter_view(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    (sd / "parts").mkdir(parents=True)
+    (sd / "parts" / "01_100_one.txt").write_text("Body of chapter one.")
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "",
+        "parts": [{"part_id": "100", "ordinal": 1, "title": "One"}],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/read/alice/42_my-tale/1")
+    assert r.status_code == 200
+    assert "Body of chapter one." in r.text
+
+
+def test_reader_404_unknown_story(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/read/alice/nonexistent")
+    assert r.status_code == 404
+
+
+def test_reader_path_traversal_blocked(output_dir: Path):
+    """Path-traversal attempts via author or dir_name must be rejected."""
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/read/..%2F..%2F/42_x")
+    assert r.status_code in (400, 404)
+
+
+def test_artifact_download_epub(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    (sd / "output").mkdir(parents=True)
+    (sd / "output" / "my-tale.epub").write_bytes(b"PK\x03\x04fake-epub")
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "", "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library/output/alice/42_my-tale/epub")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/epub+zip"
+
+
+def test_artifact_unknown_format_404(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "T", "author_username": "alice",
+        "tags": [], "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library/output/alice/42_my-tale/pdf")
+    assert r.status_code == 404
