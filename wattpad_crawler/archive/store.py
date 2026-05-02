@@ -135,3 +135,38 @@ def write_part_files(
         parts_dir / f"{cbase}_comments-end.json",
         json.dumps([_comment_to_dict(c) for c in end_comments], ensure_ascii=False, indent=2),
     )
+
+
+def write_story_metadata(output_dir: Path, story: Story) -> None:
+    sd = story_dir(output_dir, story)
+    payload = {
+        "story_id": story.story_id,
+        "title": _scrub_surrogates(story.title),
+        "author_username": story.author_username,
+        "description": _scrub_surrogates(story.description),
+        "cover_url": story.cover_url,
+        "tags": [_scrub_surrogates(t) for t in story.tags],
+        "last_modified": story.last_modified,
+        "votes": story.votes,
+        "reads": story.reads,
+        "completed": story.completed,
+        "parts": [
+            {
+                "part_id": p.part_id,
+                "ordinal": p.ordinal,
+                "title": _scrub_surrogates(p.title),
+                "url": p.url,
+                "last_modified": p.last_modified,
+            }
+            for p in story.parts
+        ],
+    }
+    atomic_write_text(sd / "metadata.json", json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def write_cover(output_dir: Path, story: Story, data: bytes) -> None:
+    """Write a story's cover image. No-op when data is empty (caller may pass
+    empty bytes if the cover URL was missing or the fetch failed)."""
+    if not data:
+        return
+    atomic_write_bytes(story_dir(output_dir, story) / "cover.jpg", data)

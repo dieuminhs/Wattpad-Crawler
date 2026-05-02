@@ -199,3 +199,43 @@ def test_write_part_files_handles_surrogate_in_comment(output_dir: Path):
     data = json.loads(out.read_text())
     assert "weird" in data[0]["body"]
     assert "\ud800" not in data[0]["body"]
+
+
+def test_write_story_metadata(output_dir: Path):
+    from wattpad_crawler.archive.store import write_story_metadata
+
+    s = Story(
+        story_id="42",
+        title="Hi There",
+        author_username="bob",
+        description="d",
+        cover_url="https://x/c.jpg",
+        tags=["a", "b"],
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    write_story_metadata(output_dir, s)
+    p = output_dir / "stories" / "bob" / "42_hi-there" / "metadata.json"
+    data = json.loads(p.read_text())
+    assert data["story_id"] == "42"
+    assert data["tags"] == ["a", "b"]
+    assert data["author_username"] == "bob"
+    assert len(data["parts"]) == 1
+
+
+def test_write_cover_bytes(output_dir: Path):
+    from wattpad_crawler.archive.store import write_cover
+
+    s = Story(story_id="42", title="Hi There", author_username="bob")
+    write_cover(output_dir, s, b"FAKEJPGBYTES")
+    p = output_dir / "stories" / "bob" / "42_hi-there" / "cover.jpg"
+    assert p.read_bytes() == b"FAKEJPGBYTES"
+
+
+def test_write_cover_skips_empty_bytes(output_dir: Path):
+    """Empty bytes should not produce an empty cover.jpg file."""
+    from wattpad_crawler.archive.store import write_cover
+
+    s = Story(story_id="42", title="Hi There", author_username="bob")
+    write_cover(output_dir, s, b"")
+    p = output_dir / "stories" / "bob" / "42_hi-there" / "cover.jpg"
+    assert not p.exists(), "empty cover should not be written"
