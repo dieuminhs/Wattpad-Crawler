@@ -1,3 +1,4 @@
+import threading
 import time
 from pathlib import Path
 
@@ -52,3 +53,36 @@ def test_token_bucket_does_not_block_when_full():
         bucket.take()
     elapsed = time.monotonic() - start
     assert elapsed < 0.05
+
+
+def test_token_bucket_under_concurrency_does_not_deadlock():
+    """Multi-thread test: catches the spinlock bug.
+
+    With rate=20/s and capacity=2, two threads each calling take() 4 times
+    needs ~6 tokens beyond the initial capacity → ~0.3s. If the lock is
+    held during sleep (the bug), this test deadlocks the thread that's
+    waiting on the lock and the test hits its timeout.
+    """
+    bucket = TokenBucket(rate_per_sec=20.0, capacity=2)
+    errors: list[str] = []
+
+    def worker():
+        try:
+            for _ in range(4):
+                bucket.take()
+        except Exception as e:
+            errors.append(str(e))
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    start = time.monotonic()
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=2.0)
+        assert not t.is_alive(), "Thread deadlocked — TokenBucket holds lock during sleep"
+    elapsed = time.monotonic() - start
+    assert not errors, f"Worker threw: {errors}"
+    # 8 takes total, 2 free from capacity, 6 need to be refilled at 20/s = 0.3s.
+    # Allow generous upper bound for slow CI; lower bound asserts the bucket
+    # actually rate-limited (not just instant).
+    assert 0.2 < elapsed < 1.5, f"Elapsed {elapsed} outside expected window"

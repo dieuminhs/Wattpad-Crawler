@@ -29,16 +29,16 @@ class TokenBucket:
         self._lock = threading.Lock()
 
     def take(self, n: int = 1) -> None:
-        with self._lock:
-            while True:
+        while True:
+            with self._lock:
                 now = time.monotonic()
-                self._tokens = min(self.capacity, self._tokens + (now - self._last) * self.rate)
+                self._tokens = min(
+                    self.capacity, self._tokens + (now - self._last) * self.rate
+                )
                 self._last = now
                 if self._tokens >= n:
                     self._tokens -= n
                     return
                 deficit = n - self._tokens
                 sleep_for = deficit / self.rate
-            # release lock during sleep, retry
-        time.sleep(sleep_for)
-        self.take(n)
+            time.sleep(sleep_for)
