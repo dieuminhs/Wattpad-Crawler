@@ -45,8 +45,22 @@ class Manifest:
         self.path = output_dir / "_state.sqlite"
         self.conn: sqlite3.Connection | None = None
 
+    @property
+    def db(self) -> sqlite3.Connection:
+        """Connection accessor that raises if not connected. Use this in CRUD methods."""
+        if self.conn is None:
+            raise RuntimeError("Manifest not connected; call connect() first")
+        return self.conn
+
     def connect(self) -> Self:
         self.conn = sqlite3.connect(self.path)
+        # Enable FK enforcement (off by default in SQLite).
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        # WAL allows concurrent readers + one writer; avoids "database is locked"
+        # once the web UI in Plan 2 reads while the crawler writes.
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        # Set row_factory once so every fetch returns sqlite3.Row.
+        self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
         self.conn.commit()
         return self
@@ -55,3 +69,11 @@ class Manifest:
         if self.conn:
             self.conn.close()
             self.conn = None
+
+    def __enter__(self) -> Self:
+        if self.conn is None:
+            self.connect()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
