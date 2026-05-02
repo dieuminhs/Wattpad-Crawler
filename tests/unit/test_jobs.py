@@ -1,9 +1,17 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.config import Config
-from wattpad_crawler.jobs import JobDeps, archive_story
+from wattpad_crawler.jobs import (
+    JobDeps,
+    ResolveError,
+    archive_many,
+    archive_story,
+    resolve_story_id,
+)
 from wattpad_crawler.models import Part, Story
 from wattpad_crawler.scrape.chapter_html import ChapterContent
 
@@ -136,4 +144,51 @@ def test_archive_story_renderers_are_independent(output_dir: Path, monkeypatch):
     assert txt_mock.called
     assert html_mock.called
     assert epub_mock.called
+    manifest.close()
+
+
+def test_resolve_numeric_id():
+    assert resolve_story_id("123456789") == "123456789"
+
+
+def test_resolve_story_url():
+    assert resolve_story_id("https://www.wattpad.com/story/123456-some-title") == "123456"
+
+
+def test_resolve_story_url_no_slug():
+    assert resolve_story_id("https://www.wattpad.com/story/789") == "789"
+
+
+def test_resolve_part_url_to_story_requires_lookup():
+    """Part URLs need an API call; this fn just rejects them."""
+    with pytest.raises(ResolveError):
+        resolve_story_id("https://www.wattpad.com/1001-chapter-one")
+
+
+def test_resolve_garbage_input():
+    with pytest.raises(ResolveError):
+        resolve_story_id("not a url or id")
+
+
+def test_archive_many_collects_results(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    fake_client = MagicMock()
+
+    # First story succeeds, second raises during fetch
+    s1 = Story(story_id="1", title="A", author_username="x", parts=[])
+
+    # Use a single deps that behaves differently per story_id
+    def fetch_story(client, sid):
+        if sid == "fail":
+            raise RuntimeError("boom")
+        return Story(story_id=sid, title=f"S{sid}", author_username="x", parts=[])
+
+    combined = _make_deps(s1)
+    combined.fetch_story = fetch_story
+
+    results = archive_many(cfg, fake_client, manifest, ["1", "fail", "2"], deps=combined)
+    assert results["1"] == "done"
+    assert results["fail"].startswith("failed:")
+    assert results["2"] == "done"
     manifest.close()

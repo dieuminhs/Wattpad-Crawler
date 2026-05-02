@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -108,3 +109,50 @@ def archive_story(
             fn(sd)
         except Exception as e:
             logger.exception("render(%s) failed for %s: %s", name, story.story_id, e)
+
+
+class ResolveError(Exception):
+    pass
+
+
+_STORY_URL_RE = re.compile(r"wattpad\.com/story/(\d+)")
+_NUMERIC_RE = re.compile(r"^\d+$")
+
+
+def resolve_story_id(target: str) -> str:
+    """Resolve a CLI input to a numeric story_id.
+
+    Accepts: a bare numeric id, or a full https://www.wattpad.com/story/<id>-<slug> URL.
+    Rejects: part URLs (https://www.wattpad.com/<part_id>-<slug>) — those need an
+    API lookup which this resolver does not perform.
+    """
+    target = target.strip()
+    if _NUMERIC_RE.match(target):
+        return target
+    m = _STORY_URL_RE.search(target)
+    if m:
+        return m.group(1)
+    raise ResolveError(
+        f"Cannot resolve {target!r} to a story ID. "
+        "Pass a numeric ID or a https://www.wattpad.com/story/<id>-... URL."
+    )
+
+
+def archive_many(
+    cfg: Config,
+    client: RateLimitedClient,
+    manifest: Manifest,
+    story_ids: list[str],
+    *,
+    deps: JobDeps | None = None,
+) -> dict[str, str]:
+    """Archive a list of stories sequentially. Returns {story_id: status}."""
+    results: dict[str, str] = {}
+    for sid in story_ids:
+        try:
+            archive_story(cfg, client, manifest, sid, deps=deps)
+            results[sid] = "done"
+        except Exception as e:
+            logger.exception("story %s failed: %s", sid, e)
+            results[sid] = f"failed: {e}"
+    return results
