@@ -139,3 +139,107 @@ def test_client_honors_retry_after_on_429(tmp_path):
     assert r.status_code == 200
     assert (time.monotonic() - start) >= 0.9
     rlc.close()
+
+
+def test_client_clears_last_exc_after_response(tmp_path):
+    """Network errors followed by a 5xx must surface the 5xx, not the network error."""
+    states = ["raise", "raise", "503"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        action = states.pop(0)
+        if action == "raise":
+            raise httpx.ConnectError("boom")
+        return httpx.Response(503)
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    with pytest.raises(httpx.HTTPStatusError):
+        rlc.get("https://example.com/x", max_attempts=3)
+    rlc.close()
+
+
+def test_client_handles_unparseable_retry_after(tmp_path):
+    """Non-numeric Retry-After (e.g. HTTP-date) falls back gracefully."""
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, headers={"Retry-After": "Sat, 02 May 2026 18:00:00 GMT"})
+        return httpx.Response(200, text="ok")
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    # Use small max_attempts so we don't actually wait 60s; we'll patch the sleep
+    import unittest.mock
+    with unittest.mock.patch("wattpad_crawler.client.time.sleep") as sleep_mock:
+        r = rlc.get("https://example.com/x")
+    assert r.status_code == 200
+    # Confirm the sleep was called with the fallback 60s, not crashed
+    assert any(call.args and call.args[0] == 60.0 for call in sleep_mock.call_args_list)
+    rlc.close()
+
+
+def test_client_caps_retry_after_at_300s(tmp_path):
+    """A malicious server sending a giant Retry-After can't stall us forever."""
+    rlc = RateLimitedClient(Config(output_dir=tmp_path, rate_limit_per_sec=1000.0))
+    try:
+        assert rlc._parse_retry_after("86400") == 300.0
+        assert rlc._parse_retry_after("garbage") == 60.0
+        assert rlc._parse_retry_after(None) == 60.0
+        assert rlc._parse_retry_after("5") == 5.0
+    finally:
+        rlc.close()
+
+
+def test_client_rejects_zero_max_attempts(tmp_path):
+    transport = httpx.MockTransport(lambda req: httpx.Response(200))
+    rlc = make_client(tmp_path, transport)
+    with pytest.raises(ValueError):
+        rlc.get("https://example.com/x", max_attempts=0)
+    rlc.close()
+
+
+def test_client_supports_context_manager(tmp_path):
+    cfg = Config(output_dir=tmp_path)
+    with RateLimitedClient(cfg) as rlc:
+        assert rlc._client is not None
+    # After exit, close() has run; httpx.Client.is_closed should be True
+    assert rlc._client.is_closed
+
+
+def test_client_does_not_sleep_on_final_attempt(tmp_path):
+    """No backoff after the final failed attempt — saves up to 16s."""
+    transport = httpx.MockTransport(lambda req: httpx.Response(503))
+    rlc = make_client(tmp_path, transport)
+    import unittest.mock
+    with unittest.mock.patch.object(rlc, "_sleep_backoff") as backoff_mock:
+        with pytest.raises(httpx.HTTPStatusError):
+            rlc.get("https://example.com/x", max_attempts=3)
+    # 3 attempts, but backoff only between attempts → called at most 2 times
+    assert backoff_mock.call_count == 2
+    rlc.close()
+
+
+def test_build_client_config_propagates_through_rate_limited_client(tmp_path):
+    """Catches regressions in build_client (cookie jar, UA, timeouts) being silently dropped."""
+    cfg = Config(output_dir=tmp_path, cookie="tok123", user_agent="ua/test")
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["ua"] = request.headers.get("user-agent", "")
+        seen["cookie"] = request.headers.get("cookie", "")
+        return httpx.Response(200)
+
+    rlc = RateLimitedClient(cfg)
+    # Swap transport but PRESERVE headers/cookies from build_client.
+    rlc._client = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        headers=dict(rlc._client.headers),
+        cookies=rlc._client.cookies,
+        follow_redirects=True,
+    )
+    rlc.get("https://www.wattpad.com/test")
+    assert "ua/test" in seen["ua"]
+    assert "tok123" in seen["cookie"]
+    rlc.close()

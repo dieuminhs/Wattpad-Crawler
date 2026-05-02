@@ -54,33 +54,62 @@ class RateLimitedClient:
         self._bucket = TokenBucket(cfg.rate_limit_per_sec, capacity=cap)
 
     def get(self, url: str, *, max_attempts: int = 5, **kwargs) -> httpx.Response:
+        if max_attempts < 1:
+            raise ValueError(f"max_attempts must be >= 1, got {max_attempts}")
         last_exc: Exception | None = None
+        resp: httpx.Response | None = None
         for attempt in range(1, max_attempts + 1):
             self._bucket.take()
             try:
                 resp = self._client.get(url, **kwargs)
             except httpx.RequestError as e:
                 last_exc = e
-                self._sleep_backoff(attempt)
+                resp = None
+                if attempt < max_attempts:
+                    self._sleep_backoff(attempt)
                 continue
+            # We got a response — clear any stashed network error.
+            last_exc = None
             if resp.status_code == 429:
-                wait = float(resp.headers.get("Retry-After", "60"))
+                wait = self._parse_retry_after(resp.headers.get("Retry-After"))
                 logger.warning("429 on %s — sleeping %.1fs", url, wait)
-                time.sleep(wait)
+                if attempt < max_attempts:
+                    time.sleep(wait)
                 continue
             if 500 <= resp.status_code < 600:
-                self._sleep_backoff(attempt)
+                if attempt < max_attempts:
+                    self._sleep_backoff(attempt)
                 continue
             resp.raise_for_status()
             return resp
         if last_exc:
             raise last_exc
+        assert resp is not None  # narrowed: loop ran at least once and resp was set
         resp.raise_for_status()
         return resp
 
     @staticmethod
     def _sleep_backoff(attempt: int) -> None:
         time.sleep(min(2 ** (attempt - 1), 16))
+
+    @staticmethod
+    def _parse_retry_after(raw: str | None) -> float:
+        """Parse a Retry-After header. Accepts integer seconds; falls back to 60s
+        for unparseable or missing values. Caps at 300s to bound worst case."""
+        if raw is None:
+            return 60.0
+        try:
+            wait = float(raw)
+        except ValueError:
+            logger.warning("Unparseable Retry-After header %r, defaulting to 60s", raw)
+            wait = 60.0
+        return min(wait, 300.0)
+
+    def __enter__(self) -> "RateLimitedClient":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def close(self) -> None:
         self._client.close()
