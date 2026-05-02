@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from wattpad_crawler.archive.store import (
@@ -5,8 +6,10 @@ from wattpad_crawler.archive.store import (
     atomic_write_text,
     slugify,
     story_dir,
+    write_part_files,
 )
-from wattpad_crawler.models import Story
+from wattpad_crawler.models import Comment, Part, Story
+from wattpad_crawler.scrape.chapter_html import ChapterContent
 
 
 def test_slugify_basic():
@@ -119,3 +122,46 @@ def test_story_dir_handles_empty_author(output_dir: Path):
     s = Story(story_id="42", title="Hi", author_username="")
     d = story_dir(output_dir, s)
     assert d == output_dir / "stories" / "unknown" / "42_hi"
+
+
+def test_write_part_files_creates_all_artifacts(output_dir: Path):
+    s = Story(
+        story_id="42",
+        title="Hi There",
+        author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="Chapter One", url="https://w/100")],
+    )
+    content = ChapterContent(
+        text="Once upon a time.",
+        paragraphs=[{"id": "p1", "text": "Once upon a time.", "html": "Once upon a time."}],
+        images=[],
+    )
+    inline = [Comment(comment_id="c1", user="bob", body="!", created_at="t", paragraph_id="p1")]
+    end = [Comment(comment_id="c2", user="alice", body="!", created_at="t")]
+    write_part_files(output_dir, s, s.parts[0], content, "<html>...</html>", inline, end)
+
+    base = output_dir / "stories" / "bob" / "42_hi-there" / "parts"
+    assert (base / "01_100_chapter-one.json").exists()
+    assert (base / "01_100_chapter-one.html").exists()
+    assert (base / "01_100_chapter-one.txt").exists()
+    assert (base / "01_100_comments-inline.json").exists()
+    assert (base / "01_100_comments-end.json").exists()
+    assert (base / "01_100_chapter-one.txt").read_text() == "Once upon a time."
+
+
+def test_write_part_files_serializes_comment_replies(output_dir: Path):
+    """Recursive replies must be serialized correctly."""
+    s = Story(story_id="42", title="Hi There", author_username="bob",
+              parts=[Part(part_id="100", ordinal=1, title="Chapter One", url="https://w")])
+    content = ChapterContent(text="x", paragraphs=[], images=[])
+    inline = [
+        Comment(comment_id="c1", user="bob", body="parent", created_at="t",
+                replies=[Comment(comment_id="c1r1", user="alice", body="reply", created_at="t")])
+    ]
+    write_part_files(output_dir, s, s.parts[0], content, "<html/>", inline, [])
+    comments_path = output_dir / "stories" / "bob" / "42_hi-there" / "parts"
+    comments_path = comments_path / "01_100_comments-inline.json"
+    data = json.loads(comments_path.read_text())
+    assert data[0]["body"] == "parent"
+    assert len(data[0]["replies"]) == 1
+    assert data[0]["replies"][0]["body"] == "reply"

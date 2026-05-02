@@ -1,9 +1,11 @@
+import json
 import os
 import re
 import threading
 from pathlib import Path
 
-from wattpad_crawler.models import Story
+from wattpad_crawler.models import Comment, Part, Story
+from wattpad_crawler.scrape.chapter_html import ChapterContent
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _SLUG_MAX = 80
@@ -69,3 +71,55 @@ def story_dir(output_dir: Path, story: Story) -> Path:
     sid = _safe_path_part(story.story_id)
     slug = slugify(story.title)
     return output_dir / "stories" / author / f"{sid}_{slug}"
+
+
+def _part_basename(part: Part) -> str:
+    return f"{part.ordinal:02d}_{part.part_id}_{slugify(part.title)}"
+
+
+def _comments_basename(part: Part) -> str:
+    return f"{part.ordinal:02d}_{part.part_id}"
+
+
+def _comment_to_dict(c: Comment) -> dict:
+    return {
+        "comment_id": c.comment_id,
+        "user": c.user,
+        "body": c.body,
+        "created_at": c.created_at,
+        "paragraph_id": c.paragraph_id,
+        "replies": [_comment_to_dict(r) for r in c.replies],
+    }
+
+
+def write_part_files(
+    output_dir: Path,
+    story: Story,
+    part: Part,
+    content: ChapterContent,
+    raw_html: str,
+    inline_comments: list[Comment],
+    end_comments: list[Comment],
+) -> None:
+    parts_dir = story_dir(output_dir, story) / "parts"
+    base = _part_basename(part)
+    cbase = _comments_basename(part)
+    atomic_write_text(parts_dir / f"{base}.json", json.dumps({
+        "part_id": part.part_id,
+        "ordinal": part.ordinal,
+        "title": part.title,
+        "url": part.url,
+        "last_modified": part.last_modified,
+        "paragraphs": content.paragraphs,
+        "images": content.images,
+    }, ensure_ascii=False, indent=2))
+    atomic_write_text(parts_dir / f"{base}.html", raw_html)
+    atomic_write_text(parts_dir / f"{base}.txt", content.text)
+    atomic_write_text(
+        parts_dir / f"{cbase}_comments-inline.json",
+        json.dumps([_comment_to_dict(c) for c in inline_comments], ensure_ascii=False, indent=2),
+    )
+    atomic_write_text(
+        parts_dir / f"{cbase}_comments-end.json",
+        json.dumps([_comment_to_dict(c) for c in end_comments], ensure_ascii=False, indent=2),
+    )
