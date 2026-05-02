@@ -2,7 +2,10 @@ import threading
 import time
 from pathlib import Path
 
-from wattpad_crawler.client import TokenBucket, build_client
+import httpx
+import pytest
+
+from wattpad_crawler.client import RateLimitedClient, TokenBucket, build_client
 from wattpad_crawler.config import Config
 
 
@@ -86,3 +89,53 @@ def test_token_bucket_under_concurrency_does_not_deadlock():
     # Allow generous upper bound for slow CI; lower bound asserts the bucket
     # actually rate-limited (not just instant).
     assert 0.2 < elapsed < 1.5, f"Elapsed {elapsed} outside expected window"
+
+
+def make_client(tmp_path, transport):
+    cfg = Config(output_dir=tmp_path, rate_limit_per_sec=1000.0)
+    rlc = RateLimitedClient(cfg)
+    rlc._client = httpx.Client(transport=transport, headers={"User-Agent": cfg.user_agent})
+    return rlc
+
+
+def test_client_retries_on_5xx(tmp_path):
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] < 3:
+            return httpx.Response(503)
+        return httpx.Response(200, json={"ok": True})
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    r = rlc.get("https://example.com/x")
+    assert r.status_code == 200
+    assert calls["n"] == 3
+    rlc.close()
+
+
+def test_client_gives_up_after_max_attempts(tmp_path):
+    transport = httpx.MockTransport(lambda req: httpx.Response(503))
+    rlc = make_client(tmp_path, transport)
+    with pytest.raises(httpx.HTTPStatusError):
+        rlc.get("https://example.com/x", max_attempts=3)
+    rlc.close()
+
+
+def test_client_honors_retry_after_on_429(tmp_path):
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, headers={"Retry-After": "1"})
+        return httpx.Response(200, text="ok")
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    start = time.monotonic()
+    r = rlc.get("https://example.com/x")
+    assert r.status_code == 200
+    assert (time.monotonic() - start) >= 0.9
+    rlc.close()
