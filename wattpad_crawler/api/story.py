@@ -11,28 +11,44 @@ STORY_URL = "https://www.wattpad.com/api/v3/stories/{story_id}?fields=" + STORY_
 
 
 def parse_story(raw: dict[str, Any]) -> Story:
-    parts = [
-        Part(
-            part_id=str(p["id"]),
-            ordinal=i + 1,
-            title=p.get("title", ""),
-            url=p.get("url", ""),
-            last_modified=p.get("modifyDate"),
+    story_id_raw = raw.get("id")
+    if story_id_raw is None:
+        raise ValueError(f"Story response missing 'id': keys={list(raw.keys())}")
+
+    user_obj = raw.get("user")
+    author_username = (
+        user_obj.get("name", "") if isinstance(user_obj, dict) else ""
+    )
+
+    parts: list[Part] = []
+    for i, p in enumerate(raw.get("parts") or []):
+        part_id_raw = p.get("id")
+        if part_id_raw is None:
+            raise ValueError(
+                f"Part at ordinal {i + 1} missing 'id' in story {story_id_raw}"
+            )
+        parts.append(
+            Part(
+                part_id=str(part_id_raw),
+                ordinal=i + 1,
+                title=p.get("title", ""),
+                url=p.get("url", ""),
+                last_modified=p.get("modifyDate"),
+            )
         )
-        for i, p in enumerate(raw.get("parts", []))
-    ]
+
     return Story(
-        story_id=str(raw["id"]),
+        story_id=str(story_id_raw),
         title=raw.get("title", ""),
-        author_username=raw.get("user", {}).get("name", ""),
-        description=raw.get("description", ""),
-        cover_url=raw.get("cover", ""),
-        tags=list(raw.get("tags", [])),
+        author_username=author_username,
+        description=raw.get("description") or "",
+        cover_url=raw.get("cover") or "",
+        tags=list(raw.get("tags") or []),
         parts=parts,
         last_modified=raw.get("modifyDate"),
-        votes=int(raw.get("voteCount", 0)),
-        reads=int(raw.get("readCount", 0)),
-        completed=bool(raw.get("completed", False)),
+        votes=int(raw.get("voteCount") or 0),
+        reads=int(raw.get("readCount") or 0),
+        completed=bool(raw.get("completed") or False),
     )
 
 
