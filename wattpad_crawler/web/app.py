@@ -22,4 +22,7 @@ def build_app(cfg: Config) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
+    from wattpad_crawler.web.routes import router as main_router
+    app.include_router(main_router)
+
     return app
