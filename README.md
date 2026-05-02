@@ -55,6 +55,30 @@ Re-running is safe and incremental — already-downloaded chapters are skipped, 
 new or failed parts are fetched. The local archive is **append-only**: the tool
 never deletes a file, even if the remote story is removed from Wattpad.
 
+## Web UI
+
+For a friendlier experience, run the local web UI:
+
+```bash
+wattpad-crawler --output ./wattpad-archive serve
+```
+
+Then open <http://127.0.0.1:8000> in your browser. Features:
+
+- **Setup:** paste your cookie, save (no terminal needed for this).
+- **Dashboard:** click a button to archive your library, a reading list, or a single story.
+- **Live progress:** watch chapters and comments stream in via Server-Sent Events.
+- **Library:** browse archived stories by cover.
+- **Reader:** read chapters in a clean view directly from your local archive.
+
+The web UI calls the same code as the CLI — `_state.sqlite` is the single source of truth for both.
+
+To bind to all interfaces (e.g. for a homelab):
+
+```bash
+wattpad-crawler serve --host 0.0.0.0 --port 8000
+```
+
 ## Output Layout
 
 ```
