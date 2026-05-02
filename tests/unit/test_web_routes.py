@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -61,3 +62,62 @@ def test_dashboard_renders(output_dir: Path):
     assert r.status_code == 200
     assert "library" in r.text.lower()
     assert "story" in r.text.lower()
+
+
+def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    captured = {}
+
+    def fake_archive_story(cfg_arg, _client, _manifest, sid, *, deps=None, progress=None):
+        captured["sid"] = sid
+        if progress:
+            progress("story.start", {"story_id": sid})
+
+    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    r = client.post("/jobs", data={"kind": "story", "target": "12345"}, follow_redirects=False)
+    assert r.status_code == 303
+    job_id = r.headers["location"].rsplit("/", 1)[-1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError(f"job stuck at {job.status}")
+        time.sleep(0.01)
+    assert captured["sid"] == "12345"
+
+
+def test_post_jobs_url_resolves(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    captured = {}
+
+    def fake_archive_story(cfg_arg, _client, _manifest, sid, *, deps=None, progress=None):
+        captured["sid"] = sid
+
+    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    r = client.post("/jobs", data={
+        "kind": "story",
+        "target": "https://www.wattpad.com/story/789-foo-bar",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    job_id = r.headers["location"].rsplit("/", 1)[-1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
+        time.sleep(0.01)
+    assert captured["sid"] == "789"
+
+
+def test_post_jobs_invalid_kind_returns_400(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.post("/jobs", data={"kind": "garbage"}, follow_redirects=False)
+    assert r.status_code == 400

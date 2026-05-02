@@ -1,7 +1,17 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+
+from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
+from wattpad_crawler.archive.state import Manifest
+from wattpad_crawler.client import RateLimitedClient
+from wattpad_crawler.jobs import (
+    ResolveError,
+    archive_many,
+    archive_story,
+    resolve_story_id,
+)
 
 router = APIRouter()
 
@@ -74,3 +84,58 @@ def dashboard(request: Request) -> HTMLResponse:
             "recent_jobs": mgr.list_jobs()[:10],
         },
     )
+
+
+def _build_work(cfg, kind: str, args: dict):
+    """Build a JobWork callable that opens its own client+manifest, runs the job,
+    then closes them."""
+    def work(emit):
+        client = RateLimitedClient(cfg)
+        manifest = Manifest(cfg.output_dir).connect()
+        try:
+            if kind == "story":
+                archive_story(cfg, client, manifest, args["story_id"], progress=emit)
+            elif kind == "library":
+                ids = fetch_library(client, args["username"])
+                archive_many(cfg, client, manifest, ids, progress=emit)
+            elif kind == "list":
+                ids = fetch_list_story_ids(client, args["list_id"])
+                archive_many(cfg, client, manifest, ids, progress=emit)
+        finally:
+            manifest.close()
+            client.close()
+    return work
+
+
+@router.post("/jobs")
+async def submit_job(request: Request) -> RedirectResponse:
+    form = await request.form()
+    kind = form.get("kind")
+    cfg = request.app.state.cfg
+    mgr = request.app.state.job_manager
+    runner = request.app.state.job_runner
+
+    if kind == "story":
+        target = form.get("target", "").strip()
+        try:
+            sid = resolve_story_id(target)
+        except ResolveError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        job = mgr.create("archive_story", {"story_id": sid, "target": target})
+        runner.submit(job, _build_work(cfg, "story", {"story_id": sid}))
+    elif kind == "library":
+        username = form.get("username", "").strip()
+        if not username:
+            raise HTTPException(status_code=400, detail="username required")
+        job = mgr.create("archive_library", {"username": username})
+        runner.submit(job, _build_work(cfg, "library", {"username": username}))
+    elif kind == "list":
+        list_id = form.get("list_id", "").strip()
+        if not list_id:
+            raise HTTPException(status_code=400, detail="list_id required")
+        job = mgr.create("archive_list", {"list_id": list_id})
+        runner.submit(job, _build_work(cfg, "list", {"list_id": list_id}))
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown kind: {kind}")
+
+    return RedirectResponse(url=f"/jobs/{job.job_id}", status_code=303)
