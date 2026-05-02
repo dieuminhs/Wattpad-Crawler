@@ -1,6 +1,6 @@
 import threading
 
-from wattpad_crawler.web.runner import Job, JobStatus, ProgressEvent
+from wattpad_crawler.web.runner import Job, JobManager, JobStatus, ProgressEvent
 
 
 def test_progress_event_holds_fields():
@@ -56,3 +56,25 @@ def test_job_emit_is_thread_safe():
     assert len(job.events) == 200
     seen = {(e.data["n"], e.data["i"]) for e in job.events}
     assert len(seen) == 200
+
+
+def test_jobmanager_create_returns_job_with_unique_id():
+    mgr = JobManager()
+    j1 = mgr.create("archive_story", {"story_id": "1"})
+    j2 = mgr.create("archive_story", {"story_id": "2"})
+    assert j1.job_id != j2.job_id
+    assert mgr.get(j1.job_id) is j1
+
+
+def test_jobmanager_get_unknown_returns_none():
+    mgr = JobManager()
+    assert mgr.get("nope") is None
+
+
+def test_jobmanager_list_returns_recent_first():
+    mgr = JobManager()
+    j1 = mgr.create("archive_story", {})
+    j2 = mgr.create("archive_story", {})
+    j3 = mgr.create("archive_story", {})
+    listed = mgr.list_jobs()
+    assert [j.job_id for j in listed] == [j3.job_id, j2.job_id, j1.job_id]

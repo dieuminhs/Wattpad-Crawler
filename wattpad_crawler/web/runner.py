@@ -65,3 +65,28 @@ class Job:
 
 def new_job_id() -> str:
     return uuid.uuid4().hex[:12]
+
+
+class JobManager:
+    """In-memory registry of jobs. Thread-safe."""
+
+    def __init__(self) -> None:
+        self._jobs: dict[str, Job] = {}
+        self._order: list[str] = []  # insertion order, oldest first
+        self._lock = threading.Lock()
+
+    def create(self, kind: str, args: dict[str, Any]) -> Job:
+        job = Job(job_id=new_job_id(), kind=kind, args=args)
+        with self._lock:
+            self._jobs[job.job_id] = job
+            self._order.append(job.job_id)
+        return job
+
+    def get(self, job_id: str) -> Job | None:
+        with self._lock:
+            return self._jobs.get(job_id)
+
+    def list_jobs(self) -> list[Job]:
+        """Return jobs newest-first."""
+        with self._lock:
+            return [self._jobs[jid] for jid in reversed(self._order)]
