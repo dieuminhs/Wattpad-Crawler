@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Library — Wattpad Crawler{% endblock %}
+{% block content %}
+  <h1>Library</h1>
+  {% if entries %}
+    <p class="muted">{{ entries|length }} stories archived.</p>
+    <div class="library-grid">
+      {% for e in entries %}
+        <a class="library-item" href="/read/{{ e.author }}/{{ e.dir_name }}">
+          {% if e.has_cover %}
+            <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
+          {% else %}
+            <div style="aspect-ratio:2/3;background:#eee;display:flex;align-items:center;justify-content:center;color:#999;">no cover</div>
+          {% endif %}
+          <div class="title">{{ e.title }}</div>
+          <div class="author">by {{ e.author }}</div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No stories yet. <a href="/">Archive one</a> to get started — the library is empty.</p>
+  {% endif %}
+{% endblock %}

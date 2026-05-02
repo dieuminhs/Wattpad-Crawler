@@ -1,3 +1,4 @@
+import json
 import time
 from pathlib import Path
 
@@ -164,3 +165,60 @@ def test_sse_stream_404_unknown_job(output_dir: Path):
     client = TestClient(app)
     r = client.get("/jobs/missing/stream")
     assert r.status_code == 404
+
+
+def test_library_empty(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library")
+    assert r.status_code == 200
+    assert "no stories" in r.text.lower() or "empty" in r.text.lower()
+
+
+def test_library_lists_stories(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": ["x"], "description": "d", "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library")
+    assert r.status_code == 200
+    assert "My Tale" in r.text
+    assert "alice" in r.text
+
+
+def test_library_cover_serves_when_present(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "cover.jpg").write_bytes(b"\xff\xd8\xff\xe0fake")
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "T", "author_username": "alice",
+        "tags": [], "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library/cover/alice/42_my-tale")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/jpeg")
+
+
+def test_library_cover_404_when_missing(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library/cover/alice/nonexistent")
+    assert r.status_code == 404
+
+
+def test_library_cover_blocks_path_traversal(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/library/cover/..%2F..%2F/x")
+    assert r.status_code in (400, 404)

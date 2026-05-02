@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
@@ -14,6 +14,7 @@ from wattpad_crawler.jobs import (
     archive_story,
     resolve_story_id,
 )
+from wattpad_crawler.web.library_browser import scan_library
 
 router = APIRouter()
 
@@ -188,3 +189,24 @@ async def job_stream(request: Request, job_id: str, after: int = 0):
             await asyncio.sleep(0.25)
 
     return EventSourceResponse(event_gen())
+
+
+@router.get("/library", response_class=HTMLResponse)
+def library(request: Request) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    entries = scan_library(cfg.output_dir)
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="library.html",
+        context={"entries": entries},
+    )
+
+
+@router.get("/library/cover/{author}/{dir_name}")
+def library_cover(request: Request, author: str, dir_name: str) -> FileResponse:
+    cfg = request.app.state.cfg
+    target = (cfg.output_dir / "stories" / author / dir_name / "cover.jpg").resolve()
+    stories_root = (cfg.output_dir / "stories").resolve()
+    if not target.is_relative_to(stories_root) or not target.exists():
+        raise HTTPException(status_code=404, detail="cover not found")
+    return FileResponse(target, media_type="image/jpeg")
