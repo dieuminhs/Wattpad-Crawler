@@ -18,6 +18,10 @@ def build_app(cfg: Config) -> FastAPI:
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
+    from wattpad_crawler.web.runner import JobManager, JobRunner
+    app.state.job_manager = JobManager()
+    app.state.job_runner = JobRunner(app.state.job_manager)
+
     @app.get("/_health")
     def health() -> dict:
         return {"status": "ok"}

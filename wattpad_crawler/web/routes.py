@@ -60,3 +60,17 @@ def setup_post(request: Request, cookie: str = Form(...)) -> RedirectResponse:
     from wattpad_crawler.config import load_config
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
+
+
+@router.get("/", response_class=HTMLResponse)
+def dashboard(request: Request) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    mgr = request.app.state.job_manager
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "has_cookie": bool(cfg.cookie),
+            "recent_jobs": mgr.list_jobs()[:10],
+        },
+    )

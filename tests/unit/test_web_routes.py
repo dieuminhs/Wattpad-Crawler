@@ -51,3 +51,13 @@ def test_setup_post_strips_whitespace(output_dir: Path):
     client.post("/setup", data={"cookie": "  tok-abc-123  \n"}, follow_redirects=False)
     text = (output_dir / "_config.toml").read_text()
     assert 'cookie = "tok-abc-123"' in text
+
+
+def test_dashboard_renders(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "library" in r.text.lower()
+    assert "story" in r.text.lower()

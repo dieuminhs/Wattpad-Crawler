@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Wattpad Crawler{% endblock %}
+{% block content %}
+  <h1>What do you want to archive?</h1>
+
+  {% if not has_cookie %}
+    <div class="card status-failed">
+      <strong>No cookie configured.</strong> You need to <a href="/setup">paste your Wattpad cookie</a> first
+      to archive your library or login-required stories.
+    </div>
+  {% endif %}
+
+  <div class="three-buttons">
+    <form method="post" action="/jobs" class="card">
+      <h3>My library</h3>
+      <p>Archive everything you've added on Wattpad.</p>
+      <p>
+        <input type="text" name="username" placeholder="your Wattpad username" required>
+      </p>
+      <input type="hidden" name="kind" value="library">
+      <button type="submit">Archive library</button>
+    </form>
+
+    <form method="post" action="/jobs" class="card">
+      <h3>One story</h3>
+      <p>Archive a single story by ID or URL.</p>
+      <p>
+        <input type="text" name="target" placeholder="story ID or wattpad.com URL" required>
+      </p>
+      <input type="hidden" name="kind" value="story">
+      <button type="submit">Archive story</button>
+    </form>
+
+    <form method="post" action="/jobs" class="card">
+      <h3>Reading list</h3>
+      <p>Archive all stories in a reading list.</p>
+      <p>
+        <input type="text" name="list_id" placeholder="reading list ID" required>
+      </p>
+      <input type="hidden" name="kind" value="list">
+      <button type="submit">Archive list</button>
+    </form>
+  </div>
+
+  <h2>Recent jobs</h2>
+  {% if recent_jobs %}
+    <ul>
+      {% for job in recent_jobs %}
+        <li>
+          <a href="/jobs/{{ job.job_id }}">
+            <span class="status-{{ job.status.value }}">[{{ job.status.value }}]</span>
+            {{ job.kind }} —
+            {% for k, v in job.args.items() %}<span class="muted">{{ k }}={{ v }}</span> {% endfor %}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No jobs yet.</p>
+  {% endif %}
+{% endblock %}
