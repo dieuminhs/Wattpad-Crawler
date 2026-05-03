@@ -27,7 +27,7 @@
     <script>
       (function () {
         var log = document.getElementById('event-log');
-        var es = new EventSource("/jobs/{{ job.job_id }}/stream?after={{ job.events|length }}");
+        var es = new EventSource("/jobs/{{ job.job_id }}/stream?after_seq={{ job.next_seq }}");
         es.onmessage = function (e) {
           var data = JSON.parse(e.data);
           if (data.kind === '__status__') {
