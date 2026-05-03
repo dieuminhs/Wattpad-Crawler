@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from wattpad_crawler.auth import AuthError
 from wattpad_crawler.cli import build_parser, main
 
 
@@ -163,3 +164,84 @@ def test_main_serve_invokes_uvicorn(output_dir, monkeypatch):
     assert rc == 0
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == 9000
+
+
+# ---- AUTH-02 tests (Phase 2 / Plan 03) ----
+
+def _seed_blank_cookie_config(output_dir: Path) -> None:
+    """Pre-create _config.toml with empty cookie so load_config returns cfg.cookie=''."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "_config.toml").write_text(
+        'cookie = ""\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
+        encoding="utf-8",
+    )
+
+
+def test_main_archive_auth_failure_exits_2(output_dir, monkeypatch, capsys):
+    """ROADMAP success criterion #1: blank cookie + archive command exits 2 with
+    AuthError on stderr BEFORE making any archive API calls."""
+    _seed_blank_cookie_config(output_dir)
+    # If archive_story is reached, the gate failed.
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.archive_story",
+        lambda *a, **kw: pytest.fail("archive_story was called despite blank cookie"),
+    )
+    rc = main(["--output", str(output_dir), "story", "12345"])
+    captured = capsys.readouterr()
+    assert rc == 2, f"Expected exit code 2, got {rc}"
+    assert "AuthError" in captured.err, f"Stderr missing 'AuthError': {captured.err!r}"
+    assert "/setup" in captured.err, f"Stderr missing remediation hint '/setup': {captured.err!r}"
+
+
+@pytest.mark.parametrize("cmd_args,downstream_attr", [
+    (["story", "12345"], "wattpad_crawler.cli.archive_story"),
+    (["url", "https://www.wattpad.com/story/42-foo"], "wattpad_crawler.cli.archive_story"),
+    (["library", "--user", "alice"], "wattpad_crawler.cli.archive_many"),
+    (["list", "L1"], "wattpad_crawler.cli.archive_many"),
+])
+def test_main_all_archive_branches_gated(output_dir, monkeypatch, cmd_args, downstream_attr):
+    """AUTH-02 / D-05: every archive branch (story / url / library / list) is gated."""
+    _seed_blank_cookie_config(output_dir)
+    # Force validate_cookie to raise — guarantees we go through the AuthError path
+    # regardless of how the cookie short-circuit is implemented.
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.validate_cookie",
+        lambda client: (_ for _ in ()).throw(AuthError("simulated auth failure")),
+    )
+    # If the downstream archive function is reached, the gate failed.
+    monkeypatch.setattr(
+        downstream_attr,
+        lambda *a, **kw: pytest.fail(f"{downstream_attr} was called despite AuthError"),
+    )
+    rc = main(["--output", str(output_dir), *cmd_args])
+    assert rc == 2, f"Expected exit code 2 for {cmd_args}, got {rc}"
+
+
+def test_main_status_skips_validation(output_dir, monkeypatch):
+    """AUTH-02 / D-06: status reads local sqlite only — does not call validate_cookie."""
+    _seed_blank_cookie_config(output_dir)
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.validate_cookie",
+        lambda client: pytest.fail("validate_cookie was called for `status` command"),
+    )
+    rc = main(["--output", str(output_dir), "status"])
+    assert rc == 0
+
+
+def test_main_serve_skips_validation(output_dir, monkeypatch):
+    """AUTH-02 / D-06: serve does not call validate_cookie at startup
+    (web /setup covers it interactively)."""
+    _seed_blank_cookie_config(output_dir)
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.validate_cookie",
+        lambda client: pytest.fail("validate_cookie was called for `serve` command"),
+    )
+    uvicorn_called = {"n": 0}
+
+    def fake_run(*args, **kwargs):
+        uvicorn_called["n"] += 1
+
+    monkeypatch.setattr("wattpad_crawler.cli.uvicorn.run", fake_run)
+    rc = main(["--output", str(output_dir), "serve"])
+    assert rc == 0
+    assert uvicorn_called["n"] == 1
