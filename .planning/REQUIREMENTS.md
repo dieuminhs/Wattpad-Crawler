@@ -9,15 +9,15 @@ Hardening pass on the existing Python archiver. No new end-user features. Each r
 
 ### Reliability
 
-- [ ] **REL-01**: Comment-reply recursion is depth-bounded — `_parse_one()` accepts a `max_depth` parameter (default 10), truncates deeper replies, and logs a warning so silent data loss is visible
-- [ ] **REL-02**: Job event lists are capped — `Job.events` keeps the most recent N entries (default 1000) so long archives don't grow unbounded; SSE stream still emits new events
-- [ ] **REL-03**: `JobManager` prunes old jobs — retain only the N most recent jobs (default 50), pruning under the existing lock when a new job is created
-- [ ] **REL-04**: Render failures fail the job loudly — if all three renderers (TXT, HTML, EPUB) fail for a story, the job ends `failed` rather than `done`; partial success surfaces as a per-format flag in the final event
+- [x] **REL-01**: Comment-reply recursion is depth-bounded — `_parse_one()` accepts a `max_depth` parameter (default 10), truncates deeper replies, and logs a warning so silent data loss is visible
+- [x] **REL-02**: Job event lists are capped — `Job.events` keeps the most recent N entries (default 1000) so long archives don't grow unbounded; SSE stream still emits new events
+- [x] **REL-03**: `JobManager` prunes old jobs — retain only the N most recent jobs (default 50), pruning under the existing lock when a new job is created
+- [x] **REL-04**: Render failures fail the job loudly — if all three renderers (TXT, HTML, EPUB) fail for a story, the job ends `failed` rather than `done`; partial success surfaces as a per-format flag in the final event
 
 ### Sanitization
 
-- [ ] **SAN-01**: Paragraph HTML is sanitized at extract-time via `nh3` — `extract_chapter()` runs each paragraph's `html` field through an explicit allowlist before storing; allowlist preserves `<img>`, `<br>`, and the `data-p-id` attribute
-- [ ] **SAN-02**: `bleach` is replaced by `nh3` in `pyproject.toml` — `nh3 0.3.x` added; `bleach` not introduced (it was never present, but documented here so it's never added)
+- [x] **SAN-01**: Paragraph HTML is sanitized at extract-time via `nh3` — `extract_chapter()` runs each paragraph's `html` field through an explicit allowlist before storing; allowlist preserves `<img>`, `<br>`, and the `data-p-id` attribute
+- [x] **SAN-02**: `bleach` is replaced by `nh3` in `pyproject.toml` — `nh3 0.3.x` added; `bleach` not introduced (it was never present, but documented here so it's never added)
 
 ### Authentication
 
@@ -96,12 +96,12 @@ Deferred to a future "Features v2" or "Polish & Ship" milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | Phase 1 | Pending |
-| REL-02 | Phase 1 | Pending |
-| REL-03 | Phase 1 | Pending |
-| REL-04 | Phase 1 | Pending |
-| SAN-01 | Phase 1 | Pending |
-| SAN-02 | Phase 1 | Pending |
+| REL-01 | Phase 1 | Satisfied |
+| REL-02 | Phase 1 | Satisfied |
+| REL-03 | Phase 1 | Satisfied |
+| REL-04 | Phase 1 | Satisfied |
+| SAN-01 | Phase 1 | Satisfied |
+| SAN-02 | Phase 1 | Satisfied |
 | AUTH-01 | Phase 2 | Pending |
 | AUTH-02 | Phase 2 | Pending |
 | AUTH-03 | Phase 2 | Pending |
@@ -128,7 +128,8 @@ Deferred to a future "Features v2" or "Polish & Ship" milestone.
 - v1 requirements: 27 total
 - Mapped to phases: 27
 - Unmapped: 0
+- Satisfied: 6/27 (Phase 1 complete; Phases 2–5 pending)
 
 ---
 *Requirements defined: 2026-05-03*
-*Last updated: 2026-05-03 after roadmap creation*
+*Last updated: 2026-05-03 after Phase 1 audit confirmed satisfaction of REL-01..04, SAN-01..02*
