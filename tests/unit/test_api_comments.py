@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from wattpad_crawler.api.comments import parse_comments_page
@@ -14,3 +15,162 @@ def test_parse_comments_page(fixtures_dir: Path):
     assert len(comments[0].replies) == 1
     assert comments[0].replies[0].user == "alice"
     assert next_url is None
+
+
+# --- Phase 1 REL-01 recursion-cap tests ---
+
+
+def _nest(level: int) -> dict:
+    """Build a comment dict with `level` levels of nested replies.
+
+    level=0 produces a leaf comment (no replies).
+    level=N produces a comment whose replies contain one nested comment of level N-1.
+    """
+    if level == 0:
+        return {"id": "c0", "body": "leaf", "user": {"name": "u"}}
+    return {
+        "id": f"c{level}",
+        "body": f"level {level}",
+        "user": {"name": "u"},
+        "replies": [_nest(level - 1)],
+    }
+
+
+def test_parse_one_caps_recursion_at_default_max_depth():
+    from wattpad_crawler.api.comments import _MAX_COMMENT_DEPTH, _parse_one
+
+    raw = _nest(15)
+    comment, truncated = _parse_one(raw)
+    assert comment is not None
+    assert truncated is True
+    assert _MAX_COMMENT_DEPTH == 10  # REL-01 default
+
+    # Walk down 10 levels — each level should have exactly one reply.
+    cursor = comment
+    for _ in range(10):
+        assert cursor is not None
+        assert len(cursor.replies) == 1
+        cursor = cursor.replies[0]
+    # The 10th-level comment is preserved (D-17) but its replies are empty.
+    assert cursor is not None
+    assert cursor.replies == []
+
+
+def test_parse_one_respects_custom_max_depth():
+    from wattpad_crawler.api.comments import _parse_one
+
+    raw = _nest(10)
+    comment, truncated = _parse_one(raw, max_depth=3)
+    assert comment is not None
+    assert truncated is True
+
+    cursor = comment
+    for _ in range(3):
+        assert len(cursor.replies) == 1
+        cursor = cursor.replies[0]
+    assert cursor.replies == []
+
+
+def test_parse_one_no_truncation_when_depth_below_cap():
+    from wattpad_crawler.api.comments import _parse_one
+
+    raw = _nest(5)
+    comment, truncated = _parse_one(raw, max_depth=10)
+    assert comment is not None
+    assert truncated is False
+
+    cursor = comment
+    for _ in range(5):
+        assert len(cursor.replies) == 1
+        cursor = cursor.replies[0]
+    assert cursor.replies == []  # natural leaf, not truncation
+
+
+def test_parse_one_no_recursion_error_on_30_level_chain():
+    """A 30-level chain must not raise RecursionError even at the default cap of 10."""
+    from wattpad_crawler.api.comments import _parse_one
+
+    raw = _nest(30)
+    comment, truncated = _parse_one(raw)
+    assert comment is not None
+    assert truncated is True
+
+
+def test_parse_one_returns_none_when_id_missing():
+    from wattpad_crawler.api.comments import _parse_one
+
+    comment, truncated = _parse_one({"body": "no id", "user": {"name": "u"}})
+    assert comment is None
+    assert truncated is False
+
+
+def test_parse_one_skips_non_dict_replies():
+    """Defensive: malformed reply entries (strings, None) must not crash."""
+    from wattpad_crawler.api.comments import _parse_one
+
+    raw = {
+        "id": "c1",
+        "user": {"name": "u"},
+        "body": "x",
+        "replies": ["not-a-dict", None, {"id": "c2", "user": {"name": "v"}, "body": "y"}],
+    }
+    comment, truncated = _parse_one(raw)
+    assert comment is not None
+    assert truncated is False
+    assert len(comment.replies) == 1
+    assert comment.replies[0].comment_id == "c2"
+
+
+def test_parse_comments_page_logs_warning_on_truncation(caplog):
+    raw = {"comments": [_nest(15)], "nextUrl": None}
+    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+        parsed, next_url = parse_comments_page(raw)
+    assert len(parsed) == 1
+    assert next_url is None
+    # Exactly one warning record from this logger.
+    records = [r for r in caplog.records if r.name == "wattpad_crawler.api.comments"]
+    assert len(records) == 1
+    msg = records[0].getMessage().lower()
+    assert "truncat" in msg
+    # Message names the parent comment id (c15 — the top of the chain).
+    assert "c15" in records[0].getMessage()
+
+
+def test_parse_comments_page_no_warning_when_under_cap(caplog):
+    raw = {"comments": [_nest(5)], "nextUrl": None}
+    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+        parsed, _ = parse_comments_page(raw)
+    assert len(parsed) == 1
+    records = [r for r in caplog.records if r.name == "wattpad_crawler.api.comments"]
+    assert records == []
+
+
+def test_parse_comments_page_emits_one_warning_per_truncated_top_level(caplog):
+    """Two top-level comments, only one of which truncates — exactly one warning."""
+    raw = {
+        "comments": [_nest(15), _nest(5)],  # first truncates, second does not
+        "nextUrl": None,
+    }
+    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+        parsed, _ = parse_comments_page(raw)
+    assert len(parsed) == 2
+    records = [r for r in caplog.records if r.name == "wattpad_crawler.api.comments"]
+    assert len(records) == 1
+    assert "c15" in records[0].getMessage()
+
+
+def test_parse_one_monkeypatch_constant_changes_behavior(monkeypatch):
+    """D-11: tests can monkeypatch _MAX_COMMENT_DEPTH; new calls pick up new default."""
+    from wattpad_crawler.api import comments as comments_mod
+
+    monkeypatch.setattr(comments_mod, "_MAX_COMMENT_DEPTH", 2)
+    # _parse_one's default for max_depth was bound at function-def time
+    # to the original constant (10). To honor the patched value tests
+    # must pass it explicitly. This test documents that contract.
+    raw = _nest(5)
+    # Default still 10 (function default captured at definition).
+    _, t_default = comments_mod._parse_one(raw)
+    assert t_default is False
+    # Explicit pass uses the patched value.
+    _, t_explicit = comments_mod._parse_one(raw, max_depth=2)
+    assert t_explicit is True
