@@ -3,6 +3,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from wattpad_crawler.api import comments as api_comments
 from wattpad_crawler.api import story as api_story
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class JobDeps:
     """Indirection layer so tests can inject fakes."""
+
     fetch_story: Callable
     fetch_chapter_html: Callable
     parse_chapter: Callable
@@ -74,12 +76,15 @@ def archive_story(
     logger.info("Archiving story %s", story_id)
     emit("story.fetch", {"story_id": story_id})
     story: Story = deps.fetch_story(client, story_id)
-    emit("story.start", {
-        "story_id": story.story_id,
-        "title": story.title,
-        "author": story.author_username,
-        "parts_total": len(story.parts),
-    })
+    emit(
+        "story.start",
+        {
+            "story_id": story.story_id,
+            "title": story.title,
+            "author": story.author_username,
+            "parts_total": len(story.parts),
+        },
+    )
 
     manifest.upsert_story(story)
     manifest.upsert_parts(story)
@@ -97,11 +102,14 @@ def archive_story(
         if existing and existing["status"] == "done":
             emit("part.skipped", {"part_id": part.part_id, "ordinal": part.ordinal})
             continue
-        emit("part.start", {
-            "part_id": part.part_id,
-            "ordinal": part.ordinal,
-            "title": part.title,
-        })
+        emit(
+            "part.start",
+            {
+                "part_id": part.part_id,
+                "ordinal": part.ordinal,
+                "title": part.title,
+            },
+        )
         manifest.set_part_status(story.story_id, part.part_id, "in_progress")
         try:
             raw_html = deps.fetch_chapter_html(client, part.url)
@@ -109,27 +117,49 @@ def archive_story(
             inline = deps.fetch_inline_comments(client, part.part_id)
             end = deps.fetch_end_comments(client, part.part_id)
             store.write_part_files(
-                cfg.output_dir, story, part, content, raw_html, inline, end,
+                cfg.output_dir,
+                story,
+                part,
+                content,
+                raw_html,
+                inline,
+                end,
             )
             body_hash = hashlib.sha256(content.text.encode("utf-8")).hexdigest()
             manifest.set_part_status(
-                story.story_id, part.part_id, "done", body_hash=body_hash,
+                story.story_id,
+                part.part_id,
+                "done",
+                body_hash=body_hash,
             )
-            emit("part.done", {
-                "part_id": part.part_id,
-                "ordinal": part.ordinal,
-                "inline_comments": len(inline),
-                "end_comments": len(end),
-            })
+            emit(
+                "part.done",
+                {
+                    "part_id": part.part_id,
+                    "ordinal": part.ordinal,
+                    "inline_comments": len(inline),
+                    "end_comments": len(end),
+                },
+            )
         except Exception as e:
             logger.exception("part %s failed: %s", part.part_id, e)
             manifest.set_part_status(
-                story.story_id, part.part_id, "failed", last_error=str(e),
+                story.story_id,
+                part.part_id,
+                "failed",
+                last_error=str(e),
             )
             emit("part.failed", {"part_id": part.part_id, "error": str(e)})
 
     sd = store.story_dir(cfg.output_dir, story)
     emit("render.start", {"story_id": story.story_id})
+
+    # REL-04 / D-15: run all three renderers unconditionally, each in its
+    # own try/except; collect per-format ok/failed status. story.done
+    # carries the breakdown so SSE consumers see exactly which formats
+    # succeeded. After the loop, raise RenderError IFF all three failed
+    # — partial success keeps the job alive so existing artifacts ship.
+    render_status: dict[str, Literal["ok", "failed"]] = {}
     for name, fn in (
         ("txt", render_txt.render_txt),
         ("html", render_html.render_html),
@@ -137,13 +167,39 @@ def archive_story(
     ):
         try:
             fn(sd)
+            render_status[name] = "ok"
         except Exception as e:
             logger.exception("render(%s) failed for %s: %s", name, story.story_id, e)
             emit("render.failed", {"format": name, "error": str(e)})
-    emit("story.done", {"story_id": story.story_id})
+            render_status[name] = "failed"
+
+    emit(
+        "story.done",
+        {
+            "story_id": story.story_id,
+            "render_status": render_status,
+        },
+    )
+
+    if all(v == "failed" for v in render_status.values()):
+        raise RenderError(f"all renders failed: {render_status}")
 
 
 class ResolveError(Exception):
+    pass
+
+
+class RenderError(Exception):
+    """All renderers (TXT, HTML, EPUB) failed for one story.
+
+    Raised by archive_story() after the render loop completes when every
+    format in render_status is "failed". JobRunner._run catches this as
+    a normal Exception and routes to set_failed(str(e)); archive_many
+    records it in the per-story results dict via the same path. Partial
+    render failures (>=1 format succeeded) do NOT raise — the story.done
+    event carries the per-format breakdown instead.
+    """
+
     pass
 
 
