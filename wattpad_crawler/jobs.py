@@ -9,6 +9,7 @@ from wattpad_crawler.api import comments as api_comments
 from wattpad_crawler.api import story as api_story
 from wattpad_crawler.archive import store
 from wattpad_crawler.archive.state import Manifest
+from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.client import RateLimitedClient
 from wattpad_crawler.config import Config
 from wattpad_crawler.models import Story
@@ -141,6 +142,26 @@ def archive_story(
                     "end_comments": len(end),
                 },
             )
+        except AuthFailedError as e:
+            # AUTH-04 / D-16: do NOT swallow — re-raise so the job ends `failed`,
+            # not silently continuing to the next chapter that will also 401.
+            # AUTH-04 / D-17: emit auth.failed BEFORE re-raise so SSE consumers
+            # see the auth signal in the stream before __status__: failed.
+            # Mark the part status `failed` for manifest consistency before
+            # re-raising (mirrors the broad-except branch's manifest update).
+            manifest.set_part_status(
+                story.story_id,
+                part.part_id,
+                "failed",
+                last_error=str(e),
+            )
+            emit("auth.failed", {
+                "part_id": part.part_id,
+                "status_code": e.status_code,
+                "url": e.url,
+                "message": str(e),
+            })
+            raise
         except Exception as e:
             logger.exception("part %s failed: %s", part.part_id, e)
             manifest.set_part_status(
@@ -245,6 +266,11 @@ def archive_many(
             archive_story(cfg, client, manifest, sid, deps=deps, progress=progress)
             results[sid] = "done"
         except Exception as e:
+            # NOTE (Phase 2 / D-18): if e is AuthFailedError from a mid-batch cookie
+            # expiry, we currently treat it as a single-story failure and continue.
+            # The next story's first request will also 401, so the batch fails loudly
+            # in N steps rather than 1. Acceptable for v1; a future improvement could
+            # re-raise AuthFailedError here to abort the batch immediately.
             logger.exception("story %s failed: %s", sid, e)
             results[sid] = f"failed: {e}"
             emit("batch.failed", {"story_id": sid, "error": str(e)})
