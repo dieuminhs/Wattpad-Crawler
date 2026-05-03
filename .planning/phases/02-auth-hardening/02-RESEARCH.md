@@ -868,37 +868,43 @@ Required new imports at top of `web/routes.py`: `import os`, `import threading`.
 
 **If this table is empty:** All claims would be verified — but A1/A2 specifically require manual network verification that I cannot perform from this research session. Planner MUST include the curl-verification step in Plan 1.
 
-## Open Questions / Risks
+## Open Questions / Risks (RESOLVED)
 
 1. **Probe URL behavior with bogus cookie — STILL needs manual verification (STATE.md flagged this).**
    - What we know: documentation says `users/{username}/library` requires auth; we know it returns paginated `stories` with a valid cookie (existing `fetch_library` works).
    - What's unclear: does it return 401 / redirect / 200-with-empty when called with a malformed cookie? With NO cookie?
    - Recommendation: Plan 1's first implementation task includes the three curl probes documented in "Probe Endpoint Decision". Block the rest of Plan 1 on confirming results match expectation. If the library probe misbehaves, swap `_PROBE_URL` to the documented `/api/v3/internal/auth/check` before continuing.
+   - **RESOLVED:** Plan 01 Task 1 is a blocking checkpoint that runs the three curls and locks _PROBE_URL based on the observed outcome (default library probe OR fallback to /api/v3/internal/auth/check).
 
 2. **Behavior when `RateLimitedClient.get()` is called by `validate_cookie()` with `follow_redirects=False` AND the response is a 401.**
    - What we know: D-13 raises `AuthFailedError` from inside `RateLimitedClient.get()` BEFORE we ever inspect the response in `validate_cookie()`.
    - What's unclear: in `validate_cookie()`, do we catch `AuthFailedError` and re-raise as `AuthError`? Or let it propagate (since `AuthFailedError` IS an `AuthError` per D-03)?
    - Recommendation: per the code example in §Code Examples → Example 1, catch and re-wrap as `AuthError(str(e))`. This way callers get a uniform `AuthError` regardless of whether the failure came from the client branch or the redirect branch. Slight loss of `status_code` precision in the validate path (we discard the AuthFailedError attributes) — acceptable because `validate_cookie` callers (CLI startup, /setup POST) only care that auth failed, not which HTTP status. If a planner prefers to preserve the attributes, they can re-raise the AuthFailedError unchanged (it's already an AuthError subclass).
+   - **RESOLVED:** Plan 01s auth.py implementation catches AuthFailedError inside validate_cookie and re-wraps as AuthError(str(e)) -- uniform AuthError surface for CLI / /setup callers.
 
 3. **`_save_cookie` cleanup-on-exception scope.**
    - What we know: D-19 mandates cleanup of the tmp file on exception during the write/replace block.
    - What's unclear: if the OS `os.replace` itself raises (rare PermissionError under AV), the tmp file may have been written but not renamed. Cleanup deletes the tmp — correct. But if `tmp.write_text` raises mid-write, the tmp file may be partially written. Cleanup deletes the partial tmp — correct.
    - Edge case: what if `tmp.unlink(missing_ok=True)` itself raises (also AV)? We'd be re-raising the original exception while leaking a tmp file. Acceptable — user can manually clean up `_config.toml.*.tmp` once.
    - Recommendation: keep the cleanup as `try/except: tmp.unlink(missing_ok=True); raise`. Don't over-engineer.
+   - **RESOLVED:** Plan 05 Task 1 uses try: tmp.write_text + os.replace; except Exception: tmp.unlink(missing_ok=True); raise -- verified by test_save_cookie_cleans_up_tmp_on_failure.
 
 4. **CLI auth gate position relative to `Manifest` / `RateLimitedClient` construction.**
    - What we know: `cli.py:main()` currently constructs `client = RateLimitedClient(cfg)` and `manifest = Manifest(cfg.output_dir).connect()` BEFORE the dispatch block (lines 76-77).
    - What's unclear: does `_require_auth` go BEFORE or AFTER these constructions? If before, we can't pass the `client` to `validate_cookie` (it doesn't exist yet). If after, the `try/finally` cleanup at lines 104-106 properly closes them on AuthError.
    - Recommendation: AFTER construction. The `_require_auth(cfg, client)` helper reuses the already-built client. The existing `try/finally` block at lines 104-106 already closes `manifest` and `client`, so if AuthError is raised inside the dispatch branch, cleanup runs. The `except AuthError` block lives in `main()` AROUND the try/except/finally, OR inside the try block before each branch — both work. Simpler: catch inside `main()` immediately around the dispatch block, AFTER the finally.
+   - **RESOLVED:** Plan 03 places _require_auth(client) AFTER client/manifest construction with the AuthError catch as an inner try/except inside the existing try/finally cleanup block.
 
 5. **`web/routes.py:setup_post` return type annotation.**
    - What we know: current annotation is `-> RedirectResponse`. After Phase 2 it returns either `RedirectResponse` (success) or `HTMLResponse` (failure via `templates.TemplateResponse`).
    - Recommendation: change annotation to `-> RedirectResponse | HTMLResponse`. FastAPI accepts both. Ruff won't complain. `[VERIFIED: routes.py uses similar mixed-return patterns in other routes]`.
+   - **RESOLVED:** Plan 05 Task 2 setup_post signature widens the return to RedirectResponse | HTMLResponse.
 
 6. **Probe rate-limit budget impact.**
    - What we know: every `wattpad-crawler archive ...` invocation now consumes one extra token from the bucket (the probe). Default rate is 2.0 req/sec; one probe = 0.5s of budget.
    - Impact: negligible. CLI archive runs already issue dozens of requests; one extra at startup is invisible.
    - **DOES the probe also count against the bucket from the `/setup` POST path?** Yes — the transient `RateLimitedClient(transient_cfg)` has its own bucket, separate from the long-lived app client. Each `/setup` validation is one bucket-of-2 fully fresh. Effectively no rate impact.
+   - **RESOLVED:** No code change required -- impact analysis confirms the extra probe consumption is negligible (CLI: ~0.5s of a 2 req/s bucket; /setup: each validation gets a fresh transient bucket).
 
 ## Sources
 
