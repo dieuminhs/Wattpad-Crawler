@@ -1,12 +1,17 @@
 import json
+import os
 import time
 from pathlib import Path
 
+import httpx
+import pytest
 from fastapi.testclient import TestClient
 
+from wattpad_crawler.auth import AuthError
 from wattpad_crawler.config import Config
 from wattpad_crawler.web import runner
 from wattpad_crawler.web.app import build_app
+from wattpad_crawler.web.routes import _save_cookie
 
 
 def test_app_health_endpoint(output_dir: Path):
@@ -487,3 +492,167 @@ def test_job_detail_template_renders_after_seq_url(output_dir: Path):
     # Old form is gone.
     assert "?after=" not in body
     assert "job.events|length" not in body  # template syntax leaked = bug
+
+
+# ---- AUTH-05 atomic-save tests (Phase 2 / Plan 05) ----
+
+
+def test_save_cookie_uses_atomic_pattern(output_dir: Path, monkeypatch):
+    """AUTH-05 / D-19: _save_cookie writes via tmp + os.replace, NOT a direct write."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    captured = {"call": None}
+    real_replace = os.replace
+
+    def fake_replace(src, dst):
+        captured["call"] = (str(src), str(dst))
+        # Do the real replace so the file ends up at config_path for any downstream check.
+        real_replace(src, dst)
+
+    monkeypatch.setattr("wattpad_crawler.web.routes.os.replace", fake_replace)
+
+    _save_cookie(output_dir, "abc12345")
+
+    assert captured["call"] is not None, "os.replace was not called — atomic pattern missing"
+    src, dst = captured["call"]
+    assert dst == str(output_dir / "_config.toml"), \
+        f"Expected dst=_config.toml, got {dst!r}"
+    # The src tmp file should match the _config.toml.{pid}.{tid}.tmp shape.
+    assert "_config.toml." in src, f"Expected tmp path with _config.toml. prefix, got {src!r}"
+    assert src.endswith(".tmp"), f"Expected tmp path ending .tmp, got {src!r}"
+
+
+def test_save_cookie_crash_safe(output_dir: Path, monkeypatch):
+    """AUTH-05 / ROADMAP success criterion #4: a crash between tmp write and
+    os.replace leaves _config.toml either unchanged or fully written — never
+    zero bytes or partial."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    config_path = output_dir / "_config.toml"
+    original = 'cookie = "old-cookie-value"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n'
+    config_path.write_text(original, encoding="utf-8")
+
+    # Simulate a crash exactly between tmp.write_text() and os.replace().
+    monkeypatch.setattr(
+        "wattpad_crawler.web.routes.os.replace",
+        lambda src, dst: (_ for _ in ()).throw(RuntimeError("simulated crash")),
+    )
+
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        _save_cookie(output_dir, "new-cookie-value")
+
+    # _config.toml MUST still contain the original content — not zero bytes, not partial.
+    after = config_path.read_text(encoding="utf-8")
+    assert after == original, \
+        f"_config.toml was mutated by failed save:\nBefore: {original!r}\nAfter: {after!r}"
+    assert len(after) > 0, "_config.toml is zero bytes — crash was not safe"
+
+
+def test_save_cookie_cleans_up_tmp_on_failure(output_dir: Path, monkeypatch):
+    """AUTH-05 / D-19: tmp file cleanup on exception — no leftover *.tmp files."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    config_path = output_dir / "_config.toml"
+    config_path.write_text(
+        'cookie = "old"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "wattpad_crawler.web.routes.os.replace",
+        lambda src, dst: (_ for _ in ()).throw(RuntimeError("simulated crash")),
+    )
+
+    with pytest.raises(RuntimeError):
+        _save_cookie(output_dir, "new-cookie-value")
+
+    # No tmp files left behind in output_dir.
+    leftover = list(output_dir.glob("_config.toml.*.tmp"))
+    assert leftover == [], f"Tmp file cleanup failed; leftovers: {leftover}"
+
+
+# ---- AUTH-03 /setup UX tests (Phase 2 / Plan 05) ----
+
+
+def test_setup_post_invalid_cookie_rerenders(output_dir: Path, monkeypatch):
+    """AUTH-03 / ROADMAP success criterion #2: invalid cookie POST re-renders 400 with
+    error banner and does NOT modify _config.toml."""
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    config_path = output_dir / "_config.toml"
+    original = 'cookie = "old-cookie"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n'
+    config_path.write_text(original, encoding="utf-8")
+
+    monkeypatch.setattr(
+        "wattpad_crawler.web.routes.validate_cookie",
+        lambda c: (_ for _ in ()).throw(AuthError("cookie rejected")),
+    )
+
+    resp = client.post("/setup", data={"cookie": "new-bad-cookie"})
+    assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
+    body_lower = resp.text.lower()
+    assert "rejected" in body_lower, "Auth-error banner missing in response body"
+    # _config.toml MUST be unchanged.
+    assert config_path.read_text(encoding="utf-8") == original, \
+        "_config.toml was modified despite validation failure"
+
+
+def test_setup_post_valid_cookie_saves(output_dir: Path, monkeypatch):
+    """AUTH-03 / D-12: valid cookie POST atomically saves and 303-redirects to /setup?saved=1."""
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    config_path = output_dir / "_config.toml"
+    config_path.write_text(
+        'cookie = "old"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "wattpad_crawler.web.routes.validate_cookie",
+        lambda c: None,  # success
+    )
+
+    resp = client.post("/setup", data={"cookie": "new-good-cookie"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/setup?saved=1" in resp.headers.get("location", "")
+    after = config_path.read_text(encoding="utf-8")
+    assert 'cookie = "new-good-cookie"' in after, \
+        f"Cookie was not saved; file contents: {after!r}"
+
+
+def test_setup_post_network_error(output_dir: Path, monkeypatch):
+    """AUTH-03 / D-10: network error during validation renders banner with error_kind=network."""
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        "wattpad_crawler.web.routes.validate_cookie",
+        lambda c: (_ for _ in ()).throw(httpx.ConnectError("simulated DNS failure")),
+    )
+
+    resp = client.post("/setup", data={"cookie": "any-cookie"})
+    assert resp.status_code == 400
+    body = resp.text.lower()
+    assert "could not reach" in body or "network" in body or "connection" in body, \
+        "Network-error banner missing in response body"
+
+
+def test_setup_post_shows_masked_attempted(output_dir: Path, monkeypatch):
+    """AUTH-03 / D-11: on error, attempted_cookie_masked is rendered back to the user."""
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        "wattpad_crawler.web.routes.validate_cookie",
+        lambda c: (_ for _ in ()).throw(AuthError("rejected")),
+    )
+
+    submitted = "AbCdEfGh12345678"  # length > 8 so _mask returns "AbCd…5678"
+    resp = client.post("/setup", data={"cookie": submitted})
+    assert resp.status_code == 400
+    # _mask("AbCdEfGh12345678") == "AbCd…5678" (4-char prefix + ellipsis + 4-char suffix).
+    expected_mask = "AbCd…5678"
+    assert expected_mask in resp.text, \
+        f"Expected masked cookie {expected_mask!r} in response body; got: {resp.text[:500]!r}"

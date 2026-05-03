@@ -1,6 +1,10 @@
+import dataclasses
 import json
+import os
+import threading
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
@@ -14,13 +18,22 @@ from wattpad_crawler.jobs import (
     archive_story,
     resolve_story_id,
 )
+from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.web.library_browser import scan_library
 
 router = APIRouter()
 
 
 def _save_cookie(output_dir: Path, cookie: str) -> None:
-    """Write/update the cookie line in _config.toml. Preserves other settings."""
+    """Write/update the cookie line in _config.toml atomically.
+
+    AUTH-05 / D-19: Process-kill safe — an interrupt during the write leaves
+    either the old file or no change, never a half-written one. Mirrors
+    archive/store.py:atomic_write_text + _tmp_path. Same-directory tmp file
+    guarantees same-volume rename on Windows. PID/TID suffix avoids collision
+    if two writers ever race on the same target (last writer wins on rename;
+    neither corrupts the target).
+    """
     config_path = output_dir / "_config.toml"
     cookie = cookie.strip()
     if config_path.exists():
@@ -36,13 +49,23 @@ def _save_cookie(output_dir: Path, cookie: str) -> None:
                 new_lines.append(line)
         if not replaced:
             new_lines.append(f'cookie = "{cookie}"')
-        config_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        new_text = "\n".join(new_lines) + "\n"
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(
-            f'cookie = "{cookie}"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
-            encoding="utf-8",
+        new_text = (
+            f'cookie = "{cookie}"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n'
         )
+    # Atomic write: same-directory tmp + os.replace. PID/TID suffix avoids
+    # collision if two writers race on the same target. Cleanup on exception
+    # so we don't leave stale tmp files in a long-running web process.
+    suffix = f".{os.getpid()}.{threading.get_ident()}.tmp"
+    tmp = config_path.with_suffix(config_path.suffix + suffix)
+    try:
+        tmp.write_text(new_text, encoding="utf-8")
+        os.replace(tmp, config_path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _mask(s: str) -> str:
@@ -66,12 +89,52 @@ def setup_get(request: Request) -> HTMLResponse:
     )
 
 
-@router.post("/setup")
-def setup_post(request: Request, cookie: str = Form(...)) -> RedirectResponse:
+@router.post("/setup", response_model=None)
+def setup_post(
+    request: Request,
+    cookie: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
     cfg = request.app.state.cfg
-    _save_cookie(cfg.output_dir, cookie)
-    from wattpad_crawler.config import load_config
+    templates = request.app.state.templates
+    submitted = cookie.strip()
 
+    # D-12: validate BEFORE saving. Build a transient Config + client around
+    # the submitted cookie; do not mutate request.app.state.cfg yet.
+    transient_cfg = dataclasses.replace(cfg, cookie=submitted)
+    error_kind: str | None = None
+    error_message: str = ""
+    try:
+        with RateLimitedClient(transient_cfg) as transient_client:
+            validate_cookie(transient_client)
+    except AuthError as e:
+        error_kind = "auth"
+        error_message = str(e)
+    except httpx.RequestError as e:
+        error_kind = "network"
+        error_message = f"Could not reach Wattpad: {e}"
+    except Exception as e:
+        error_kind = "unexpected"
+        error_message = f"Validation failed: {e!r}"
+
+    if error_kind is not None:
+        # D-09: re-render the form with status 400; D-11: show masked attempted
+        return templates.TemplateResponse(
+            request=request,
+            name="setup.html",
+            context={
+                "current_cookie_masked": _mask(cfg.cookie),
+                "attempted_cookie_masked": _mask(submitted),
+                "error_kind": error_kind,
+                "error_message": error_message,
+                "output_dir": str(cfg.output_dir),
+                "saved": False,
+            },
+            status_code=400,
+        )
+
+    # Validation succeeded — persist atomically (D-19) and reload config.
+    _save_cookie(cfg.output_dir, submitted)
+    from wattpad_crawler.config import load_config
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
 
