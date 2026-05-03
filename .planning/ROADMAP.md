@@ -25,7 +25,12 @@ The five phases follow a strict dependency chain driven by the audit. Isolated l
   2. An HTML chapter containing `<img src="...">`, `<br>`, and a `data-p-id` attribute is extracted; the stored paragraph `html` field contains all three intact after sanitization via nh3
   3. Running the web UI and submitting 60+ jobs does not grow `JobManager._jobs` beyond the 50-job cap; a long-running story's Job object does not grow past 1000 events
   4. A story where all three renderers (TXT, HTML, EPUB) raise exceptions results in a job with `status == "failed"` and a progress event naming which formats failed rather than a job with `status == "done"`
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 01-01-PLAN.md — SAN-01 + SAN-02: nh3 dependency + module-scope Cleaner + extract_chapter sanitization
+- [ ] 01-02-PLAN.md — REL-01: bounded comment recursion with truncation tracking and per-subtree warning
+- [ ] 01-03-PLAN.md — REL-02 + REL-03: deque-bounded Job.events, monotonic seq, JobManager prune (running-pinned)
+- [ ] 01-04-PLAN.md — REL-04: RenderError + render_status dict + raise-on-all-fail
+- [ ] 01-05-PLAN.md — D-09 + D-10: SSE rename ?after= -> ?after_seq=; synthetic events.evicted on gap (Wave 2; depends on 01-03)
 **UI hint**: no
 
 ### Phase 2: Auth hardening
