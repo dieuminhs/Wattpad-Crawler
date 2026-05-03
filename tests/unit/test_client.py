@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.client import RateLimitedClient, TokenBucket, build_client
 from wattpad_crawler.config import Config
 
@@ -243,3 +244,106 @@ def test_build_client_config_propagates_through_rate_limited_client(tmp_path):
     assert "ua/test" in seen["ua"]
     assert "tok123" in seen["cookie"]
     rlc.close()
+
+
+def test_get_does_not_retry_on_401(tmp_path):
+    """AUTH-04 / D-14: first 401 fails immediately, no retries."""
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return httpx.Response(401)
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    try:
+        with pytest.raises(AuthFailedError):
+            rlc.get("https://www.wattpad.com/x", max_attempts=5)
+        assert calls["n"] == 1, f"Expected 1 call (no retry); got {calls['n']}"
+    finally:
+        rlc.close()
+
+
+def test_get_raises_on_403(tmp_path):
+    """AUTH-04 / D-13: 403 triggers AuthFailedError just like 401."""
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return httpx.Response(403)
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    try:
+        with pytest.raises(AuthFailedError):
+            rlc.get("https://www.wattpad.com/x", max_attempts=5)
+        assert calls["n"] == 1
+    finally:
+        rlc.close()
+
+
+def test_auth_failed_error_payload(tmp_path):
+    """AUTH-04 / D-15: AuthFailedError carries status_code and url attributes."""
+    transport = httpx.MockTransport(lambda req: httpx.Response(401))
+    rlc = make_client(tmp_path, transport)
+    try:
+        with pytest.raises(AuthFailedError) as exc_info:
+            rlc.get("https://www.wattpad.com/x")
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.url == "https://www.wattpad.com/x"
+    finally:
+        rlc.close()
+
+
+def test_get_raises_on_400_permission_denied(tmp_path):
+    """AUTH-04: Wattpad's actual mid-job unauth signal is HTTP 400 + PermissionDenied,
+    NOT 401/403. Verified manually 2026-05-03 against live API (Plan 02-01 Task 1).
+    """
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return httpx.Response(
+            400,
+            json={
+                "error_code": 1018,
+                "error_type": "PermissionDenied",
+                "message": "User not logged in",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport)
+    try:
+        with pytest.raises(AuthFailedError) as exc_info:
+            rlc.get("https://www.wattpad.com/x", max_attempts=5)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.url == "https://www.wattpad.com/x"
+        assert calls["n"] == 1, f"Expected 1 call (no retry); got {calls['n']}"
+    finally:
+        rlc.close()
+
+
+def test_get_does_not_intercept_400_invalid_endpoint(tmp_path):
+    """AUTH-04 guard: HTTP 400 without PermissionDenied/1018 is a real client
+    error (e.g., InvalidEndpoint=1001) and must fall through to existing
+    raise_for_status() handling — NOT misclassified as auth failure.
+    """
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            400,
+            json={
+                "error_code": 1001,
+                "error_type": "InvalidEndpoint",
+                "message": "API method not found",
+            },
+        )
+    )
+    rlc = make_client(tmp_path, transport)
+    try:
+        # Must NOT be AuthFailedError — must surface as plain HTTPStatusError
+        # via raise_for_status().
+        with pytest.raises(httpx.HTTPStatusError):
+            rlc.get("https://www.wattpad.com/x", max_attempts=1)
+    finally:
+        rlc.close()

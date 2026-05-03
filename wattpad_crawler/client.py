@@ -70,6 +70,53 @@ class RateLimitedClient:
                 continue
             # We got a response — clear any stashed network error.
             last_exc = None
+
+            # AUTH-04 / D-13: 401/403/400-PermissionDenied detection BEFORE
+            # 429/5xx retry branches and BEFORE raise_for_status (which would
+            # raise HTTPStatusError without our status_code/url payload).
+            # D-14: do NOT retry — auth failures are deterministic.
+            # Deferred import breaks the auth.py <-> client.py cycle (auth.py
+            # imports RateLimitedClient via TYPE_CHECKING for typing only).
+            if resp.status_code in (401, 403):
+                from wattpad_crawler.auth import AuthFailedError
+
+                logger.warning(
+                    "Auth failure on %s — HTTP %d", url, resp.status_code,
+                )
+                raise AuthFailedError(
+                    f"Wattpad returned HTTP {resp.status_code} for {url} — "
+                    "cookie likely expired",
+                    status_code=resp.status_code,
+                    url=url,
+                )
+
+            # Wattpad's actual mid-job unauth signal is HTTP 400 with a
+            # structured JSON body — verified manually 2026-05-03 against
+            # live API (Plan 02-01 Task 1). NOT 401/403 as the API would
+            # suggest. Only intercept the PermissionDenied / 1018 shape;
+            # other HTTP 400s (e.g., InvalidEndpoint=1001) are real client
+            # errors and must fall through to raise_for_status.
+            if resp.status_code == 400:
+                try:
+                    body = resp.json()
+                except ValueError:
+                    body = {}
+                if (
+                    body.get("error_type") == "PermissionDenied"
+                    or body.get("error_code") == 1018
+                ):
+                    from wattpad_crawler.auth import AuthFailedError
+
+                    logger.warning(
+                        "Auth failure on %s — HTTP 400 PermissionDenied", url,
+                    )
+                    raise AuthFailedError(
+                        f"Wattpad returned HTTP 400 PermissionDenied for "
+                        f"{url} — cookie likely expired",
+                        status_code=400,
+                        url=url,
+                    )
+
             if resp.status_code == 429:
                 wait = self._parse_retry_after(resp.headers.get("Retry-After"))
                 logger.warning("429 on %s — sleeping %.1fs", url, wait)
