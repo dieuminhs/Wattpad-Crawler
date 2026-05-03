@@ -7,6 +7,7 @@ from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.config import Config
 from wattpad_crawler.jobs import (
     JobDeps,
+    RenderError,
     ResolveError,
     archive_many,
     archive_story,
@@ -256,4 +257,247 @@ def test_archive_story_progress_default_is_noop(output_dir: Path):
     fake_client = MagicMock()
     deps = _make_deps(story)
     archive_story(cfg, fake_client, manifest, "42", deps=deps)  # no progress=
+    manifest.close()
+
+
+# --- Phase 1 REL-04 render-failure tests ---
+
+
+def test_render_error_is_exception_subclass():
+    assert issubclass(RenderError, Exception)
+    e = RenderError("msg")
+    assert str(e) == "msg"
+
+
+def test_archive_story_raises_render_error_when_all_renderers_fail(
+    output_dir, monkeypatch,
+):
+    from wattpad_crawler.render import epub as render_epub_mod
+    from wattpad_crawler.render import html as render_html_mod
+    from wattpad_crawler.render import txt as render_txt_mod
+
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+
+    monkeypatch.setattr(
+        render_txt_mod, "render_txt",
+        MagicMock(side_effect=RuntimeError("txt fail")),
+    )
+    monkeypatch.setattr(
+        render_html_mod, "render_html",
+        MagicMock(side_effect=RuntimeError("html fail")),
+    )
+    monkeypatch.setattr(
+        render_epub_mod, "render_epub",
+        MagicMock(side_effect=RuntimeError("epub fail")),
+    )
+
+    events: list[tuple[str, dict]] = []
+
+    def progress(kind, data):
+        events.append((kind, dict(data)))
+
+    with pytest.raises(RenderError) as exc_info:
+        archive_story(
+            cfg, fake_client, manifest, "42",
+            deps=deps, progress=progress,
+        )
+
+    # Error message names all three formats (via the render_status dict repr).
+    msg = str(exc_info.value)
+    assert "txt" in msg
+    assert "html" in msg
+    assert "epub" in msg
+    assert "failed" in msg
+
+    # story.done was emitted BEFORE the raise (D-15 step 3) with
+    # render_status reflecting all three failures.
+    done_events = [d for k, d in events if k == "story.done"]
+    assert len(done_events) == 1
+    assert done_events[0]["render_status"] == {
+        "txt": "failed", "html": "failed", "epub": "failed",
+    }
+
+    # Three render.failed events (one per format).
+    failed_events = [d for k, d in events if k == "render.failed"]
+    assert len(failed_events) == 3
+    assert {d["format"] for d in failed_events} == {"txt", "html", "epub"}
+
+    manifest.close()
+
+
+def test_archive_story_partial_render_failure_does_not_raise(
+    output_dir, monkeypatch,
+):
+    """Two failed + one ok = partial. story.done emits the breakdown, no RenderError."""
+    from wattpad_crawler.render import epub as render_epub_mod
+    from wattpad_crawler.render import html as render_html_mod
+    from wattpad_crawler.render import txt as render_txt_mod
+
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+
+    # txt succeeds, html and epub fail.
+    monkeypatch.setattr(render_txt_mod, "render_txt", MagicMock())
+    monkeypatch.setattr(
+        render_html_mod, "render_html",
+        MagicMock(side_effect=RuntimeError("html fail")),
+    )
+    monkeypatch.setattr(
+        render_epub_mod, "render_epub",
+        MagicMock(side_effect=RuntimeError("epub fail")),
+    )
+
+    events: list[tuple[str, dict]] = []
+
+    def progress(kind, data):
+        events.append((kind, dict(data)))
+
+    # Must NOT raise.
+    archive_story(
+        cfg, fake_client, manifest, "42",
+        deps=deps, progress=progress,
+    )
+
+    done_events = [d for k, d in events if k == "story.done"]
+    assert len(done_events) == 1
+    assert done_events[0]["render_status"] == {
+        "txt": "ok", "html": "failed", "epub": "failed",
+    }
+
+    # Two render.failed events, none for txt.
+    failed_events = [d for k, d in events if k == "render.failed"]
+    assert {d["format"] for d in failed_events} == {"html", "epub"}
+
+    manifest.close()
+
+
+def test_archive_story_all_ok_emits_render_status_all_ok(
+    output_dir, monkeypatch,
+):
+    """Sanity: all renderers succeed -> render_status all 'ok', no RenderError."""
+    from wattpad_crawler.render import epub as render_epub_mod
+    from wattpad_crawler.render import html as render_html_mod
+    from wattpad_crawler.render import txt as render_txt_mod
+
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+
+    monkeypatch.setattr(render_txt_mod, "render_txt", MagicMock())
+    monkeypatch.setattr(render_html_mod, "render_html", MagicMock())
+    monkeypatch.setattr(render_epub_mod, "render_epub", MagicMock())
+
+    events: list[tuple[str, dict]] = []
+
+    def progress(kind, data):
+        events.append((kind, dict(data)))
+
+    archive_story(
+        cfg, fake_client, manifest, "42",
+        deps=deps, progress=progress,
+    )
+
+    done_events = [d for k, d in events if k == "story.done"]
+    assert len(done_events) == 1
+    assert done_events[0]["render_status"] == {
+        "txt": "ok", "html": "ok", "epub": "ok",
+    }
+    # No render.failed events.
+    assert not any(k == "render.failed" for k, _ in events)
+
+    manifest.close()
+
+
+def test_archive_story_renderers_run_independently_when_one_fails(
+    output_dir, monkeypatch,
+):
+    """A renderer raising must not skip subsequent renderers in the loop.
+
+    Verifies D-15: all three renderers run unconditionally — txt's failure
+    does not prevent html.render_html or epub.render_epub from being called.
+    """
+    from wattpad_crawler.render import epub as render_epub_mod
+    from wattpad_crawler.render import html as render_html_mod
+    from wattpad_crawler.render import txt as render_txt_mod
+
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+
+    txt_mock = MagicMock(side_effect=RuntimeError("txt fail"))
+    html_mock = MagicMock()
+    epub_mock = MagicMock()
+    monkeypatch.setattr(render_txt_mod, "render_txt", txt_mock)
+    monkeypatch.setattr(render_html_mod, "render_html", html_mock)
+    monkeypatch.setattr(render_epub_mod, "render_epub", epub_mock)
+
+    archive_story(cfg, fake_client, manifest, "42", deps=deps)
+
+    # All three were called despite txt's failure.
+    assert txt_mock.call_count == 1
+    assert html_mock.call_count == 1
+    assert epub_mock.call_count == 1
+
+    manifest.close()
+
+
+def test_archive_many_records_render_error_in_results(
+    output_dir, monkeypatch,
+):
+    """archive_many's existing per-story exception handler catches RenderError
+    and records 'failed: all renders failed: ...' in the results dict."""
+    from wattpad_crawler.render import epub as render_epub_mod
+    from wattpad_crawler.render import html as render_html_mod
+    from wattpad_crawler.render import txt as render_txt_mod
+
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+
+    monkeypatch.setattr(
+        render_txt_mod, "render_txt",
+        MagicMock(side_effect=RuntimeError("txt fail")),
+    )
+    monkeypatch.setattr(
+        render_html_mod, "render_html",
+        MagicMock(side_effect=RuntimeError("html fail")),
+    )
+    monkeypatch.setattr(
+        render_epub_mod, "render_epub",
+        MagicMock(side_effect=RuntimeError("epub fail")),
+    )
+
+    results = archive_many(cfg, fake_client, manifest, ["42"], deps=deps)
+    assert "42" in results
+    assert "failed" in results["42"]
+    assert "all renders failed" in results["42"]
+
     manifest.close()
