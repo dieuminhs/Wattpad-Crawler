@@ -980,20 +980,25 @@ def test_archive_story_partial_render_failure_does_not_raise(
 
 This research has no `[ASSUMED]` claims — every recommendation is either confirmed by external documentation or pulled directly from the existing codebase. The planner can lock all decisions in this research without further user confirmation.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three open questions surfaced during research were resolved during planning. Each plan adopts the recommended answer; the resolutions are recorded inline below for traceability.
 
 1. **Should `_PARAGRAPH_CLEANER` set `link_rel=None` to suppress nh3's default `rel="noopener noreferrer"` injection?**
    - What we know: nh3 adds `rel="noopener noreferrer"` to every `<a>` by default, even when href is stripped due to invalid scheme.
    - What's unclear: whether the user wants this rel attribute in stored archive HTML or in EPUB output. CONTEXT.md doesn't address it.
    - Recommendation: **leave `link_rel` at default**. `noopener noreferrer` is desirable for archived HTML opened in a browser — it's defense-in-depth even though our paragraph HTML has already been sanitized. The cost is one extra attribute per `<a>`. If the EPUB renderer or HTML renderer dislikes the `rel` attribute, we can revisit, but no current evidence suggests they do.
+   - **RESOLVED:** Plan 01 (`01-01-PLAN.md`) follows this recommendation. `_PARAGRAPH_CLEANER = nh3.Cleaner(...)` is constructed without overriding `link_rel`, so the nh3 default of `"noopener noreferrer"` is retained on every `<a>` tag in stored paragraph HTML. No CONTEXT.md decision was added because the recommendation has zero downside; it can be revisited in a later phase if a renderer reports issues.
 
 2. **Should the SSE `events.evicted` event be emitted *only on first poll* or every time a gap is detected?**
    - What we know: a single SSE connection has one `after_seq` from the client, and `last_seq` advances locally on the server side. A gap can only exist on the first poll — subsequent polls always have `last_seq` >= `oldest_seq` because we advance through every event we yield.
    - What's unclear: whether reconnection by the JS client (after a network blip) creates a *new* SSE handler with a fresh `gap_announced=False`, in which case the user could see two `events.evicted` for the same job. Probably fine — they reflect different points in time.
    - Recommendation: keep `gap_announced` as a per-stream bool. Document the reconnection behavior in a code comment.
+   - **RESOLVED:** Plan 03 (`01-03-PLAN.md`, after the merge of the SSE-rename task) follows this recommendation. The `event_gen` async generator inside `wattpad_crawler/web/routes.py:job_stream` declares `gap_announced = False` as a function-local variable; once the synthetic `events.evicted` event is yielded (or the gap check passes), `gap_announced` is set to `True` and the gap branch is never re-entered for the lifetime of that SSE connection. Reconnection creates a fresh `event_gen` invocation and re-evaluates the gap by design. A code comment in the handler documents this.
 
 3. **`Job._next_seq` Jinja2 access** — accessing a leading-underscore attribute from a template feels weird.
    - Recommendation: rename to `next_seq: int = 0` (no leading underscore) or expose a property `@property def next_seq(self): return self._next_seq`. The attribute *is* used as part of the API surface to the template — leading underscore implies "internal" which is no longer accurate. **Suggest renaming to `next_seq`** in the plan; trivial cost, clearer intent.
+   - **RESOLVED:** Plan 03 (`01-03-PLAN.md`) follows this recommendation. The `Job` dataclass declares `next_seq: int = 0` as a public field (no leading underscore), and the file does not contain the substring `_next_seq` anywhere. Plan 05 (`01-05-PLAN.md`) consumes the public attribute via Jinja2 in `wattpad_crawler/web/templates/job.html` as `?after_seq={{ job.next_seq }}`.
 
 ## Project Constraints (from CLAUDE.md)
 
