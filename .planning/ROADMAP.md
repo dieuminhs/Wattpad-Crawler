@@ -42,7 +42,12 @@ The five phases follow a strict dependency chain driven by the audit. Isolated l
   2. A `/setup` POST with an invalid cookie re-renders the setup form with an error message; `_config.toml` is not modified
   3. A mid-job 401/403 response from `RateLimitedClient.get()` causes the job to end `failed` with a clear "authentication failed" message rather than marking chapters as empty-done
   4. A crash simulated between the start and end of a `_save_cookie()` write leaves `_config.toml` either fully written or fully unchanged — never zero bytes or partial
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 02-01-PLAN.md — AUTH-01: auth.py module (AuthError, AuthFailedError, _PROBE_URL, validate_cookie) + 6 unit tests + manual probe-URL curl verification (Wave 1)
+- [ ] 02-02-PLAN.md — AUTH-04 (detection): RateLimitedClient.get 401/403 fast-fail branch + 3 unit tests (Wave 1)
+- [ ] 02-03-PLAN.md — AUTH-02: CLI auth gate via _require_auth helper + AuthError exit-2 in main + 4 unit tests (Wave 2; depends on 02-01)
+- [ ] 02-04-PLAN.md — AUTH-04 (propagation): archive_story re-raise AuthFailedError + auth.failed event + 3 tests across test_jobs.py + test_runner.py (Wave 2; depends on 02-01, 02-02)
+- [ ] 02-05-PLAN.md — AUTH-03 + AUTH-05: setup_post validate-before-save + 3-category UX + atomic _save_cookie + setup.html banner + 7 unit tests (Wave 2; depends on 02-01)
 **UI hint**: no
 
 ### Phase 3: Circuit-breakers
