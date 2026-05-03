@@ -21,11 +21,11 @@ Hardening pass on the existing Python archiver. No new end-user features. Each r
 
 ### Authentication
 
-- [ ] **AUTH-01**: A `validate_cookie()` function in a new `auth.py` module probes a session-required Wattpad endpoint and raises `AuthError` on 401/403/redirect-to-login
-- [ ] **AUTH-02**: CLI runs cookie validation before starting any archive command (`archive`, `list`, `library`); `serve` is exempted (web `/setup` covers it)
-- [ ] **AUTH-03**: `/setup` POST validates cookie before saving; on failure, re-renders the form with an error message and does not overwrite `_config.toml`
-- [ ] **AUTH-04**: `RateLimitedClient.get()` recognizes 401/403 mid-job and raises `AuthFailedError`; `archive_story()` propagates it as a job failure with a clear message instead of falling through to empty chapters
-- [ ] **AUTH-05**: `_save_cookie()` writes atomically (temp file + `os.replace()`) so concurrent reads never see a half-written `_config.toml`
+- [x] **AUTH-01**: A `validate_cookie()` function in a new `auth.py` module probes a session-required Wattpad endpoint and raises `AuthError` on 401/403/redirect-to-login (and on Wattpad's actual unauth contract: HTTP 400 + `error_type:"PermissionDenied"` — verified manually 2026-05-03)
+- [x] **AUTH-02**: CLI runs cookie validation before starting any archive command (`archive`, `list`, `library`); `serve` is exempted (web `/setup` covers it)
+- [x] **AUTH-03**: `/setup` POST validates cookie before saving; on failure, re-renders the form with an error message and does not overwrite `_config.toml`
+- [x] **AUTH-04**: `RateLimitedClient.get()` recognizes 401/403 (and HTTP 400 + PermissionDenied) mid-job and raises `AuthFailedError`; `archive_story()` propagates it as a job failure with a clear message instead of falling through to empty chapters
+- [x] **AUTH-05**: `_save_cookie()` writes atomically (temp file + `os.replace()`) so concurrent reads never see a half-written `_config.toml`
 
 ### Resilience
 
@@ -102,11 +102,11 @@ Deferred to a future "Features v2" or "Polish & Ship" milestone.
 | REL-04 | Phase 1 | Satisfied |
 | SAN-01 | Phase 1 | Satisfied |
 | SAN-02 | Phase 1 | Satisfied |
-| AUTH-01 | Phase 2 | Pending |
-| AUTH-02 | Phase 2 | Pending |
-| AUTH-03 | Phase 2 | Pending |
-| AUTH-04 | Phase 2 | Pending |
-| AUTH-05 | Phase 2 | Pending |
+| AUTH-01 | Phase 2 | Validated |
+| AUTH-02 | Phase 2 | Validated |
+| AUTH-03 | Phase 2 | Validated |
+| AUTH-04 | Phase 2 | Validated |
+| AUTH-05 | Phase 2 | Validated |
 | RES-01 | Phase 3 | Pending |
 | RES-02 | Phase 3 | Pending |
 | RES-03 | Phase 3 | Pending |
