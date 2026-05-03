@@ -98,6 +98,7 @@ Reliably preserve Wattpad stories the user cares about — without silent failur
 | Defer EPUB rendering to streaming until measured | EbookLib's incremental API may be sufficient with chunked input; profile first, optimize second | — Pending |
 | Web job history capped in memory, not persisted | Single-user; ephemeral history is fine. Persisting requires schema work that doesn't pay back. | — Pending |
 | No new end-user features in this milestone | Keeps scope focused; reliability before surface area | — Pending |
+| Probe URL kept as `/api/v3/users/wattpad/library?limit=1` despite Wattpad returning HTTP 400 (not 401/403) for unauth | Verified manually 2026-05-03; documented fallback `/api/v3/internal/auth/check` does not exist (404). Plans 02-01 and 02-02 extend detection to include `error_type:"PermissionDenied"` / `error_code:1018` in HTTP 400 bodies. | Phase 2 — Validated |
 
 ## Evolution
 
@@ -117,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 after Phase 1 (local-hardening-fixes) completion*
+*Last updated: 2026-05-03 after Phase 2 (auth-hardening) completion*
