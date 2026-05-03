@@ -71,6 +71,7 @@ def setup_post(request: Request, cookie: str = Form(...)) -> RedirectResponse:
     cfg = request.app.state.cfg
     _save_cookie(cfg.output_dir, cookie)
     from wattpad_crawler.config import load_config
+
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
 
@@ -92,6 +93,7 @@ def dashboard(request: Request) -> HTMLResponse:
 def _build_work(cfg, kind: str, args: dict):
     """Build a JobWork callable that opens its own client+manifest, runs the job,
     then closes them."""
+
     def work(emit):
         client = RateLimitedClient(cfg)
         manifest = Manifest(cfg.output_dir).connect()
@@ -107,6 +109,7 @@ def _build_work(cfg, kind: str, args: dict):
         finally:
             manifest.close()
             client.close()
+
     return work
 
 
@@ -158,7 +161,15 @@ def job_detail(request: Request, job_id: str) -> HTMLResponse:
 
 
 @router.get("/jobs/{job_id}/stream")
-async def job_stream(request: Request, job_id: str, after: int = 0):
+async def job_stream(request: Request, job_id: str, after_seq: int = 0):
+    """Server-Sent Events stream of job progress.
+
+    D-09: query parameter is `after_seq` (the highest seq the client has
+    already consumed). D-10: if events between after_seq and the oldest
+    surviving seq have been evicted from the deque (REL-02 cap), emit a
+    synthetic `events.evicted` event ahead of the snapshot so the UI
+    knows older events were dropped to save memory.
+    """
     mgr = request.app.state.job_manager
     job = mgr.get(job_id)
     if job is None:
@@ -166,22 +177,62 @@ async def job_stream(request: Request, job_id: str, after: int = 0):
 
     async def event_gen():
         import asyncio
-        index = after
+        import time as _time
+
+        last_seq = after_seq
+        # Per-stream eviction-warning latch (RESEARCH Open Question #2 — RESOLVED).
+        # Reconnection creates a fresh event_gen and re-evaluates the gap by
+        # design; within one SSE connection we announce at most once.
+        gap_announced = False
+
         while True:
             if await request.is_disconnected():
                 break
-            new_events = job.snapshot_events(index)
+
+            # On first poll only, check whether the client's cursor has
+            # been evicted from the deque. If so, emit a synthetic
+            # events.evicted event ahead of the regular snapshot.
+            if not gap_announced:
+                oldest = job.oldest_seq()
+                if oldest and last_seq + 1 < oldest:
+                    dropped = oldest - 1 - last_seq
+                    yield {
+                        "data": json.dumps(
+                            {
+                                "kind": "events.evicted",
+                                "data": {
+                                    "dropped_count": dropped,
+                                    "requested_after_seq": after_seq,
+                                    "oldest_available_seq": oldest,
+                                },
+                                "ts": _time.time(),
+                            }
+                        )
+                    }
+                gap_announced = True
+
+            new_events = job.snapshot_events(last_seq)
             for ev in new_events:
-                index += 1
+                last_seq = ev.seq
                 yield {
-                    "data": json.dumps({"kind": ev.kind, "data": ev.data, "ts": ev.timestamp})
+                    "data": json.dumps(
+                        {
+                            "kind": ev.kind,
+                            "data": ev.data,
+                            "seq": ev.seq,
+                            "ts": ev.timestamp,
+                        }
+                    )
                 }
+
             if job.status.value in ("done", "failed"):
                 yield {
-                    "data": json.dumps({
-                        "kind": "__status__",
-                        "data": {"status": job.status.value, "error": job.error},
-                    })
+                    "data": json.dumps(
+                        {
+                            "kind": "__status__",
+                            "data": {"status": job.status.value, "error": job.error},
+                        }
+                    )
                 }
                 return
             # 250ms polling — fine for personal-use UI; threading.Event-to-asyncio
@@ -246,9 +297,7 @@ def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
 
 
 @router.get("/read/{author}/{dir_name}/{ordinal}", response_class=HTMLResponse)
-def reader_chapter(
-    request: Request, author: str, dir_name: str, ordinal: int
-) -> HTMLResponse:
+def reader_chapter(request: Request, author: str, dir_name: str, ordinal: int) -> HTMLResponse:
     cfg = request.app.state.cfg
     sd = _resolve_story_dir(cfg, author, dir_name)
     meta = json.loads((sd / "metadata.json").read_text(encoding="utf-8"))
