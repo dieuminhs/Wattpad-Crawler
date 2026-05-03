@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from wattpad_crawler.config import Config
+from wattpad_crawler.web import runner
 from wattpad_crawler.web.app import build_app
 
 
@@ -304,3 +305,185 @@ def test_artifact_unknown_format_404(output_dir: Path):
     client = TestClient(app)
     r = client.get("/library/output/alice/42_my-tale/pdf")
     assert r.status_code == 404
+
+
+# --- Phase 01 Plan 05 / REL-02: SSE handler + template integrated tests ---
+# D-09 (after_seq query param rename) + D-10 (events.evicted gap announcement)
+# These exercise the post-Plan-03 surface end-to-end via FastAPI's TestClient,
+# proving the rename, the eviction-gap synthetic event shape, and the rendered
+# template URL. The existing `output_dir` fixture comes from tests/conftest.py.
+
+
+def _make_test_client(output_dir: Path) -> tuple[TestClient, "object"]:
+    """Build a FastAPI app + TestClient for an empty archive directory.
+
+    Returns (client, app) so tests can both drive HTTP and reach into
+    app.state.job_manager to seed jobs and emit events directly.
+    """
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    return TestClient(app), app
+
+
+def test_job_stream_uses_after_seq_query_param_not_after(output_dir: Path):
+    """D-09: SSE endpoint accepts ?after_seq=N. The legacy ?after=N is no
+    longer a recognized parameter — FastAPI silently ignores unknown query
+    params, so after_seq defaults to 0 (replay everything)."""
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+
+    # Seed a job and immediately mark it done so the SSE generator terminates.
+    job = mgr.create("archive_story", {"story_id": "1"})
+    job.emit("part.start", {"part_id": "100"})
+    job.emit("part.done", {"part_id": "100"})
+    job.set_done()
+
+    resp = client.get(f"/jobs/{job.job_id}/stream?after_seq=0", timeout=2.0)
+    assert resp.status_code == 200
+    body = resp.text
+    assert "part.start" in body
+    assert "part.done" in body
+    assert "__status__" in body
+
+
+def test_job_stream_each_event_payload_includes_seq_field(output_dir: Path):
+    """REL-02 / D-07: every real SSE event JSON has a seq field alongside
+    kind, data, ts — the new field shipped in Plan 03."""
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+    job = mgr.create("archive_story", {})
+    job.emit("a", {"x": 1})
+    job.emit("b", {"x": 2})
+    job.set_done()
+
+    resp = client.get(f"/jobs/{job.job_id}/stream?after_seq=0", timeout=2.0)
+    # SSE format: "data: <json>\n\n" lines.
+    lines = [
+        ln[len("data: "):]
+        for ln in resp.text.splitlines()
+        if ln.startswith("data: ")
+    ]
+    # First two are real events; third is __status__.
+    ev_a = json.loads(lines[0])
+    ev_b = json.loads(lines[1])
+    assert ev_a["kind"] == "a"
+    assert ev_a["seq"] == 1
+    assert ev_b["kind"] == "b"
+    assert ev_b["seq"] == 2
+
+
+def test_job_stream_no_evicted_event_when_no_gap(output_dir: Path):
+    """No eviction has happened — handler must NOT emit events.evicted."""
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+    job = mgr.create("archive_story", {})
+    for i in range(5):
+        job.emit("tick", {"i": i})
+    job.set_done()
+
+    resp = client.get(f"/jobs/{job.job_id}/stream?after_seq=0", timeout=2.0)
+    assert "events.evicted" not in resp.text
+
+
+def test_job_stream_emits_evicted_event_on_gap(output_dir: Path, monkeypatch):
+    """D-10: when after_seq < oldest_seq, emit synthetic events.evicted ahead
+    of the snapshot with dropped_count / requested_after_seq /
+    oldest_available_seq."""
+    # Force a small deque cap so we can produce eviction with few events.
+    monkeypatch.setattr(runner, "_MAX_EVENTS_PER_JOB", 5)
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+    job = mgr.create("archive_story", {})
+    # Emit 10 events; deque holds the last 5 (seqs 6..10); seqs 1..5 evicted.
+    for i in range(10):
+        job.emit("tick", {"i": i})
+    job.set_done()
+
+    # Client connects with after_seq=0; the gap is seqs 1..5 (5 dropped).
+    resp = client.get(f"/jobs/{job.job_id}/stream?after_seq=0", timeout=2.0)
+    body = resp.text
+    assert "events.evicted" in body
+
+    # The first SSE data line should be the events.evicted event.
+    data_lines = [
+        ln[len("data: "):]
+        for ln in body.splitlines()
+        if ln.startswith("data: ")
+    ]
+    first = json.loads(data_lines[0])
+    assert first["kind"] == "events.evicted"
+    # dropped_count = oldest_available_seq - 1 - requested_after_seq
+    # oldest_available_seq is 6 (seqs 1..5 evicted); requested 0 -> 6-1-0 = 5.
+    assert first["data"]["dropped_count"] == 5
+    assert first["data"]["requested_after_seq"] == 0
+    assert first["data"]["oldest_available_seq"] == 6
+    assert "ts" in first
+
+
+def test_job_stream_emits_evicted_only_once_per_stream(
+    output_dir: Path, monkeypatch,
+):
+    """gap_announced flag prevents duplicate events.evicted within one
+    stream. Even though the handler polls every 250ms, the second iteration
+    must skip the gap check (gap_announced is True). Verified by counting
+    events.evicted occurrences in the response body."""
+    monkeypatch.setattr(runner, "_MAX_EVENTS_PER_JOB", 3)
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+    job = mgr.create("archive_story", {})
+    for i in range(10):
+        job.emit("tick", {"i": i})
+    job.set_done()
+
+    resp = client.get(f"/jobs/{job.job_id}/stream?after_seq=0", timeout=2.0)
+    # Count occurrences of the literal string in the body.
+    assert resp.text.count("events.evicted") == 1
+
+
+def test_job_stream_no_evicted_when_after_seq_advanced_past_gap(
+    output_dir: Path, monkeypatch,
+):
+    """If client passes after_seq >= oldest_available_seq - 1, no gap exists."""
+    monkeypatch.setattr(runner, "_MAX_EVENTS_PER_JOB", 5)
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+    job = mgr.create("archive_story", {})
+    for i in range(10):
+        job.emit("tick", {"i": i})
+    job.set_done()
+
+    # oldest_seq is 6; after_seq=5 means client has consumed up to seq 5.
+    # Gap check: 5 + 1 < 6 -> False; no events.evicted.
+    resp = client.get(f"/jobs/{job.job_id}/stream?after_seq=5", timeout=2.0)
+    assert "events.evicted" not in resp.text
+    # Confirm we receive seqs 6..10.
+    data_lines = [
+        ln[len("data: "):]
+        for ln in resp.text.splitlines()
+        if ln.startswith("data: ") and "__status__" not in ln
+    ]
+    seqs = [json.loads(d)["seq"] for d in data_lines]
+    assert seqs == [6, 7, 8, 9, 10]
+
+
+def test_job_detail_template_renders_after_seq_url(output_dir: Path):
+    """D-09 template change: rendered HTML for /jobs/{id} contains the
+    new EventSource URL with ?after_seq=..., not the legacy ?after=..."""
+    client, app = _make_test_client(output_dir)
+    mgr = app.state.job_manager
+    job = mgr.create("archive_story", {"story_id": "1"})
+    # Emit one event so next_seq becomes 1; status remains pending so the
+    # <script> block (which contains the EventSource URL) is rendered (the
+    # template guards it on `job.status.value not in ("done", "failed")`).
+    job.emit("a", {})
+
+    resp = client.get(f"/jobs/{job.job_id}")
+    assert resp.status_code == 200
+    body = resp.text
+    # New URL form is present.
+    assert "?after_seq=" in body
+    # The current next_seq (1) is rendered into the URL.
+    assert "?after_seq=1" in body
+    # Old form is gone.
+    assert "?after=" not in body
+    assert "job.events|length" not in body  # template syntax leaked = bug
