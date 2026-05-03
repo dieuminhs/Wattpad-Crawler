@@ -10,10 +10,25 @@
     <li>Copy the value of the <code>token</code> cookie and paste it below.</li>
   </ol>
 
+  {% if error_kind %}
+    <div class="error-banner error-banner--{{ error_kind }}" role="alert">
+      {% if error_kind == "auth" %}
+        <strong>Cookie rejected by Wattpad.</strong> Re-copy from your browser.
+      {% elif error_kind == "network" %}
+        <strong>Could not reach Wattpad.</strong> Check your connection and retry.
+      {% else %}
+        <strong>Validation failed:</strong> {{ error_message }}
+      {% endif %}
+      {% if attempted_cookie_masked %}
+        <p class="muted">Submitted: <code>{{ attempted_cookie_masked }}</code></p>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <form method="post" action="/setup">
     <p>
       <label for="cookie"><strong>Wattpad <code>token</code> cookie:</strong></label><br>
-      <input type="password" id="cookie" name="cookie" value="{{ current_cookie_masked }}" required>
+      <input type="password" id="cookie" name="cookie" value="{{ attempted_cookie_masked or current_cookie_masked }}" required>
     </p>
     <p>
       <button type="submit">Save</button>

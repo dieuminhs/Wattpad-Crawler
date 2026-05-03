@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
 from wattpad_crawler.archive.state import Manifest
+from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.client import RateLimitedClient
 from wattpad_crawler.jobs import (
     ResolveError,
@@ -18,7 +19,6 @@ from wattpad_crawler.jobs import (
     archive_story,
     resolve_story_id,
 )
-from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.web.library_browser import scan_library
 
 router = APIRouter()

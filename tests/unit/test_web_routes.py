@@ -42,20 +42,22 @@ def test_setup_page_renders(output_dir: Path):
     assert "wattpad" in r.text.lower()
 
 
-def test_setup_post_saves_cookie(output_dir: Path):
+def test_setup_post_saves_cookie(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
     client = TestClient(app)
+    monkeypatch.setattr("wattpad_crawler.web.routes.validate_cookie", lambda c: None)
     r = client.post("/setup", data={"cookie": "tok-abc-123"}, follow_redirects=False)
     assert r.status_code in (200, 303)
     text = (output_dir / "_config.toml").read_text()
     assert "tok-abc-123" in text
 
 
-def test_setup_post_strips_whitespace(output_dir: Path):
+def test_setup_post_strips_whitespace(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
     client = TestClient(app)
+    monkeypatch.setattr("wattpad_crawler.web.routes.validate_cookie", lambda c: None)
     client.post("/setup", data={"cookie": "  tok-abc-123  \n"}, follow_redirects=False)
     text = (output_dir / "_config.toml").read_text()
     assert 'cookie = "tok-abc-123"' in text
