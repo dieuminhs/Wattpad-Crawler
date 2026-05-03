@@ -26,6 +26,10 @@ Reliably preserve Wattpad stories the user cares about — without silent failur
 - ✓ Background `JobRunner` so the web UI runs archive jobs in daemon threads while serving requests — existing
 - ✓ Configuration via TOML (`_config.toml`) — cookie, rate limit, user agent — existing
 - ✓ Unit-test coverage across api / client / config / jobs / state / store / render / web routes — existing
+- ✓ HTML sanitization via `nh3` over paragraph HTML before storage — validated in Phase 1 (SAN-01, SAN-02)
+- ✓ Bounded comment-reply recursion (depth cap = 10) preventing stack-overflow on malformed responses — validated in Phase 1 (REL-01)
+- ✓ Job history pruning: `JobManager` capped to 50 jobs, `Job.events` deque capped to 1000 with monotonic `seq` cursor and SSE `events.evicted` gap signaling — validated in Phase 1 (REL-02, REL-03)
+- ✓ Per-format render error handling: `RenderError` raised only when all three renderers fail; `story.done` carries a `render_status` breakdown so partial-success jobs ship — validated in Phase 1 (REL-04)
 
 ### Active
 
@@ -35,10 +39,7 @@ Reliably preserve Wattpad stories the user cares about — without silent failur
 - [ ] Validate Wattpad cookie on save (CLI + `/setup`) with a quick test API call; surface auth failures during a job instead of silently producing empty chapters
 - [ ] Circuit-breaker on chapter extraction: if N consecutive chapters return zero `data-p-id` paragraphs (or near-empty text vs. substantial raw HTML), pause loudly with a clear error
 - [ ] Circuit-breaker on rate-limit / auth walls: cap consecutive 4xx/5xx and detect IP-throttling patterns, fail fast instead of looping forever
-- [ ] Bounded comment-reply recursion (max depth limit) to prevent stack-overflow / runaway threads from malformed responses
-- [ ] HTML sanitization (`bleach` or `nh3`) over paragraph HTML before storage so EPUB / HTML output is safe to open in any reader
 - [ ] Streamed rendering: write HTML / TXT incrementally instead of accumulating in memory; use `ebooklib`'s incremental API or per-chapter intermediate files for EPUB
-- [ ] Job history pruning: cap `JobManager` to last N jobs, cap `Job.events` per-job, prune on a schedule so long-running web sessions don't bloat
 - [ ] Real integration test: VCR cassette recorded against a small public story, committed to repo, run in CI to detect API breakage early
 
 ### Out of Scope
@@ -93,7 +94,7 @@ Reliably preserve Wattpad stories the user cares about — without silent failur
 | Hardening milestone before any new features | Audit surfaced ~20 concerns dominated by silent-failure paths — fixing these protects every future feature | — Pending |
 | `workers_per_story` becomes per-story chapter-fetch parallelism (not per-job) | Token bucket is shared in `RateLimitedClient`; chapter fetch is I/O-bound. Per-story is the natural unit. | — Pending |
 | Circuit-breakers preferred over migrating off `data-p-id` selector | Migration is open-ended R&D; circuit-breaker bounds the blast radius and gives a loud signal when Wattpad changes structure | — Pending |
-| Sanitization library TBD between `bleach` and `nh3` | `nh3` is faster and Rust-backed; `bleach` is the historical default. Defer choice to research/plan phase. | — Pending |
+| Adopted `nh3` over `bleach` for HTML sanitization | Faster, Rust-backed, smaller dep footprint; chose during Phase 1 research. Reading-rich allowlist (img/br/b/i/em/strong/u/a) per CONTEXT.md D-01..D-04. | ✓ Phase 1 |
 | Defer EPUB rendering to streaming until measured | EbookLib's incremental API may be sufficient with chunked input; profile first, optimize second | — Pending |
 | Web job history capped in memory, not persisted | Single-user; ephemeral history is fine. Persisting requires schema work that doesn't pay back. | — Pending |
 | No new end-user features in this milestone | Keeps scope focused; reliability before surface area | — Pending |
@@ -116,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 after initialization*
+*Last updated: 2026-05-03 after Phase 1 (local-hardening-fixes) completion*
