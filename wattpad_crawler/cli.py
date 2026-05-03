@@ -6,6 +6,7 @@ from pathlib import Path
 import uvicorn
 
 from wattpad_crawler.archive.state import Manifest
+from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.client import RateLimitedClient
 from wattpad_crawler.config import load_config
 from wattpad_crawler.jobs import archive_many, archive_story, resolve_story_id
@@ -69,6 +70,18 @@ def _print_status(manifest: Manifest) -> None:
         print(f"  {status:12s} {n:>5}")
 
 
+def _require_auth(client: RateLimitedClient) -> None:
+    """Validate the configured Wattpad cookie before doing any archive work.
+
+    AUTH-02 / D-05: called at the top of each of the 4 archive branches in main().
+    AUTH-02 / D-06: status and serve are exempt (no network read; web /setup covers serve).
+    AUTH-02 / D-07: no opt-out flag.
+
+    Raises AuthError on failure (caught in main and formatted to stderr + sys.exit(2)).
+    """
+    validate_cookie(client)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(args.verbose)
@@ -76,31 +89,46 @@ def main(argv: list[str] | None = None) -> int:
     client = RateLimitedClient(cfg)
     manifest = Manifest(cfg.output_dir).connect()
     try:
-        if args.cmd == "story":
-            sid = resolve_story_id(args.target)
-            archive_story(cfg, client, manifest, sid)
-        elif args.cmd == "url":
-            sid = resolve_story_id(args.target)
-            archive_story(cfg, client, manifest, sid)
-        elif args.cmd == "library":
-            from wattpad_crawler.api.user import fetch_library
-            ids = fetch_library(client, args.user)
-            archive_many(cfg, client, manifest, ids)
-        elif args.cmd == "list":
-            from wattpad_crawler.api.user import fetch_list_story_ids
-            ids = fetch_list_story_ids(client, args.list_id)
-            archive_many(cfg, client, manifest, ids)
-        elif args.cmd == "status":
-            _print_status(manifest)
-        elif args.cmd == "serve":
-            # serve owns its own client/manifest lifecycle inside JobRunner threads;
-            # close the ones main() opened so we don't leak them.
-            manifest.close()
-            client.close()
-            app = build_app(cfg)
-            uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        try:
+            if args.cmd == "story":
+                _require_auth(client)
+                sid = resolve_story_id(args.target)
+                archive_story(cfg, client, manifest, sid)
+            elif args.cmd == "url":
+                _require_auth(client)
+                sid = resolve_story_id(args.target)
+                archive_story(cfg, client, manifest, sid)
+            elif args.cmd == "library":
+                _require_auth(client)
+                from wattpad_crawler.api.user import fetch_library
+                ids = fetch_library(client, args.user)
+                archive_many(cfg, client, manifest, ids)
+            elif args.cmd == "list":
+                _require_auth(client)
+                from wattpad_crawler.api.user import fetch_list_story_ids
+                ids = fetch_list_story_ids(client, args.list_id)
+                archive_many(cfg, client, manifest, ids)
+            elif args.cmd == "status":
+                # D-06: status reads local sqlite only — no validation.
+                _print_status(manifest)
+            elif args.cmd == "serve":
+                # D-06: web /setup handles auth interactively.
+                # serve owns its own client/manifest lifecycle inside JobRunner threads;
+                # close the ones main() opened so we don't leak them.
+                manifest.close()
+                client.close()
+                app = build_app(cfg)
+                uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+                return 0
             return 0
-        return 0
+        except AuthError as e:
+            # D-08: print to stderr, no traceback noise, exit 2 (= misuse / config error).
+            print(
+                f"AuthError: {e}\n"
+                f"Update your cookie via /setup or edit {cfg.output_dir}/_config.toml.",
+                file=sys.stderr,
+            )
+            return 2
     finally:
         manifest.close()
         client.close()
