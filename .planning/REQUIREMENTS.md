@@ -94,43 +94,41 @@ Deferred to a future "Features v2" or "Polish & Ship" milestone.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | TBD | Pending |
-| REL-02 | TBD | Pending |
-| REL-03 | TBD | Pending |
-| REL-04 | TBD | Pending |
-| SAN-01 | TBD | Pending |
-| SAN-02 | TBD | Pending |
-| AUTH-01 | TBD | Pending |
-| AUTH-02 | TBD | Pending |
-| AUTH-03 | TBD | Pending |
-| AUTH-04 | TBD | Pending |
-| AUTH-05 | TBD | Pending |
-| RES-01 | TBD | Pending |
-| RES-02 | TBD | Pending |
-| RES-03 | TBD | Pending |
-| THR-01 | TBD | Pending |
-| THR-02 | TBD | Pending |
-| THR-03 | TBD | Pending |
-| THR-04 | TBD | Pending |
-| THR-05 | TBD | Pending |
-| REN-01 | TBD | Pending |
-| REN-02 | TBD | Pending |
-| REN-03 | TBD | Pending |
-| REN-04 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
+| REL-01 | Phase 1 | Pending |
+| REL-02 | Phase 1 | Pending |
+| REL-03 | Phase 1 | Pending |
+| REL-04 | Phase 1 | Pending |
+| SAN-01 | Phase 1 | Pending |
+| SAN-02 | Phase 1 | Pending |
+| AUTH-01 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Pending |
+| AUTH-03 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Pending |
+| RES-01 | Phase 3 | Pending |
+| RES-02 | Phase 3 | Pending |
+| RES-03 | Phase 3 | Pending |
+| THR-01 | Phase 4 | Pending |
+| THR-02 | Phase 4 | Pending |
+| THR-03 | Phase 4 | Pending |
+| THR-04 | Phase 4 | Pending |
+| THR-05 | Phase 4 | Pending |
+| REN-01 | Phase 5 | Pending |
+| REN-02 | Phase 5 | Pending |
+| REN-03 | Phase 5 | Pending |
+| REN-04 | Phase 5 | Pending |
+| TEST-01 | Phase 5 | Pending |
+| TEST-02 | Phase 5 | Pending |
+| TEST-03 | Phase 5 | Pending |
+| TEST-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 27 ⚠️ (will resolve when roadmapper runs)
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-03*
-*Last updated: 2026-05-03 after initial definition*
+*Last updated: 2026-05-03 after roadmap creation*
