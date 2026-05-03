@@ -58,6 +58,7 @@ def test_parser_requires_subcommand():
 
 
 def test_main_story_calls_archive_story(output_dir, monkeypatch):
+    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_archive_story(cfg, client, manifest, sid, deps=None):
@@ -72,6 +73,7 @@ def test_main_story_calls_archive_story(output_dir, monkeypatch):
 
 
 def test_main_url_command_resolves_then_archives(output_dir, monkeypatch):
+    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_archive_story(cfg, client, manifest, sid, deps=None):
@@ -87,6 +89,7 @@ def test_main_url_command_resolves_then_archives(output_dir, monkeypatch):
 
 
 def test_main_library_calls_fetch_library_and_archive_many(output_dir, monkeypatch):
+    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_fetch_library(client, username):
@@ -106,6 +109,7 @@ def test_main_library_calls_fetch_library_and_archive_many(output_dir, monkeypat
 
 
 def test_main_list_calls_fetch_list_and_archive_many(output_dir, monkeypatch):
+    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_fetch_list(client, lid):
