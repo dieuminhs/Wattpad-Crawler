@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from wattpad_crawler.archive.state import Manifest
+from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.config import Config
 from wattpad_crawler.jobs import (
     JobDeps,
@@ -501,3 +502,67 @@ def test_archive_many_records_render_error_in_results(
     assert "all renders failed" in results["42"]
 
     manifest.close()
+
+
+# ---- AUTH-04 tests (Phase 2 / Plan 04) ----
+
+
+def test_archive_story_propagates_auth_failed(output_dir: Path):
+    """AUTH-04 / D-16: archive_story re-raises AuthFailedError instead of swallowing."""
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    try:
+        story = Story(
+            story_id="42", title="Hi", author_username="bob",
+            parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+        )
+        fake_client = MagicMock()
+        deps = _make_deps(story)
+        deps.fetch_chapter_html.side_effect = AuthFailedError(
+            "Wattpad returned HTTP 401 for https://w/100",
+            status_code=401,
+            url="https://w/100",
+        )
+        with pytest.raises(AuthFailedError):
+            archive_story(cfg, fake_client, manifest, "42", deps=deps)
+        # Manifest should reflect the failure, not "done".
+        row = manifest.get_part("42", "100")
+        assert row["status"] != "done", f"Expected status != 'done', got {row['status']!r}"
+    finally:
+        manifest.close()
+
+
+def test_archive_story_emits_auth_failed_event(output_dir: Path):
+    """AUTH-04 / D-17: archive_story emits auth.failed event BEFORE re-raising."""
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    try:
+        story = Story(
+            story_id="42", title="Hi", author_username="bob",
+            parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+        )
+        fake_client = MagicMock()
+        deps = _make_deps(story)
+        deps.fetch_chapter_html.side_effect = AuthFailedError(
+            "Wattpad returned HTTP 401 for https://w/100",
+            status_code=401,
+            url="https://w/100",
+        )
+        events: list[tuple[str, dict]] = []
+
+        def collect(kind: str, data: dict) -> None:
+            events.append((kind, data))
+
+        with pytest.raises(AuthFailedError):
+            archive_story(cfg, fake_client, manifest, "42", deps=deps, progress=collect)
+        # The auth.failed event must have been emitted BEFORE the re-raise.
+        auth_events = [(k, d) for (k, d) in events if k == "auth.failed"]
+        n = len(auth_events)
+        assert n == 1, f"Expected exactly 1 auth.failed event, got {n}"
+        kind, data = auth_events[0]
+        assert data["part_id"] == "100"
+        assert data["status_code"] == 401
+        assert data["url"] == "https://w/100"
+        assert "401" in data["message"]
+    finally:
+        manifest.close()

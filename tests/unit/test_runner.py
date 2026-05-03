@@ -2,6 +2,7 @@ import threading
 import time
 from collections import deque
 
+from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.web import runner
 from wattpad_crawler.web.runner import Job, JobManager, JobRunner, JobStatus, ProgressEvent
 
@@ -349,3 +350,36 @@ def test_jobmanager_order_list_consistent_after_prune(monkeypatch):
     d = mgr.create("k", {})  # triggers prune
     assert mgr._order == [b.job_id, c.job_id, d.job_id]
     assert set(mgr._order) == set(mgr._jobs.keys())
+
+
+# ---- AUTH-04 integration test (Phase 2 / Plan 04) ----
+
+
+def test_runner_marks_failed_on_auth_failure():
+    """AUTH-04: a JobWork that raises AuthFailedError causes JobRunner to mark
+    the job `failed` with the AuthFailedError message in job.error.
+
+    This validates the full propagation path: archive_story raises (Plan 04) ->
+    JobRunner._run catches Exception -> job.set_failed(str(e)).
+    Mirrors test_jobrunner_records_failure (lines 106-122) verbatim with
+    AuthFailedError swapped in for RuntimeError.
+    """
+    mgr = JobManager()
+    job = mgr.create("archive_story", {"story_id": "42"})
+    job_runner = JobRunner(mgr)
+
+    def work(emit):
+        raise AuthFailedError(
+            "simulated auth failure",
+            status_code=401,
+            url="https://w/x",
+        )
+
+    job_runner.submit(job, work)
+    deadline = time.monotonic() + 2.0
+    while job.status not in (JobStatus.done, JobStatus.failed):
+        if time.monotonic() > deadline:
+            raise AssertionError("job did not finish")
+        time.sleep(0.01)
+    assert job.status == JobStatus.failed
+    assert "simulated auth failure" in (job.error or "")
