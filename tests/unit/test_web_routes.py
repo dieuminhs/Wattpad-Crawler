@@ -267,6 +267,71 @@ def test_reader_chapter_view(output_dir: Path):
     assert "Body of chapter one." in r.text
 
 
+def test_reader_chapter_view_groups_inline_comments_by_paragraph(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    (sd / "parts").mkdir(parents=True)
+    (sd / "parts" / "01_100_one.json").write_text(json.dumps({
+        "part_id": "100",
+        "ordinal": 1,
+        "title": "One",
+        "url": "https://w/100",
+        "last_modified": None,
+        "paragraphs": [
+            {"id": "p1", "text": "First paragraph.", "html": "First paragraph."},
+            {"id": "p2", "text": "Second paragraph.", "html": "Second paragraph."},
+        ],
+        "images": [],
+    }))
+    (sd / "parts" / "01_100_comments-inline.json").write_text(json.dumps([
+        {
+            "comment_id": "c1",
+            "user": "bob",
+            "body": "Inline on first.",
+            "created_at": "t",
+            "paragraph_id": "p1",
+            "replies": [],
+        },
+        {
+            "comment_id": "c2",
+            "user": "carol",
+            "body": "Inline on second.",
+            "created_at": "t",
+            "paragraph_id": "p2",
+            "replies": [
+                {
+                    "comment_id": "r1",
+                    "user": "dave",
+                    "body": "Reply.",
+                    "created_at": "t",
+                    "paragraph_id": None,
+                    "replies": [],
+                }
+            ],
+        },
+    ]))
+    (sd / "parts" / "01_100_comments-end.json").write_text("[]")
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "",
+        "parts": [{"part_id": "100", "ordinal": 1, "title": "One"}],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/read/alice/42_my-tale/1")
+
+    assert r.status_code == 200
+    assert "First paragraph." in r.text
+    assert "Second paragraph." in r.text
+    assert "bob" in r.text
+    assert "Inline on first." in r.text
+    assert "carol" in r.text
+    assert "Inline on second." in r.text
+    assert "dave" in r.text
+    assert "Reply." in r.text
+
+
 def test_reader_404_unknown_story(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)

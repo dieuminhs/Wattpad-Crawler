@@ -26,8 +26,42 @@
       <p class="muted"><a href="/read/{{ author }}/{{ dir_name }}">← {{ meta.title }}</a></p>
       <h1>{{ chapter.title }}</h1>
       <div class="chapter-body">
-        <pre>{{ chapter.body }}</pre>
+        {% if chapter.paragraphs %}
+          {% for paragraph in chapter.paragraphs %}
+            <section class="reader-paragraph" id="p-{{ paragraph.id }}">
+              <div class="paragraph-text">{{ paragraph.html | safe }}</div>
+              {% if paragraph.comments %}
+                <details class="inline-comments">
+                  <summary>{{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}</summary>
+                  {% for comment in paragraph.comments recursive %}
+                    <article class="comment">
+                      <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+                      {% if comment.replies %}
+                        <div class="comment-replies">{{ loop(comment.replies) }}</div>
+                      {% endif %}
+                    </article>
+                  {% endfor %}
+                </details>
+              {% endif %}
+            </section>
+          {% endfor %}
+        {% else %}
+          <pre>{{ chapter.body }}</pre>
+        {% endif %}
       </div>
+      {% if chapter.end_comments %}
+        <section class="end-comments">
+          <h2>End comments</h2>
+          {% for comment in chapter.end_comments recursive %}
+            <article class="comment">
+              <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+              {% if comment.replies %}
+                <div class="comment-replies">{{ loop(comment.replies) }}</div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
       <p>
         {% if chapter.prev_ord %}<a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.prev_ord }}">← Previous</a>{% endif %}
         {% if chapter.next_ord %} · <a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.next_ord }}">Next →</a>{% endif %}

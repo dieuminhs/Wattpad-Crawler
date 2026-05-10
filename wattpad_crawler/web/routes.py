@@ -2,6 +2,7 @@ import dataclasses
 import json
 import os
 import threading
+from collections import defaultdict
 from pathlib import Path
 
 import httpx
@@ -338,6 +339,71 @@ def _resolve_story_dir(cfg, author: str, dir_name: str) -> Path:
     return target
 
 
+def _read_json_or_default(path: Path, default):
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _comment_count(comments: list[dict]) -> int:
+    total = 0
+    stack = list(comments)
+    while stack:
+        comment = stack.pop()
+        total += 1
+        replies = comment.get("replies") or []
+        if isinstance(replies, list):
+            stack.extend(reply for reply in replies if isinstance(reply, dict))
+    return total
+
+
+def _chapter_view_data(story_dir: Path, ordinal: int, part: dict) -> dict:
+    part_id = part["part_id"]
+    prefix = f"{ordinal:02d}_{part_id}_"
+    parts_dir = story_dir / "parts"
+    json_files = [
+        path for path in parts_dir.glob(f"{prefix}*.json") if "_comments-" not in path.name
+    ]
+    txt_files = list(parts_dir.glob(f"{prefix}*.txt"))
+    comments_prefix = f"{ordinal:02d}_{part_id}"
+    inline_path = parts_dir / f"{comments_prefix}_comments-inline.json"
+    end_path = parts_dir / f"{comments_prefix}_comments-end.json"
+    inline_comments = _read_json_or_default(inline_path, [])
+    end_comments = _read_json_or_default(end_path, [])
+
+    comments_by_paragraph: defaultdict[str, list[dict]] = defaultdict(list)
+    for comment in inline_comments:
+        if not isinstance(comment, dict):
+            continue
+        paragraph_id = comment.get("paragraph_id")
+        if paragraph_id:
+            comments_by_paragraph[str(paragraph_id)].append(comment)
+
+    paragraphs = []
+    if json_files:
+        data = json.loads(json_files[0].read_text(encoding="utf-8"))
+        for paragraph in data.get("paragraphs", []):
+            if not isinstance(paragraph, dict):
+                continue
+            paragraph_id = str(paragraph.get("id") or "")
+            comments = comments_by_paragraph.get(paragraph_id, [])
+            paragraphs.append({
+                "id": paragraph_id,
+                "text": paragraph.get("text", ""),
+                "html": paragraph.get("html", ""),
+                "comments": comments,
+                "comment_count": _comment_count(comments),
+            })
+
+    body = txt_files[0].read_text(encoding="utf-8") if txt_files else "(missing chapter body)"
+    return {
+        "title": part.get("title", ""),
+        "body": body,
+        "paragraphs": paragraphs,
+        "end_comments": end_comments,
+    }
+
+
 @router.get("/read/{author}/{dir_name}", response_class=HTMLResponse)
 def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
     cfg = request.app.state.cfg
@@ -368,13 +434,12 @@ def reader_chapter(request: Request, author: str, dir_name: str, ordinal: int) -
     p = next((q for q in parts if int(q.get("ordinal", 0)) == ordinal), None)
     if p is None:
         raise HTTPException(status_code=404, detail="chapter not found")
-    prefix = f"{ordinal:02d}_{p['part_id']}_"
-    txt_files = list((sd / "parts").glob(f"{prefix}*.txt"))
-    body = txt_files[0].read_text(encoding="utf-8") if txt_files else "(missing chapter body)"
-
     ords = [int(q["ordinal"]) for q in parts]
     prev_ord = max((o for o in ords if o < ordinal), default=None)
     next_ord = min((o for o in ords if o > ordinal), default=None)
+    chapter = _chapter_view_data(sd, ordinal, p)
+    chapter["prev_ord"] = prev_ord
+    chapter["next_ord"] = next_ord
 
     return request.app.state.templates.TemplateResponse(
         request=request,

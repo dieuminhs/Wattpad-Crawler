@@ -109,3 +109,18 @@ input[type=text], input[type=password], textarea {
 .reader { max-width: var(--reading-width); margin: 0 auto; }
 .reader .chapter-body { font-family: Georgia, serif; font-size: 1.1em; }
 .reader .chapter-body pre { white-space: pre-wrap; font-family: inherit; margin: 1em 0; }
+.reader-paragraph { margin: 1.2em 0; }
+.paragraph-text { white-space: pre-wrap; }
+.inline-comments, .end-comments {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.9rem;
+  background: #fff;
+  border-left: 3px solid var(--accent);
+  margin-top: 0.5em;
+  padding: 0.6em 0.8em;
+}
+.inline-comments summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.comment { border-top: 1px solid var(--border); padding-top: 0.4em; margin-top: 0.4em; }
+.comment:first-of-type { border-top: 0; }
+.comment p { margin: 0.2em 0; }
+.comment-replies { margin-left: 1em; }
