@@ -76,7 +76,7 @@ The web UI calls the same code as the CLI — `_state.sqlite` is the single sour
 To bind to all interfaces (e.g. for a homelab):
 
 ```bash
-wattpad-crawler serve --host 0.0.0.0 --port 8000
+wattpad-crawler serve --host 127.0.0.1 --port 8081
 ```
 
 ## Output Layout
