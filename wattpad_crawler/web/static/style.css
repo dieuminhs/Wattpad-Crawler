@@ -109,18 +109,80 @@ input[type=text], input[type=password], textarea {
 .reader { max-width: var(--reading-width); margin: 0 auto; }
 .reader .chapter-body { font-family: Georgia, serif; font-size: 1.1em; }
 .reader .chapter-body pre { white-space: pre-wrap; font-family: inherit; margin: 1em 0; }
-.reader-paragraph { margin: 1.2em 0; }
+.reader-paragraph { margin: 1.2em 0; position: relative; }
 .paragraph-text { white-space: pre-wrap; }
-.inline-comments, .end-comments {
+.comment-count-button {
+  position: absolute;
+  top: 50%;
+  right: -3.25rem;
+  transform: translateY(-50%);
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  background: #ff7a00;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 2rem;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+}
+.comment-count-button:hover,
+.comment-count-button[aria-expanded="true"] { background: #e66d00; }
+.comment-drawer,
+.end-comments {
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 0.9rem;
   background: #fff;
+}
+.comment-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  width: min(24rem, 92vw);
+  height: 100vh;
+  padding: 1rem;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgb(0 0 0 / 16%);
+  transform: translateX(100%);
+  transition: transform 0.18s ease-out;
+}
+.comment-drawer.is-open { transform: translateX(0); }
+.comment-drawer-header {
+  position: sticky;
+  top: -1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  margin: -1rem -1rem 0.75rem;
+  padding: 1rem;
+}
+.comment-drawer-header h2 { font-size: 1rem; margin: 0; }
+.comment-drawer-close {
+  background: #eee;
+  color: var(--fg);
+  padding: 0.45em 0.8em;
+  font-size: 0.85rem;
+}
+.comment-drawer-close:hover { background: #ddd; }
+.end-comments {
   border-left: 3px solid var(--accent);
-  margin-top: 0.5em;
+  margin-top: 1em;
   padding: 0.6em 0.8em;
 }
-.inline-comments summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .comment { border-top: 1px solid var(--border); padding-top: 0.4em; margin-top: 0.4em; }
 .comment:first-of-type { border-top: 0; }
 .comment p { margin: 0.2em 0; }
 .comment-replies { margin-left: 1em; }
+@media (max-width: 54rem) {
+  .comment-count-button { right: -2.5rem; }
+}
+@media (max-width: 46rem) {
+  .reader { padding-right: 2.5rem; }
+  .comment-count-button { right: -2.35rem; }
+}

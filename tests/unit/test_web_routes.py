@@ -378,6 +378,10 @@ def test_reader_chapter_view_groups_inline_comments_by_paragraph(output_dir: Pat
     assert r.status_code == 200
     assert "First paragraph." in r.text
     assert "Second paragraph." in r.text
+    assert 'class="comment-count-button"' in r.text
+    assert 'data-comments-target="comments-p1"' in r.text
+    assert 'class="comment-drawer" id="comments-p1"' in r.text
+    assert "Hide comments" in r.text
     assert "bob" in r.text
     assert "Inline on first." in r.text
     assert "carol" in r.text

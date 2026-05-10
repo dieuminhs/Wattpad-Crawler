@@ -31,8 +31,19 @@
             <section class="reader-paragraph" id="p-{{ paragraph.id }}">
               <div class="paragraph-text">{{ paragraph.html | safe }}</div>
               {% if paragraph.comments %}
-                <details class="inline-comments">
-                  <summary>{{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}</summary>
+                <button
+                  class="comment-count-button"
+                  type="button"
+                  data-comments-target="comments-{{ paragraph.id }}"
+                  aria-controls="comments-{{ paragraph.id }}"
+                  aria-expanded="false"
+                  title="Show {{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}"
+                >{{ paragraph.comment_count }}</button>
+                <aside class="comment-drawer" id="comments-{{ paragraph.id }}" aria-hidden="true">
+                  <div class="comment-drawer-header">
+                    <h2>{{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}</h2>
+                    <button class="comment-drawer-close" type="button">Hide comments</button>
+                  </div>
                   {% for comment in paragraph.comments recursive %}
                     <article class="comment">
                       <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
@@ -41,7 +52,7 @@
                       {% endif %}
                     </article>
                   {% endfor %}
-                </details>
+                </aside>
               {% endif %}
             </section>
           {% endfor %}
@@ -66,6 +77,33 @@
         {% if chapter.prev_ord %}<a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.prev_ord }}">← Previous</a>{% endif %}
         {% if chapter.next_ord %} · <a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.next_ord }}">Next →</a>{% endif %}
       </p>
+      <script>
+        document.querySelectorAll('.comment-count-button').forEach((button) => {
+          const drawer = document.getElementById(button.dataset.commentsTarget);
+          if (!drawer) return;
+          const close = drawer.querySelector('.comment-drawer-close');
+          const hideDrawer = () => {
+            drawer.classList.remove('is-open');
+            drawer.setAttribute('aria-hidden', 'true');
+            button.setAttribute('aria-expanded', 'false');
+          };
+          button.addEventListener('click', () => {
+            document.querySelectorAll('.comment-drawer.is-open').forEach((openDrawer) => {
+              if (openDrawer !== drawer) {
+                openDrawer.classList.remove('is-open');
+                openDrawer.setAttribute('aria-hidden', 'true');
+              }
+            });
+            document.querySelectorAll('.comment-count-button[aria-expanded="true"]').forEach((openButton) => {
+              if (openButton !== button) openButton.setAttribute('aria-expanded', 'false');
+            });
+            drawer.classList.add('is-open');
+            drawer.setAttribute('aria-hidden', 'false');
+            button.setAttribute('aria-expanded', 'true');
+          });
+          if (close) close.addEventListener('click', hideDrawer);
+        });
+      </script>
     {% endif %}
   </div>
 {% endblock %}
