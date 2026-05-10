@@ -4,21 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Wattpad Crawler{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260511-job-panel">
+  <link rel="stylesheet" href="/static/style.css?v=20260511-ui-refresh">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 </head>
 <body>
   <nav class="topbar">
-    <a href="/">Dashboard</a>
-    <a href="/library">Library</a>
-    <a href="/setup">Setup</a>
-    <a href="/config">Config</a>
+    <a class="brand-mark" href="/" aria-label="Wattpad Crawler dashboard">
+      <span class="brand-icon">W</span>
+      <span>Archive</span>
+    </a>
+    <div class="topbar-links">
+      <a href="/">Dashboard</a>
+      <a href="/library">Library</a>
+      <a href="/setup">Setup</a>
+      <a href="/config">Config</a>
+    </div>
   </nav>
-  <main class="container">
+  <main class="container app-shell">
     {% block content %}{% endblock %}
   </main>
   <section class="job-panel is-hidden" id="job-panel" aria-live="polite">
-    <div class="job-panel-header">
+    <div class="job-panel-header" id="job-panel-header" role="button" tabindex="0">
       <button id="job-panel-toggle" type="button" class="job-panel-title">Archive progress</button>
       <div class="job-panel-actions">
         <a id="job-panel-open" href="#">Open full</a>
@@ -35,6 +41,7 @@
     (function () {
       var panel = document.getElementById('job-panel');
       var bubble = document.getElementById('job-panel-bubble');
+      var header = document.getElementById('job-panel-header');
       var toggle = document.getElementById('job-panel-toggle');
       var hide = document.getElementById('job-panel-hide');
       var open = document.getElementById('job-panel-open');
@@ -121,9 +128,17 @@
           });
       }
 
-      hide.addEventListener('click', function () { setCollapsed(true); });
+      header.addEventListener('click', function () { setCollapsed(true); });
+      header.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setCollapsed(true);
+        }
+      });
+      hide.addEventListener('click', function (event) { event.stopPropagation(); setCollapsed(true); });
       bubble.addEventListener('click', function () { setCollapsed(false); });
-      toggle.addEventListener('click', function () { setCollapsed(panel.classList.contains('is-hidden') === false); });
+      open.addEventListener('click', function (event) { event.stopPropagation(); });
+      toggle.addEventListener('click', function (event) { event.stopPropagation(); setCollapsed(true); });
       loadJob();
     })();
   </script>

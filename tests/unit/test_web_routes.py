@@ -128,6 +128,19 @@ def test_dashboard_renders(output_dir: Path):
     assert "story" in r.text.lower()
 
 
+def test_dashboard_uses_polished_archive_cards(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/")
+
+    assert r.status_code == 200
+    assert 'class="hero-card"' in r.text
+    assert "archive-card-featured" in r.text
+    assert 'class="section-heading"' in r.text
+
+
 def test_base_page_renders_job_panel_shell(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
@@ -137,9 +150,24 @@ def test_base_page_renders_job_panel_shell(output_dir: Path):
 
     assert r.status_code == 200
     assert 'id="job-panel"' in r.text
+    assert 'id="job-panel-header"' in r.text
     assert 'id="job-panel-toggle"' in r.text
     assert 'id="job-panel-events"' in r.text
+    assert "header.addEventListener('click'" in r.text
     assert "Open full" in r.text
+
+
+def test_base_page_renders_brand_shell(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/")
+
+    assert r.status_code == 200
+    assert 'class="brand-mark"' in r.text
+    assert 'class="topbar-links"' in r.text
+    assert "app-shell" in r.text
 
 
 def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):

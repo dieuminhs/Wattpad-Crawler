@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — Wattpad Crawler{% endblock %}
 {% block content %}
-  <h1>What do you want to archive?</h1>
+  <section class="hero-card">
+    <div>
+      <p class="eyebrow">Personal Wattpad archive</p>
+      <h1>Save stories before they disappear.</h1>
+      <p class="hero-copy">Fetch chapters, comments, covers, and output files from one calm dashboard.</p>
+    </div>
+    <a class="btn btn-light" href="/library">View library</a>
+  </section>
 
   {% if not has_cookie %}
     <div class="card status-failed">
@@ -10,8 +17,16 @@
     </div>
   {% endif %}
 
-  <div class="three-buttons">
-    <form method="post" action="/jobs" class="card">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Archive sources</p>
+      <h2>Choose what to save</h2>
+    </div>
+  </div>
+
+  <div class="three-buttons archive-grid">
+    <form method="post" action="/jobs" class="card archive-card archive-card-featured">
+      <span class="archive-icon">★</span>
       <h3>My library</h3>
       <p>Archive everything you've added on Wattpad.</p>
       <p>
@@ -21,7 +36,8 @@
       <button type="submit">Archive library</button>
     </form>
 
-    <form method="post" action="/jobs" class="card">
+    <form method="post" action="/jobs" class="card archive-card">
+      <span class="archive-icon">➜</span>
       <h3>One story</h3>
       <p>Archive a single story by ID or URL.</p>
       <p>
@@ -31,7 +47,8 @@
       <button type="submit">Archive story</button>
     </form>
 
-    <form method="post" action="/jobs" class="card">
+    <form method="post" action="/jobs" class="card archive-card">
+      <span class="archive-icon">≡</span>
       <h3>Reading list</h3>
       <p>Archive all stories in a reading list.</p>
       <p>
@@ -42,11 +59,16 @@
     </form>
   </div>
 
-  <h2>Recent jobs</h2>
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Background work</p>
+      <h2>Recent jobs</h2>
+    </div>
+  </div>
   {% if recent_jobs %}
-    <ul>
+    <ul class="job-list">
       {% for job in recent_jobs %}
-        <li>
+        <li class="job-list-item">
           <a href="/jobs/{{ job.job_id }}">
             <span class="status-{{ job.status.value }}">[{{ job.status.value }}]</span>
             {{ job.kind }} —
