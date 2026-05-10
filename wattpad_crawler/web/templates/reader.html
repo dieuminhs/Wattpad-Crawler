@@ -39,7 +39,7 @@
                   aria-expanded="false"
                   title="Show {{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}"
                 >{{ paragraph.comment_count }}</button>
-                <aside class="comment-drawer" id="comments-{{ paragraph.id }}" aria-hidden="true">
+                <aside class="comment-drawer" id="comments-{{ paragraph.id }}" hidden aria-hidden="true">
                   <div class="comment-drawer-header">
                     <h2>{{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}</h2>
                     <button class="comment-drawer-close" type="button">Hide comments</button>
@@ -84,6 +84,7 @@
           const close = drawer.querySelector('.comment-drawer-close');
           const hideDrawer = () => {
             drawer.classList.remove('is-open');
+            drawer.hidden = true;
             drawer.setAttribute('aria-hidden', 'true');
             button.setAttribute('aria-expanded', 'false');
           };
@@ -91,12 +92,14 @@
             document.querySelectorAll('.comment-drawer.is-open').forEach((openDrawer) => {
               if (openDrawer !== drawer) {
                 openDrawer.classList.remove('is-open');
+                openDrawer.hidden = true;
                 openDrawer.setAttribute('aria-hidden', 'true');
               }
             });
             document.querySelectorAll('.comment-count-button[aria-expanded="true"]').forEach((openButton) => {
               if (openButton !== button) openButton.setAttribute('aria-expanded', 'false');
             });
+            drawer.hidden = false;
             drawer.classList.add('is-open');
             drawer.setAttribute('aria-hidden', 'false');
             button.setAttribute('aria-expanded', 'true');

@@ -42,6 +42,15 @@ def test_setup_page_renders(output_dir: Path):
     assert "wattpad" in r.text.lower()
 
 
+def test_pages_cache_bust_static_css(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/setup")
+    assert r.status_code == 200
+    assert 'href="/static/style.css?v=' in r.text
+
+
 def test_setup_post_saves_cookie(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
@@ -380,7 +389,7 @@ def test_reader_chapter_view_groups_inline_comments_by_paragraph(output_dir: Pat
     assert "Second paragraph." in r.text
     assert 'class="comment-count-button"' in r.text
     assert 'data-comments-target="comments-p1"' in r.text
-    assert 'class="comment-drawer" id="comments-p1"' in r.text
+    assert 'class="comment-drawer" id="comments-p1" hidden aria-hidden="true"' in r.text
     assert "Hide comments" in r.text
     assert "bob" in r.text
     assert "Inline on first." in r.text
