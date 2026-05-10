@@ -76,6 +76,34 @@ def _save_cookie(output_dir: Path, cookie: str) -> None:
         raise
 
 
+def _atomic_write_config(output_dir: Path, text: str) -> None:
+    config_path = output_dir / "_config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    suffix = f".{os.getpid()}.{threading.get_ident()}.tmp"
+    tmp = config_path.with_suffix(config_path.suffix + suffix)
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, config_path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _save_runtime_config(
+    output_dir: Path,
+    *,
+    cookie: str,
+    rate_limit_per_sec: float,
+    workers_per_story: int,
+) -> None:
+    text = (
+        f"cookie = {_toml_string(cookie)}\n"
+        f"rate_limit_per_sec = {rate_limit_per_sec}\n"
+        f"workers_per_story = {workers_per_story}\n"
+    )
+    _atomic_write_config(output_dir, text)
+
+
 def _mask(s: str) -> str:
     if not s:
         return ""
@@ -328,6 +356,54 @@ def library(request: Request) -> HTMLResponse:
             "bookmarked_story_id": request.query_params.get("bookmarked"),
         },
     )
+
+
+@router.get("/config", response_class=HTMLResponse)
+def config_get(request: Request) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="config.html",
+        context={
+            "cfg": cfg,
+            "saved": request.query_params.get("saved") == "1",
+            "error_message": "",
+        },
+    )
+
+
+@router.post("/config", response_model=None)
+def config_post(
+    request: Request,
+    rate_limit_per_sec: str = Form(...),
+    workers_per_story: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
+    cfg = request.app.state.cfg
+    try:
+        rate = float(rate_limit_per_sec)
+        workers = int(workers_per_story)
+        if rate <= 0:
+            raise ValueError("Requests per second must be greater than 0.")
+        if workers < 1:
+            raise ValueError("Chapter workers must be at least 1.")
+    except ValueError as e:
+        return request.app.state.templates.TemplateResponse(
+            request=request,
+            name="config.html",
+            context={"cfg": cfg, "saved": False, "error_message": str(e)},
+            status_code=400,
+        )
+
+    _save_runtime_config(
+        cfg.output_dir,
+        cookie=cfg.cookie,
+        rate_limit_per_sec=rate,
+        workers_per_story=workers,
+    )
+    from wattpad_crawler.config import load_config
+
+    request.app.state.cfg = load_config(cfg.output_dir)
+    return RedirectResponse(url="/config?saved=1", status_code=303)
 
 
 @router.post("/library/reset/{story_id}")

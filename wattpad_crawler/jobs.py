@@ -2,6 +2,7 @@ import hashlib
 import logging
 import re
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit
@@ -14,7 +15,7 @@ from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.client import RateLimitedClient
 from wattpad_crawler.config import Config
-from wattpad_crawler.models import Story
+from wattpad_crawler.models import Part, Story
 from wattpad_crawler.render import epub as render_epub
 from wattpad_crawler.render import html as render_html
 from wattpad_crawler.render import txt as render_txt
@@ -84,6 +85,16 @@ class JobDeps:
     fetch_cover_bytes: Callable
 
 
+@dataclass
+class PartArchiveResult:
+    part: Part
+    raw_html: str
+    content: ChapterContent
+    inline_comments: list
+    end_comments: list
+    body_hash: str
+
+
 def _default_deps() -> JobDeps:
     def fetch_cover_bytes(client: RateLimitedClient, url: str) -> bytes:
         if not url:
@@ -135,6 +146,32 @@ def _fetch_comments_or_empty(
         return []
 
 
+def _fetch_part_payload(
+    deps: JobDeps,
+    client: RateLimitedClient,
+    part,
+    emit: ProgressCallback,
+) -> PartArchiveResult:
+    raw_html = deps.fetch_chapter_html(client, part.url)
+    content: ChapterContent = deps.parse_chapter(raw_html)
+    inline = _fetch_comments_or_empty(
+        deps.fetch_inline_comments,
+        client,
+        part.part_id,
+        "inline",
+        emit,
+    )
+    end = _fetch_comments_or_empty(
+        deps.fetch_end_comments,
+        client,
+        part.part_id,
+        "end",
+        emit,
+    )
+    body_hash = hashlib.sha256(content.text.encode("utf-8")).hexdigest()
+    return PartArchiveResult(part, raw_html, content, inline, end, body_hash)
+
+
 def archive_story(
     cfg: Config,
     client: RateLimitedClient,
@@ -173,6 +210,7 @@ def archive_story(
         except Exception as e:
             logger.warning("cover fetch failed for %s: %s", story.story_id, e)
 
+    pending_parts = []
     for part in story.parts:
         existing = manifest.get_part(story.story_id, part.part_id)
         if existing and existing["status"] == "done":
@@ -187,87 +225,80 @@ def archive_story(
             },
         )
         manifest.set_part_status(story.story_id, part.part_id, "in_progress")
-        try:
-            raw_html = deps.fetch_chapter_html(client, part.url)
-            content: ChapterContent = deps.parse_chapter(raw_html)
-            inline = _fetch_comments_or_empty(
-                deps.fetch_inline_comments,
-                client,
-                part.part_id,
-                "inline",
-                emit,
-            )
-            end = _fetch_comments_or_empty(
-                deps.fetch_end_comments,
-                client,
-                part.part_id,
-                "end",
-                emit,
-            )
-            store.write_part_files(
-                cfg.output_dir,
-                story,
+        pending_parts.append(part)
+
+    def persist_result(result: PartArchiveResult) -> None:
+        part = result.part
+        store.write_part_files(
+            cfg.output_dir,
+            story,
+            part,
+            result.content,
+            result.raw_html,
+            result.inline_comments,
+            result.end_comments,
+        )
+        with repo.transaction():
+            repo.upsert_part(
+                story.story_id,
                 part,
-                content,
-                raw_html,
-                inline,
-                end,
+                result.content,
+                result.raw_html,
+                result.inline_comments,
+                result.end_comments,
+                body_hash=result.body_hash,
             )
-            body_hash = hashlib.sha256(content.text.encode("utf-8")).hexdigest()
-            with repo.transaction():
-                repo.upsert_part(
-                    story.story_id,
-                    part,
-                    content,
-                    raw_html,
-                    inline,
-                    end,
-                    body_hash=body_hash,
-                )
-            manifest.set_part_status(
-                story.story_id,
-                part.part_id,
-                "done",
-                body_hash=body_hash,
-            )
-            emit(
-                "part.done",
-                {
-                    "part_id": part.part_id,
-                    "ordinal": part.ordinal,
-                    "inline_comments": len(inline),
-                    "end_comments": len(end),
-                },
-            )
-        except AuthFailedError as e:
-            # AUTH-04 / D-16: do NOT swallow — re-raise so the job ends `failed`,
-            # not silently continuing to the next chapter that will also 401.
-            # AUTH-04 / D-17: emit auth.failed BEFORE re-raise so SSE consumers
-            # see the auth signal in the stream before __status__: failed.
-            # Mark the part status `failed` for manifest consistency before
-            # re-raising (mirrors the broad-except branch's manifest update).
-            manifest.set_part_status(
-                story.story_id,
-                part.part_id,
-                "failed",
-                last_error=str(e),
-            )
-            emit("auth.failed", {
+        manifest.set_part_status(
+            story.story_id,
+            part.part_id,
+            "done",
+            body_hash=result.body_hash,
+        )
+        emit(
+            "part.done",
+            {
                 "part_id": part.part_id,
-                "status_code": e.status_code,
-                "url": e.url,
-                "message": str(e),
-            })
-            raise
-        except Exception as e:
-            logger.exception("part %s failed: %s", part.part_id, e)
-            manifest.set_part_status(
-                story.story_id,
-                part.part_id,
-                "failed",
-                last_error=str(e),
-            )
-            emit("part.failed", {"part_id": part.part_id, "error": str(e)})
+                "ordinal": part.ordinal,
+                "inline_comments": len(result.inline_comments),
+                "end_comments": len(result.end_comments),
+            },
+        )
+
+    if pending_parts:
+        with ThreadPoolExecutor(max_workers=cfg.workers_per_story) as executor:
+            future_to_part = {
+                executor.submit(_fetch_part_payload, deps, client, part, emit): part
+                for part in pending_parts
+            }
+            for future in as_completed(future_to_part):
+                part = future_to_part[future]
+                try:
+                    persist_result(future.result())
+                except AuthFailedError as e:
+                    manifest.set_part_status(
+                        story.story_id,
+                        part.part_id,
+                        "failed",
+                        last_error=str(e),
+                    )
+                    emit("auth.failed", {
+                        "part_id": part.part_id,
+                        "status_code": e.status_code,
+                        "url": e.url,
+                        "message": str(e),
+                    })
+                    for pending in future_to_part:
+                        pending.cancel()
+                    raise
+                except Exception as e:
+                    logger.exception("part %s failed: %s", part.part_id, e)
+                    manifest.set_part_status(
+                        story.story_id,
+                        part.part_id,
+                        "failed",
+                        last_error=str(e),
+                    )
+                    emit("part.failed", {"part_id": part.part_id, "error": str(e)})
 
     sd = store.story_dir(cfg.output_dir, story)
     emit("render.start", {"story_id": story.story_id})

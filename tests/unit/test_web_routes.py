@@ -45,6 +45,40 @@ def test_setup_page_renders(output_dir: Path):
     assert "wattpad" in r.text.lower()
 
 
+def test_config_page_renders_current_settings(output_dir: Path):
+    cfg = Config(output_dir=output_dir, rate_limit_per_sec=1.5, workers_per_story=4)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/config")
+
+    assert r.status_code == 200
+    assert "Archive settings" in r.text
+    assert 'name="rate_limit_per_sec"' in r.text
+    assert 'value="1.5"' in r.text
+    assert 'name="workers_per_story"' in r.text
+    assert 'value="4"' in r.text
+
+
+def test_config_post_saves_rate_limit_and_workers(output_dir: Path):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.post(
+        "/config",
+        data={"rate_limit_per_sec": "3.5", "workers_per_story": "6"},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/config?saved=1"
+    saved = load_config(output_dir)
+    assert saved.cookie == "tok"
+    assert saved.rate_limit_per_sec == 3.5
+    assert saved.workers_per_story == 6
+
+
 def test_pages_cache_bust_static_css(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)

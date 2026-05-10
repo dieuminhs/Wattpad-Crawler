@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -96,6 +98,46 @@ def test_archive_story_marks_failed_on_chapter_error(output_dir: Path):
     assert row["status"] == "failed"
     assert row["last_error"] is not None
     assert "network exploded" in row["last_error"]
+    manifest.close()
+
+
+def test_archive_story_fetches_parts_concurrently(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, workers_per_story=3)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42",
+        title="Hi",
+        author_username="bob",
+        parts=[
+            Part(part_id="100", ordinal=1, title="One", url="https://w/100"),
+            Part(part_id="101", ordinal=2, title="Two", url="https://w/101"),
+            Part(part_id="102", ordinal=3, title="Three", url="https://w/102"),
+        ],
+    )
+    deps = _make_deps(story)
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+
+    def fetch_chapter_html(_client, url):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return f"<pre>{url}</pre>"
+
+    deps.fetch_chapter_html = MagicMock(side_effect=fetch_chapter_html)
+    monkeypatch.setattr("wattpad_crawler.render.txt.render_txt", MagicMock())
+    monkeypatch.setattr("wattpad_crawler.render.html.render_html", MagicMock())
+    monkeypatch.setattr("wattpad_crawler.render.epub.render_epub", MagicMock())
+
+    archive_story(cfg, MagicMock(), manifest, "42", deps=deps)
+
+    assert max_active > 1
+    assert deps.fetch_chapter_html.call_count == 3
     manifest.close()
 
 
