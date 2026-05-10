@@ -3,13 +3,20 @@ import logging
 import sys
 from pathlib import Path
 
+import httpx
 import uvicorn
 
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import load_config
-from wattpad_crawler.jobs import archive_many, archive_story, resolve_story_id
+from wattpad_crawler.config import ConfigError, load_config
+from wattpad_crawler.jobs import (
+    ResolveError,
+    archive_many,
+    archive_story,
+    resolve_story_id,
+    resolve_url_story_id,
+)
 from wattpad_crawler.web.app import build_app
 
 
@@ -36,6 +43,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp_url = sub.add_parser("url", help="Archive whatever a Wattpad URL points to")
     sp_url.add_argument("target", help="Any Wattpad URL")
+
+    sp_reset = sub.add_parser("reset", help="Reset a story so the next archive refetches it")
+    sp_reset.add_argument("target", help="Numeric story ID")
 
     sub.add_parser("status", help="Show archive status")
     sp_serve = sub.add_parser("serve", help="Run the local web UI")
@@ -71,9 +81,12 @@ def _print_status(manifest: Manifest) -> None:
 
 
 def _require_auth(client: RateLimitedClient) -> None:
-    """Validate the configured Wattpad cookie before doing any archive work.
+    """Validate the configured Wattpad cookie before auth-only archive work.
 
-    AUTH-02 / D-05: called at the top of each of the 4 archive branches in main().
+    Direct story/url archival intentionally skips this probe; the story request
+    itself can be public, and auth failures still surface through RateLimitedClient
+    if Wattpad rejects the real fetch.
+    AUTH-02 / D-05: called at the top of collection archive branches in main().
     AUTH-02 / D-06: status and serve are exempt (no network read; web /setup covers serve).
     AUTH-02 / D-07: no opt-out flag.
 
@@ -85,18 +98,20 @@ def _require_auth(client: RateLimitedClient) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(args.verbose)
-    cfg = load_config(args.output)
+    try:
+        cfg = load_config(args.output)
+    except ConfigError as e:
+        print(f"ConfigError: {e}", file=sys.stderr)
+        return 2
     client = RateLimitedClient(cfg)
     manifest = Manifest(cfg.output_dir).connect()
     try:
         try:
             if args.cmd == "story":
-                _require_auth(client)
                 sid = resolve_story_id(args.target)
                 archive_story(cfg, client, manifest, sid)
             elif args.cmd == "url":
-                _require_auth(client)
-                sid = resolve_story_id(args.target)
+                sid = resolve_url_story_id(client, args.target)
                 archive_story(cfg, client, manifest, sid)
             elif args.cmd == "library":
                 _require_auth(client)
@@ -111,6 +126,12 @@ def main(argv: list[str] | None = None) -> int:
             elif args.cmd == "status":
                 # D-06: status reads local sqlite only — no validation.
                 _print_status(manifest)
+            elif args.cmd == "reset":
+                sid = resolve_story_id(args.target)
+                if not manifest.reset_story(sid):
+                    print(f"Story not found: {sid}", file=sys.stderr)
+                    return 2
+                print(f"Reset story {sid} for refetch")
             elif args.cmd == "serve":
                 # D-06: web /setup handles auth interactively.
                 # serve owns its own client/manifest lifecycle inside JobRunner threads;
@@ -126,6 +147,23 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"AuthError: {e}\n"
                 f"Update your cookie via /setup or edit {cfg.output_dir}/_config.toml.",
+                file=sys.stderr,
+            )
+            return 2
+        except ResolveError as e:
+            print(f"ResolveError: {e}", file=sys.stderr)
+            return 2
+        except httpx.HTTPStatusError as e:
+            response = e.response
+            print(
+                f"HTTPError: Wattpad returned HTTP {response.status_code} for {response.url}",
+                file=sys.stderr,
+            )
+            return 2
+        except httpx.RequestError as e:
+            print(
+                f"NetworkError: Could not reach Wattpad: {e}\n"
+                "Check your connection, VPN/proxy/firewall, or try again later.",
                 file=sys.stderr,
             )
             return 2

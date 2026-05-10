@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from wattpad_crawler.client import RateLimitedClient
@@ -8,6 +9,10 @@ STORY_FIELDS = (
     "parts(id,title,url,modifyDate)"
 )
 STORY_URL = "https://www.wattpad.com/api/v3/stories/{story_id}?fields=" + STORY_FIELDS
+PART_PAGE_URL = "https://www.wattpad.com/{part_id}"
+_STORY_LINK_RE = re.compile(
+    r'(?:https?://(?:www\.)?wattpad\.com)?/story/(\d+)(?:[-/?#"\']|$)'
+)
 
 
 def parse_story(raw: dict[str, Any]) -> Story:
@@ -55,3 +60,27 @@ def parse_story(raw: dict[str, Any]) -> Story:
 def fetch_story(client: RateLimitedClient, story_id: str) -> Story:
     resp = client.get(STORY_URL.format(story_id=story_id))
     return parse_story(resp.json())
+
+
+def parse_part_story_id(raw: dict[str, Any]) -> str:
+    group_id = raw.get("groupId")
+    if group_id is not None:
+        return str(group_id)
+
+    group = raw.get("group")
+    if isinstance(group, dict) and group.get("id") is not None:
+        return str(group["id"])
+
+    raise ValueError(f"Part response missing parent story id: keys={list(raw.keys())}")
+
+
+def parse_part_page_story_id(html: str) -> str:
+    match = _STORY_LINK_RE.search(html)
+    if match:
+        return match.group(1)
+    raise ValueError("Part page missing parent story link")
+
+
+def fetch_part_story_id(client: RateLimitedClient, part_id: str) -> str:
+    resp = client.get(PART_PAGE_URL.format(part_id=part_id), follow_redirects=True)
+    return parse_part_page_story_id(resp.text)

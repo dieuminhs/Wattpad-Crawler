@@ -7,8 +7,7 @@ from wattpad_crawler.models import Comment
 
 logger = logging.getLogger(__name__)
 
-INLINE_URL = "https://www.wattpad.com/api/v3/parts/{part_id}/comments?limit=100"
-END_URL = "https://www.wattpad.com/api/v3/parts/{part_id}/comments?limit=100&forms=root"
+PART_COMMENTS_URL = "https://www.wattpad.com/v4/parts/{part_id}/comments?limit=100"
 _MAX_PAGES = 200
 # REL-01 / D-11: cap nested-reply recursion to avoid RecursionError on
 # malformed or adversarial Wattpad responses. Module constant rather than
@@ -35,7 +34,7 @@ def _parse_one(
     if cid is None:
         return None, False
 
-    user_obj = raw.get("user")
+    user_obj = raw.get("user") or raw.get("author")
     user = user_obj.get("name", "") if isinstance(user_obj, dict) else ""
 
     truncated = False
@@ -63,7 +62,7 @@ def _parse_one(
             comment_id=str(cid),
             user=user,
             body=raw.get("body") or "",
-            created_at=raw.get("createdAt") or "",
+            created_at=raw.get("createdAt") or raw.get("createDate") or "",
             paragraph_id=raw.get("paragraphId"),
             replies=replies,
         ),
@@ -108,8 +107,10 @@ def _fetch_all(client: RateLimitedClient, url: str) -> list[Comment]:
 
 
 def fetch_inline_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
-    return _fetch_all(client, INLINE_URL.format(part_id=quote(part_id, safe="")))
+    comments = _fetch_all(client, PART_COMMENTS_URL.format(part_id=quote(part_id, safe="")))
+    return [comment for comment in comments if comment.paragraph_id is not None]
 
 
 def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
-    return _fetch_all(client, END_URL.format(part_id=quote(part_id, safe="")))
+    comments = _fetch_all(client, PART_COMMENTS_URL.format(part_id=quote(part_id, safe="")))
+    return [comment for comment in comments if comment.paragraph_id is None]

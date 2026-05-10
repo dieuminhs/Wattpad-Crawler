@@ -134,6 +134,25 @@ class Manifest:
         )
         self.db.commit()
 
+    def reset_story(self, story_id: str) -> bool:
+        """Mark a story and all known parts pending so next archive refetches them."""
+        with self.db:
+            cur = self.db.execute(
+                "UPDATE stories SET status = 'pending' WHERE story_id = ?",
+                (story_id,),
+            )
+            if cur.rowcount == 0:
+                return False
+            self.db.execute(
+                """
+                UPDATE parts
+                SET status = 'pending', body_hash = NULL, last_error = NULL
+                WHERE story_id = ?
+                """,
+                (story_id,),
+            )
+        return True
+
     def get_story(self, story_id: str) -> dict | None:
         row = self.db.execute(
             "SELECT * FROM stories WHERE story_id = ?", (story_id,)

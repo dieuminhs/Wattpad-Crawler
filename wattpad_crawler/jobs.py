@@ -4,6 +4,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
+from urllib.parse import urlsplit
 
 from wattpad_crawler.api import comments as api_comments
 from wattpad_crawler.api import story as api_story
@@ -20,6 +21,55 @@ from wattpad_crawler.scrape.chapter_html import ChapterContent, extract_chapter
 
 logger = logging.getLogger(__name__)
 
+MAX_CHAPTER_TEXT_PAGES = 100
+_HTML_BODY_CLOSE_RE = re.compile(r"</body>\s*</html>\s*$", re.IGNORECASE)
+
+
+def _part_id_from_url(url: str) -> str:
+    path = urlsplit(url).path
+    match = re.match(r"^/(\d+)", path)
+    if not match:
+        raise ValueError(f"cannot determine Wattpad part id from URL: {url}")
+    return match.group(1)
+
+
+def fetch_full_chapter_html(client: RateLimitedClient, url: str) -> str:
+    """Fetch initial chapter HTML plus any extra storytext pages."""
+    part_id = _part_id_from_url(url)
+    first_page = client.get(url).text
+    extra_pages: list[str] = []
+    ajax_headers = {
+        "Accept": "text/html, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": url,
+    }
+
+    for page in range(2, MAX_CHAPTER_TEXT_PAGES + 1):
+        response = client.get(
+            "https://www.wattpad.com/apiv2/",
+            params={"m": "storytext", "id": part_id, "page": page},
+            headers=ajax_headers,
+        )
+        text = response.text
+        if not text.strip():
+            break
+        extra_pages.append(text)
+    else:
+        logger.warning(
+            "chapter %s reached storytext page limit %d",
+            part_id,
+            MAX_CHAPTER_TEXT_PAGES,
+        )
+
+    if not extra_pages:
+        return first_page
+
+    extra_html = "\n".join(extra_pages)
+    match = _HTML_BODY_CLOSE_RE.search(first_page)
+    if not match:
+        return "\n".join([first_page, extra_html])
+    return first_page[: match.start()] + "\n" + extra_html + first_page[match.start() :]
+
 
 @dataclass
 class JobDeps:
@@ -34,9 +84,6 @@ class JobDeps:
 
 
 def _default_deps() -> JobDeps:
-    def fetch_chapter_html(client: RateLimitedClient, url: str) -> str:
-        return client.get(url).text
-
     def fetch_cover_bytes(client: RateLimitedClient, url: str) -> bytes:
         if not url:
             return b""
@@ -48,7 +95,7 @@ def _default_deps() -> JobDeps:
 
     return JobDeps(
         fetch_story=api_story.fetch_story,
-        fetch_chapter_html=fetch_chapter_html,
+        fetch_chapter_html=fetch_full_chapter_html,
         parse_chapter=extract_chapter,
         fetch_inline_comments=api_comments.fetch_inline_comments,
         fetch_end_comments=api_comments.fetch_end_comments,
@@ -61,6 +108,30 @@ ProgressCallback = Callable[[str, dict], None]
 
 def _noop_progress(_kind: str, _data: dict) -> None:
     pass
+
+
+def _fetch_comments_or_empty(
+    fetch_comments: Callable,
+    client: RateLimitedClient,
+    part_id: str,
+    comment_kind: str,
+    emit: ProgressCallback,
+) -> list:
+    try:
+        return fetch_comments(client, part_id)
+    except AuthFailedError:
+        raise
+    except Exception as e:
+        logger.warning("%s comments failed for part %s: %s", comment_kind, part_id, e)
+        emit(
+            "comments.failed",
+            {
+                "part_id": part_id,
+                "kind": comment_kind,
+                "error": str(e),
+            },
+        )
+        return []
 
 
 def archive_story(
@@ -115,8 +186,20 @@ def archive_story(
         try:
             raw_html = deps.fetch_chapter_html(client, part.url)
             content: ChapterContent = deps.parse_chapter(raw_html)
-            inline = deps.fetch_inline_comments(client, part.part_id)
-            end = deps.fetch_end_comments(client, part.part_id)
+            inline = _fetch_comments_or_empty(
+                deps.fetch_inline_comments,
+                client,
+                part.part_id,
+                "inline",
+                emit,
+            )
+            end = _fetch_comments_or_empty(
+                deps.fetch_end_comments,
+                client,
+                part.part_id,
+                "end",
+                emit,
+            )
             store.write_part_files(
                 cfg.output_dir,
                 story,
@@ -225,15 +308,14 @@ class RenderError(Exception):
 
 
 _STORY_URL_RE = re.compile(r"wattpad\.com/story/(\d+)")
+_PART_URL_RE = re.compile(r"wattpad\.com/(\d+)(?:[/?#-]|$)")
 _NUMERIC_RE = re.compile(r"^\d+$")
 
 
 def resolve_story_id(target: str) -> str:
     """Resolve a CLI input to a numeric story_id.
 
-    Accepts: a bare numeric id, or a full https://www.wattpad.com/story/<id>-<slug> URL.
-    Rejects: part URLs (https://www.wattpad.com/<part_id>-<slug>) — those need an
-    API lookup which this resolver does not perform.
+    Accepts a bare numeric id or /story/<id> URLs.
     """
     target = target.strip()
     if _NUMERIC_RE.match(target):
@@ -243,7 +325,25 @@ def resolve_story_id(target: str) -> str:
         return m.group(1)
     raise ResolveError(
         f"Cannot resolve {target!r} to a story ID. "
-        "Pass a numeric ID or a https://www.wattpad.com/story/<id>-... URL."
+        "Pass a numeric story ID or a Wattpad /story/<id> URL."
+    )
+
+
+def resolve_url_story_id(client: RateLimitedClient, target: str) -> str:
+    """Resolve a URL command target to a story_id, including chapter URLs."""
+    target = target.strip()
+    try:
+        return resolve_story_id(target)
+    except ResolveError:
+        pass
+
+    m = _PART_URL_RE.search(target)
+    if m:
+        return api_story.fetch_part_story_id(client, m.group(1))
+
+    raise ResolveError(
+        f"Cannot resolve {target!r} to a story ID. "
+        "Pass a numeric story ID, a Wattpad /story/<id> URL, or a Wattpad chapter URL."
     )
 
 

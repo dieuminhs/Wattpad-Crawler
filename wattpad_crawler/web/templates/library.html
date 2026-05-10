@@ -2,6 +2,9 @@
 {% block title %}Library — Wattpad Crawler{% endblock %}
 {% block content %}
   <h1>Library</h1>
+  {% if reset_story_id %}
+    <p class="status-done">Reset story {{ reset_story_id }}. Next archive run will refetch it.</p>
+  {% endif %}
   {% if entries %}
     <p class="muted">{{ entries|length }} stories archived.</p>
     <div class="library-grid">
@@ -15,6 +18,9 @@
           <div class="title">{{ e.title }}</div>
           <div class="author">by {{ e.author }}</div>
         </a>
+        <form method="post" action="/library/reset/{{ e.story_id }}" class="library-action">
+          <button type="submit">Reset for refetch</button>
+        </form>
       {% endfor %}
     </div>
   {% else %}

@@ -18,11 +18,15 @@ from wattpad_crawler.jobs import (
     ResolveError,
     archive_many,
     archive_story,
-    resolve_story_id,
+    resolve_url_story_id,
 )
 from wattpad_crawler.web.library_browser import scan_library
 
 router = APIRouter()
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _save_cookie(output_dir: Path, cookie: str) -> None:
@@ -44,17 +48,17 @@ def _save_cookie(output_dir: Path, cookie: str) -> None:
         replaced = False
         for line in lines:
             if line.lstrip().startswith("cookie "):
-                new_lines.append(f'cookie = "{cookie}"')
+                new_lines.append(f"cookie = {_toml_string(cookie)}")
                 replaced = True
             else:
                 new_lines.append(line)
         if not replaced:
-            new_lines.append(f'cookie = "{cookie}"')
+            new_lines.append(f"cookie = {_toml_string(cookie)}")
         new_text = "\n".join(new_lines) + "\n"
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         new_text = (
-            f'cookie = "{cookie}"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n'
+            f"cookie = {_toml_string(cookie)}\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n"
         )
     # Atomic write: same-directory tmp + os.replace. PID/TID suffix avoids
     # collision if two writers race on the same target. Cleanup on exception
@@ -188,7 +192,8 @@ async def submit_job(request: Request) -> RedirectResponse:
     if kind == "story":
         target = form.get("target", "").strip()
         try:
-            sid = resolve_story_id(target)
+            with RateLimitedClient(cfg) as client:
+                sid = resolve_url_story_id(client, target)
         except ResolveError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         job = mgr.create("archive_story", {"story_id": sid, "target": target})
@@ -313,8 +318,20 @@ def library(request: Request) -> HTMLResponse:
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="library.html",
-        context={"entries": entries},
+        context={"entries": entries, "reset_story_id": request.query_params.get("reset")},
     )
+
+
+@router.post("/library/reset/{story_id}")
+def library_reset(request: Request, story_id: str) -> RedirectResponse:
+    cfg = request.app.state.cfg
+    manifest = Manifest(cfg.output_dir).connect()
+    try:
+        if not manifest.reset_story(story_id):
+            raise HTTPException(status_code=404, detail="story not found")
+    finally:
+        manifest.close()
+    return RedirectResponse(url=f"/library?reset={story_id}", status_code=303)
 
 
 @router.get("/library/cover/{author}/{dir_name}")
@@ -448,12 +465,7 @@ def reader_chapter(request: Request, author: str, dir_name: str, ordinal: int) -
             "author": author,
             "dir_name": dir_name,
             "meta": meta,
-            "chapter": {
-                "title": p.get("title", ""),
-                "body": body,
-                "prev_ord": prev_ord,
-                "next_ord": next_ord,
-            },
+            "chapter": chapter,
         },
     )
 

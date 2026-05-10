@@ -32,7 +32,7 @@ class ChapterContent:
 
 def extract_chapter(html: str) -> ChapterContent:
     soup = BeautifulSoup(html, "lxml")
-    container = soup.select_one(".page-container") or soup.body
+    container = soup.body or soup.select_one(".page-container")
     if container is None:
         return ChapterContent(text="", paragraphs=[], images=[])
 
