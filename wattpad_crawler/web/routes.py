@@ -374,23 +374,52 @@ def library_remove(request: Request, story_id: str) -> RedirectResponse:
     repo = ArchiveRepository(cfg.output_dir).connect()
     try:
         story = repo.get_story(story_id)
-        if story is None:
+        story_path = _story_path_for_remove(cfg.output_dir, story_id, story)
+        if story is None and story_path is None:
             raise HTTPException(status_code=404, detail="story not found")
-        story_path = (
-            cfg.output_dir
+        stories_root = (cfg.output_dir / "stories").resolve()
+        resolved_story_path = story_path.resolve() if story_path is not None else None
+        if (
+            resolved_story_path is not None
+            and resolved_story_path.is_relative_to(stories_root)
+            and resolved_story_path.exists()
+        ):
+            shutil.rmtree(resolved_story_path)
+        if story is not None:
+            with repo.transaction():
+                repo.remove_story(story_id)
+    finally:
+        repo.close()
+    return RedirectResponse(url=f"/library?removed={story_id}", status_code=303)
+
+
+def _story_path_for_remove(output_dir: Path, story_id: str, story: dict | None) -> Path | None:
+    if story is not None:
+        return (
+            output_dir
             / "stories"
             / story["author_username"]
             / f"{story_id}_{store.slugify(story['title'])}"
         )
-        stories_root = (cfg.output_dir / "stories").resolve()
-        resolved_story_path = story_path.resolve()
-        if resolved_story_path.is_relative_to(stories_root) and resolved_story_path.exists():
-            shutil.rmtree(resolved_story_path)
-        with repo.transaction():
-            repo.remove_story(story_id)
-    finally:
-        repo.close()
-    return RedirectResponse(url=f"/library?removed={story_id}", status_code=303)
+    stories_root = output_dir / "stories"
+    if not stories_root.exists():
+        return None
+    for author_dir in stories_root.iterdir():
+        if not author_dir.is_dir():
+            continue
+        for story_dir in author_dir.iterdir():
+            if not story_dir.is_dir() or not story_dir.name.startswith(f"{story_id}_"):
+                continue
+            meta_path = story_dir / "metadata.json"
+            if not meta_path.exists():
+                continue
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if str(meta.get("story_id", "")) == story_id:
+                return story_dir
+    return None
 
 
 @router.get("/library/cover/{author}/{dir_name}")

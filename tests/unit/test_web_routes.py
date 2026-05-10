@@ -284,6 +284,27 @@ def test_library_remove_story_deletes_db_and_story_folder(output_dir: Path):
     repo.close()
 
 
+def test_library_remove_story_deletes_file_only_story_folder(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "MeoMupppp" / "383728013_edit-n-ng-gia-ti-u-phu-lang"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "383728013",
+        "title": "Edit nàng gia tiểu phu lang",
+        "author_username": "MeoMupppp",
+        "tags": [],
+        "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.post("/library/remove/383728013", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/library?removed=383728013"
+    assert not sd.exists()
+
+
 def test_library_reset_story_marks_parts_pending(output_dir: Path):
     from wattpad_crawler.archive.state import Manifest
     from wattpad_crawler.models import Part, Story
