@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import os
+import shutil
 import threading
 from collections import defaultdict
 from pathlib import Path
@@ -11,6 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
+from wattpad_crawler.archive import store
 from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthError, validate_cookie
@@ -319,20 +321,76 @@ def library(request: Request) -> HTMLResponse:
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="library.html",
-        context={"entries": entries, "reset_story_id": request.query_params.get("reset")},
+        context={
+            "entries": entries,
+            "reset_story_id": request.query_params.get("reset"),
+            "removed_story_id": request.query_params.get("removed"),
+            "bookmarked_story_id": request.query_params.get("bookmarked"),
+        },
     )
 
 
 @router.post("/library/reset/{story_id}")
 def library_reset(request: Request, story_id: str) -> RedirectResponse:
     cfg = request.app.state.cfg
+    reset_done = False
+    archive_db = cfg.output_dir / "archive.sqlite"
+    if archive_db.exists():
+        repo = ArchiveRepository(cfg.output_dir).connect()
+        try:
+            with repo.transaction():
+                reset_done = repo.reset_story(story_id)
+        finally:
+            repo.close()
+
     manifest = Manifest(cfg.output_dir).connect()
     try:
-        if not manifest.reset_story(story_id):
+        reset_done = manifest.reset_story(story_id) or reset_done
+        if not reset_done:
             raise HTTPException(status_code=404, detail="story not found")
     finally:
         manifest.close()
     return RedirectResponse(url=f"/library?reset={story_id}", status_code=303)
+
+
+@router.post("/library/bookmark/{story_id}")
+def library_bookmark(request: Request, story_id: str) -> RedirectResponse:
+    cfg = request.app.state.cfg
+    repo = ArchiveRepository(cfg.output_dir).connect()
+    try:
+        story = repo.get_story(story_id)
+        if story is None:
+            raise HTTPException(status_code=404, detail="story not found")
+        with repo.transaction():
+            repo.set_bookmarked(story_id, not story["bookmarked"])
+    finally:
+        repo.close()
+    return RedirectResponse(url=f"/library?bookmarked={story_id}", status_code=303)
+
+
+@router.post("/library/remove/{story_id}")
+def library_remove(request: Request, story_id: str) -> RedirectResponse:
+    cfg = request.app.state.cfg
+    repo = ArchiveRepository(cfg.output_dir).connect()
+    try:
+        story = repo.get_story(story_id)
+        if story is None:
+            raise HTTPException(status_code=404, detail="story not found")
+        story_path = (
+            cfg.output_dir
+            / "stories"
+            / story["author_username"]
+            / f"{story_id}_{store.slugify(story['title'])}"
+        )
+        stories_root = (cfg.output_dir / "stories").resolve()
+        resolved_story_path = story_path.resolve()
+        if resolved_story_path.is_relative_to(stories_root) and resolved_story_path.exists():
+            shutil.rmtree(resolved_story_path)
+        with repo.transaction():
+            repo.remove_story(story_id)
+    finally:
+        repo.close()
+    return RedirectResponse(url=f"/library?removed={story_id}", status_code=303)
 
 
 @router.get("/library/cover/{author}/{dir_name}")

@@ -13,3 +13,4 @@ class LibraryEntry:
     dir_name: str
     has_cover: bool
     storage_path: Path
+    bookmarked: bool = False

@@ -5,22 +5,42 @@
   {% if reset_story_id %}
     <p class="status-done">Reset story {{ reset_story_id }}. Next archive run will refetch it.</p>
   {% endif %}
+  {% if bookmarked_story_id %}
+    <p class="status-done">Updated bookmark for story {{ bookmarked_story_id }}.</p>
+  {% endif %}
+  {% if removed_story_id %}
+    <p class="status-done">Removed story {{ removed_story_id }} from the archive.</p>
+  {% endif %}
   {% if entries %}
     <p class="muted">{{ entries|length }} stories archived.</p>
     <div class="library-grid">
       {% for e in entries %}
-        <a class="library-item" href="/read/{{ e.author }}/{{ e.dir_name }}">
-          {% if e.has_cover %}
-            <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
-          {% else %}
-            <div style="aspect-ratio:2/3;background:#eee;display:flex;align-items:center;justify-content:center;color:#999;">no cover</div>
-          {% endif %}
-          <div class="title">{{ e.title }}</div>
-          <div class="author">by {{ e.author }}</div>
-        </a>
-        <form method="post" action="/library/reset/{{ e.story_id }}" class="library-action">
-          <button type="submit">Reset for refetch</button>
-        </form>
+        <div class="library-card">
+          <a class="library-item" href="/read/{{ e.author }}/{{ e.dir_name }}">
+            {% if e.has_cover %}
+              <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
+            {% else %}
+              <div style="aspect-ratio:2/3;background:#eee;display:flex;align-items:center;justify-content:center;color:#999;">no cover</div>
+            {% endif %}
+            {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
+            <div class="title">{{ e.title }}</div>
+            <div class="author">by {{ e.author }}</div>
+          </a>
+          <details class="library-menu">
+            <summary aria-label="Story actions">⋯</summary>
+            <div class="library-menu-items">
+              <form method="post" action="/library/bookmark/{{ e.story_id }}">
+                <button type="submit">{% if e.bookmarked %}Unbookmark{% else %}Bookmark{% endif %}</button>
+              </form>
+              <form method="post" action="/library/reset/{{ e.story_id }}">
+                <button type="submit">Reset for refetch</button>
+              </form>
+              <form method="post" action="/library/remove/{{ e.story_id }}" onsubmit="return confirm('Remove this story from the archive?');">
+                <button type="submit" class="danger-button">Remove from archive</button>
+              </form>
+            </div>
+          </details>
+        </div>
       {% endfor %}
     </div>
   {% else %}

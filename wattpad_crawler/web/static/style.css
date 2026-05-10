@@ -93,6 +93,7 @@ input[type=text], input[type=password], textarea {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1em;
 }
+.library-card { position: relative; }
 .library-item {
   background: #fff;
   border: 1px solid var(--border);
@@ -102,6 +103,54 @@ input[type=text], input[type=password], textarea {
   color: var(--fg);
   overflow: hidden;
 }
+.bookmark-star {
+  position: absolute;
+  top: 0.35em;
+  left: 0.45em;
+  color: #f59e0b;
+  font-size: 1.35em;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
+.library-menu {
+  position: absolute;
+  top: 0.35em;
+  right: 0.35em;
+}
+.library-menu summary {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  list-style: none;
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.library-menu summary::-webkit-details-marker { display: none; }
+.library-menu-items {
+  position: absolute;
+  top: 2.25rem;
+  right: 0;
+  z-index: 2;
+  min-width: 12rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 18%);
+  padding: 0.35em;
+}
+.library-menu-items button {
+  display: block;
+  width: 100%;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  padding: 0.55em 0.7em;
+}
+.library-menu-items button:hover { background: #f4f4f0; }
+.library-menu-items .danger-button { color: var(--accent); }
 .library-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; }
 .library-item .title {
   padding: 0.5em;

@@ -238,7 +238,50 @@ def test_library_lists_stories(output_dir: Path):
     assert r.status_code == 200
     assert "My Tale" in r.text
     assert "alice" in r.text
+    assert "⋯" in r.text
     assert "Reset for refetch" in r.text
+    assert "Remove from archive" in r.text
+    assert "Bookmark" in r.text
+
+
+def test_library_bookmark_story_toggles_flag(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(Story(story_id="42", title="My Tale", author_username="alice"))
+    repo.close()
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.post("/library/bookmark/42", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/library?bookmarked=42"
+    repo = ArchiveRepository(output_dir).connect()
+    assert repo.get_story("42")["bookmarked"] is True
+    repo.close()
+
+
+def test_library_remove_story_deletes_db_and_story_folder(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(Story(story_id="42", title="My Tale", author_username="alice"))
+    repo.close()
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text("{}")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.post("/library/remove/42", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/library?removed=42"
+    assert not sd.exists()
+    repo = ArchiveRepository(output_dir).connect()
+    assert repo.get_story("42") is None
+    repo.close()
 
 
 def test_library_reset_story_marks_parts_pending(output_dir: Path):
@@ -275,6 +318,38 @@ def test_library_reset_story_marks_parts_pending(output_dir: Path):
     assert m.get_story("42")["status"] == "pending"
     assert m.get_part("42", "100")["body_hash"] is None
     m.close()
+
+
+def test_library_reset_story_marks_archive_database_pending(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story = Story(
+        story_id="42",
+        title="My Tale",
+        author_username="alice",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(
+            "42",
+            story.parts[0],
+            ChapterContent(text="Body", paragraphs=[], images=[]),
+            "<html/>",
+            [],
+            [],
+            body_hash="abc",
+        )
+    repo.close()
+
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.post("/library/reset/42", follow_redirects=False)
+
+    assert r.status_code == 303
+    repo = ArchiveRepository(output_dir).connect()
+    assert repo.list_parts("42")[0]["status"] == "pending"
+    repo.close()
 
 
 def test_library_reset_missing_story_404(output_dir: Path):

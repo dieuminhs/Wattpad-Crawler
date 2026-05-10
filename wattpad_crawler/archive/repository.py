@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS stories (
     votes               INTEGER NOT NULL DEFAULT 0,
     reads               INTEGER NOT NULL DEFAULT 0,
     completed           INTEGER NOT NULL DEFAULT 0,
+    bookmarked          INTEGER NOT NULL DEFAULT 0,
     last_modified       TEXT,
     status              TEXT NOT NULL DEFAULT 'pending',
     created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -123,6 +124,7 @@ class ArchiveRepository:
         self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.execute("PRAGMA busy_timeout = 5000")
         self.conn.executescript(_SCHEMA)
+        self._ensure_columns()
         row = self.conn.execute("SELECT version FROM schema_meta LIMIT 1").fetchone()
         if row is None:
             self.conn.execute("INSERT INTO schema_meta(version) VALUES (?)", (SCHEMA_VERSION,))
@@ -130,6 +132,13 @@ class ArchiveRepository:
             raise RuntimeError(f"unsupported archive schema version: {row['version']}")
         self.conn.commit()
         return self
+
+    def _ensure_columns(self) -> None:
+        story_columns = {
+            row["name"] for row in self.db.execute("PRAGMA table_info(stories)")
+        }
+        if "bookmarked" not in story_columns:
+            self.db.execute("ALTER TABLE stories ADD COLUMN bookmarked INTEGER NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         if self.conn is not None:
@@ -327,6 +336,7 @@ class ArchiveRepository:
             return None
         story = dict(row)
         story["completed"] = bool(story["completed"])
+        story["bookmarked"] = bool(story["bookmarked"])
         story["tags"] = [
             tag_row["tag"]
             for tag_row in self.db.execute(
@@ -407,7 +417,7 @@ class ArchiveRepository:
             FROM stories s
             LEFT JOIN parts p ON p.story_id = s.story_id
             GROUP BY s.story_id
-            ORDER BY lower(s.author_username), lower(s.title)
+            ORDER BY s.bookmarked DESC, lower(s.author_username), lower(s.title)
             """
         )
         for row in rows:
@@ -433,9 +443,42 @@ class ArchiveRepository:
                     dir_name=f"{story['story_id']}_{slugify(story['title'])}",
                     has_cover=(story_path / "cover.jpg").exists(),
                     storage_path=story_path,
+                    bookmarked=story["bookmarked"],
                 )
             )
         return entries
+
+    def set_bookmarked(self, story_id: str, bookmarked: bool) -> bool:
+        cur = self.db.execute(
+            "UPDATE stories SET bookmarked = ?, updated_at = CURRENT_TIMESTAMP WHERE story_id = ?",
+            (int(bookmarked), story_id),
+        )
+        return cur.rowcount > 0
+
+    def remove_story(self, story_id: str) -> bool:
+        cur = self.db.execute("DELETE FROM stories WHERE story_id = ?", (story_id,))
+        return cur.rowcount > 0
+
+    def reset_story(self, story_id: str) -> bool:
+        cur = self.db.execute(
+            """
+            UPDATE stories
+            SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+            WHERE story_id = ?
+            """,
+            (story_id,),
+        )
+        if cur.rowcount == 0:
+            return False
+        self.db.execute(
+            """
+            UPDATE parts
+            SET status = 'pending', body_hash = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE story_id = ?
+            """,
+            (story_id,),
+        )
+        return True
 
     def record_artifact(
         self,
