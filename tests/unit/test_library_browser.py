@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from wattpad_crawler.archive.repository import ArchiveRepository
+from wattpad_crawler.models import Story
 from wattpad_crawler.web.library_browser import LibraryEntry, scan_library
 
 
@@ -30,6 +32,20 @@ def test_scan_library_one_story(output_dir: Path):
     assert e.parts_count == 1
     assert e.dir_name == "42_my-tale"
     assert e.has_cover is False
+
+
+def test_scan_library_prefers_archive_database(output_dir: Path):
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(Story(story_id="42", title="My Tale", author_username="alice"))
+    repo.close()
+
+    out = scan_library(output_dir)
+
+    assert len(out) == 1
+    assert out[0].story_id == "42"
+    assert out[0].title == "My Tale"
+    assert out[0].dir_name == "42_my-tale"
 
 
 def test_scan_library_detects_cover(output_dir: Path):

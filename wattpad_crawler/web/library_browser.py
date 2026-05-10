@@ -1,24 +1,23 @@
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass
-class LibraryEntry:
-    story_id: str
-    title: str
-    author: str
-    description: str
-    tags: list[str]
-    parts_count: int
-    dir_name: str
-    has_cover: bool
-    storage_path: Path
+from wattpad_crawler.archive.library import LibraryEntry
+from wattpad_crawler.archive.repository import ArchiveRepository
 
 
 def scan_library(output_dir: Path) -> list[LibraryEntry]:
     """Walk <output>/stories/<author>/<id>_<slug>/ and return one LibraryEntry per
     story directory that contains a metadata.json. Sorted by (author, title)."""
+    archive_db = output_dir / "archive.sqlite"
+    if archive_db.exists():
+        repo = ArchiveRepository(output_dir).connect()
+        try:
+            entries = repo.list_library_entries()
+        finally:
+            repo.close()
+        if entries:
+            return entries
+
     stories_root = output_dir / "stories"
     if not stories_root.exists():
         return []

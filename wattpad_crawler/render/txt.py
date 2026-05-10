@@ -1,7 +1,24 @@
 import json
 from pathlib import Path
 
+from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.store import atomic_write_text
+
+
+def _db_story(story_dir_path: Path) -> tuple[dict, list[dict]] | None:
+    output_dir = story_dir_path.parents[2]
+    archive_db = output_dir / "archive.sqlite"
+    if not archive_db.exists():
+        return None
+    story_id = story_dir_path.name.split("_", 1)[0]
+    repo = ArchiveRepository(output_dir).connect()
+    try:
+        story = repo.get_story(story_id)
+        if story is None:
+            return None
+        return story, repo.list_parts(story_id)
+    finally:
+        repo.close()
 
 
 def render_txt(story_dir_path: Path) -> str:
@@ -10,16 +27,26 @@ def render_txt(story_dir_path: Path) -> str:
     Reads metadata.json + each chapter's .txt body file, joins them in ordinal
     order, writes to <story_dir>/output/<slug>.txt, and returns the full content.
     """
-    meta = json.loads((story_dir_path / "metadata.json").read_text(encoding="utf-8"))
+    db_story = _db_story(story_dir_path)
+    if db_story is None:
+        meta = json.loads((story_dir_path / "metadata.json").read_text(encoding="utf-8"))
+        parts = sorted(meta["parts"], key=lambda x: x["ordinal"])
+    else:
+        meta, parts = db_story
     parts_dir = story_dir_path / "parts"
     chunks = [f"{meta['title']}\nby {meta['author_username']}\n\n"]
-    for p in sorted(meta["parts"], key=lambda x: x["ordinal"]):
+    for p in parts:
         ord_ = int(p["ordinal"])
-        prefix = f"{ord_:02d}_{p['part_id']}_"
-        candidates = list(parts_dir.glob(f"{prefix}*.txt"))
-        if not candidates:
-            continue
-        body = candidates[0].read_text(encoding="utf-8")
+        if db_story is None:
+            prefix = f"{ord_:02d}_{p['part_id']}_"
+            candidates = list(parts_dir.glob(f"{prefix}*.txt"))
+            if not candidates:
+                continue
+            body = candidates[0].read_text(encoding="utf-8")
+        else:
+            body = p["body_text"]
+            if not body:
+                continue
         chunks.append(f"\n\n========\n{p['title']}\n========\n\n{body}\n")
     full = "".join(chunks)
 

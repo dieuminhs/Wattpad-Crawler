@@ -3,10 +3,33 @@ from pathlib import Path
 
 from ebooklib import epub
 
+from wattpad_crawler.archive.repository import ArchiveRepository
+
+
+def _db_story(story_dir_path: Path) -> tuple[dict, list[dict]] | None:
+    output_dir = story_dir_path.parents[2]
+    archive_db = output_dir / "archive.sqlite"
+    if not archive_db.exists():
+        return None
+    story_id = story_dir_path.name.split("_", 1)[0]
+    repo = ArchiveRepository(output_dir).connect()
+    try:
+        story = repo.get_story(story_id)
+        if story is None:
+            return None
+        return story, repo.list_parts(story_id)
+    finally:
+        repo.close()
+
 
 def render_epub(story_dir_path: Path) -> Path:
     """Render a downloaded story directory into an EPUB file using EbookLib."""
-    meta = json.loads((story_dir_path / "metadata.json").read_text(encoding="utf-8"))
+    db_story = _db_story(story_dir_path)
+    if db_story is None:
+        meta = json.loads((story_dir_path / "metadata.json").read_text(encoding="utf-8"))
+        parts = sorted(meta["parts"], key=lambda x: x["ordinal"])
+    else:
+        meta, parts = db_story
     parts_dir = story_dir_path / "parts"
 
     book = epub.EpubBook()
@@ -22,12 +45,17 @@ def render_epub(story_dir_path: Path) -> Path:
         book.set_cover("cover.jpg", cover_path.read_bytes())
 
     chapters = []
-    for p in sorted(meta["parts"], key=lambda x: x["ordinal"]):
-        prefix = f"{int(p['ordinal']):02d}_{p['part_id']}_"
-        candidates = list(parts_dir.glob(f"{prefix}*.html"))
-        if not candidates:
-            continue
-        body = candidates[0].read_text(encoding="utf-8")
+    for p in parts:
+        if db_story is None:
+            prefix = f"{int(p['ordinal']):02d}_{p['part_id']}_"
+            candidates = list(parts_dir.glob(f"{prefix}*.html"))
+            if not candidates:
+                continue
+            body = candidates[0].read_text(encoding="utf-8")
+        else:
+            body = p["raw_html"]
+            if not body:
+                continue
         ch = epub.EpubHtml(
             title=p["title"],
             file_name=f"chap_{int(p['ordinal']):02d}.xhtml",

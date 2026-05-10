@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+from wattpad_crawler.archive.repository import ArchiveRepository
+from wattpad_crawler.models import Part, Story
 from wattpad_crawler.render.txt import render_txt
+from wattpad_crawler.scrape.chapter_html import ChapterContent
 
 
 def test_render_txt_concatenates_chapters_in_order(output_dir: Path):
@@ -48,3 +51,29 @@ def test_render_txt_writes_output_file(output_dir: Path):
     }))
     render_txt(sd)
     assert (sd / "output" / "hi.txt").exists()
+
+
+def test_render_txt_reads_archive_database(output_dir: Path):
+    sd = output_dir / "stories" / "bob" / "42_hi"
+    story = Story(
+        story_id="42",
+        title="Hi",
+        author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(
+            "42",
+            story.parts[0],
+            ChapterContent(text="DB body.", paragraphs=[], images=[]),
+            "<html/>",
+            [],
+            [],
+        )
+    repo.close()
+
+    out = render_txt(sd)
+
+    assert "DB body." in out

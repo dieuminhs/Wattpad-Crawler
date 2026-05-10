@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+from wattpad_crawler.archive.repository import ArchiveRepository
+from wattpad_crawler.models import Part, Story
 from wattpad_crawler.render.html import render_html
+from wattpad_crawler.scrape.chapter_html import ChapterContent
 
 
 def test_render_html_single_file(output_dir: Path):
@@ -43,3 +46,29 @@ def test_render_html_writes_output_file(output_dir: Path):
     }))
     render_html(sd)
     assert (sd / "output" / "hi.html").exists()
+
+
+def test_render_html_reads_archive_database(output_dir: Path):
+    sd = output_dir / "stories" / "bob" / "42_hi"
+    story = Story(
+        story_id="42",
+        title="Hi",
+        author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(
+            "42",
+            story.parts[0],
+            ChapterContent(text="DB body.", paragraphs=[], images=[]),
+            "<p>DB html.</p>",
+            [],
+            [],
+        )
+    repo.close()
+
+    out = render_html(sd)
+
+    assert "DB html." in out

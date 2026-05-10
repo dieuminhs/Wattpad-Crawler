@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from wattpad_crawler.api import comments as api_comments
 from wattpad_crawler.api import story as api_story
 from wattpad_crawler.archive import store
+from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.client import RateLimitedClient
@@ -160,6 +161,9 @@ def archive_story(
 
     manifest.upsert_story(story)
     manifest.upsert_parts(story)
+    repo = ArchiveRepository(cfg.output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
     store.write_story_metadata(cfg.output_dir, story)
     if story.cover_url:
         try:
@@ -210,6 +214,16 @@ def archive_story(
                 end,
             )
             body_hash = hashlib.sha256(content.text.encode("utf-8")).hexdigest()
+            with repo.transaction():
+                repo.upsert_part(
+                    story.story_id,
+                    part,
+                    content,
+                    raw_html,
+                    inline,
+                    end,
+                    body_hash=body_hash,
+                )
             manifest.set_part_status(
                 story.story_id,
                 part.part_id,
@@ -287,6 +301,8 @@ def archive_story(
 
     if all(v == "failed" for v in render_status.values()):
         raise RenderError(f"all renders failed: {render_status}")
+
+    repo.close()
 
 
 class ResolveError(Exception):

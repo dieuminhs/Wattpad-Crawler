@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.config import Config
@@ -95,6 +96,31 @@ def test_archive_story_marks_failed_on_chapter_error(output_dir: Path):
     assert row["status"] == "failed"
     assert row["last_error"] is not None
     assert "network exploded" in row["last_error"]
+    manifest.close()
+
+
+def test_archive_story_writes_primary_archive_database(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+
+    archive_story(cfg, fake_client, manifest, "42", deps=deps)
+
+    repo = ArchiveRepository(output_dir).connect()
+    saved_story = repo.get_story("42")
+    saved_parts = repo.list_parts("42")
+    saved_paragraphs = repo.list_paragraphs("100")
+
+    assert saved_story is not None
+    assert saved_story["title"] == "Hi"
+    assert saved_parts[0]["body_text"] == "One body."
+    assert saved_paragraphs[0]["text"] == "One body."
+    repo.close()
     manifest.close()
 
 

@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
+from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.client import RateLimitedClient
@@ -351,9 +352,44 @@ def _resolve_story_dir(cfg, author: str, dir_name: str) -> Path:
     target = (cfg.output_dir / "stories" / author / dir_name).resolve()
     if not target.is_relative_to(stories_root):
         raise HTTPException(status_code=400, detail="invalid path")
-    if not target.exists() or not (target / "metadata.json").exists():
-        raise HTTPException(status_code=404, detail="story not found")
-    return target
+    if target.exists() and (target / "metadata.json").exists():
+        return target
+
+    story_id = dir_name.split("_", 1)[0]
+    archive_db = cfg.output_dir / "archive.sqlite"
+    if archive_db.exists() and story_id:
+        repo = ArchiveRepository(cfg.output_dir).connect()
+        try:
+            story = repo.get_story(story_id)
+        finally:
+            repo.close()
+        if story and story["author_username"] == author:
+            return target
+    raise HTTPException(status_code=404, detail="story not found")
+
+
+def _metadata_from_db(cfg, dir_name: str) -> dict | None:
+    archive_db = cfg.output_dir / "archive.sqlite"
+    if not archive_db.exists():
+        return None
+    story_id = dir_name.split("_", 1)[0]
+    repo = ArchiveRepository(cfg.output_dir).connect()
+    try:
+        story = repo.get_story(story_id)
+        if story is None:
+            return None
+        parts = repo.list_parts(story_id)
+    finally:
+        repo.close()
+    story["parts"] = parts
+    return story
+
+
+def _metadata_for_story(cfg, story_dir: Path, dir_name: str) -> dict:
+    meta = _metadata_from_db(cfg, dir_name)
+    if meta is not None:
+        return meta
+    return json.loads((story_dir / "metadata.json").read_text(encoding="utf-8"))
 
 
 def _read_json_or_default(path: Path, default):
@@ -421,11 +457,40 @@ def _chapter_view_data(story_dir: Path, ordinal: int, part: dict) -> dict:
     }
 
 
+def _chapter_view_data_from_db(cfg, part: dict) -> dict | None:
+    archive_db = cfg.output_dir / "archive.sqlite"
+    if not archive_db.exists():
+        return None
+    part_id = str(part["part_id"])
+    repo = ArchiveRepository(cfg.output_dir).connect()
+    try:
+        paragraphs = []
+        comments_by_paragraph = repo.comments_by_paragraph(part_id)
+        for paragraph in repo.list_paragraphs(part_id):
+            comments = comments_by_paragraph.get(paragraph["paragraph_id"], [])
+            paragraphs.append({
+                "id": paragraph["paragraph_id"],
+                "text": paragraph["text"],
+                "html": paragraph["html"],
+                "comments": comments,
+                "comment_count": _comment_count(comments),
+            })
+        end_comments = repo.end_comments(part_id)
+    finally:
+        repo.close()
+    return {
+        "title": part.get("title", ""),
+        "body": part.get("body_text", ""),
+        "paragraphs": paragraphs,
+        "end_comments": end_comments,
+    }
+
+
 @router.get("/read/{author}/{dir_name}", response_class=HTMLResponse)
 def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
     cfg = request.app.state.cfg
     sd = _resolve_story_dir(cfg, author, dir_name)
-    meta = json.loads((sd / "metadata.json").read_text(encoding="utf-8"))
+    meta = _metadata_for_story(cfg, sd, dir_name)
     out = sd / "output"
     return request.app.state.templates.TemplateResponse(
         request=request,
@@ -446,7 +511,7 @@ def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
 def reader_chapter(request: Request, author: str, dir_name: str, ordinal: int) -> HTMLResponse:
     cfg = request.app.state.cfg
     sd = _resolve_story_dir(cfg, author, dir_name)
-    meta = json.loads((sd / "metadata.json").read_text(encoding="utf-8"))
+    meta = _metadata_for_story(cfg, sd, dir_name)
     parts = sorted(meta.get("parts", []), key=lambda p: p.get("ordinal", 0))
     p = next((q for q in parts if int(q.get("ordinal", 0)) == ordinal), None)
     if p is None:
@@ -454,7 +519,7 @@ def reader_chapter(request: Request, author: str, dir_name: str, ordinal: int) -
     ords = [int(q["ordinal"]) for q in parts]
     prev_ord = max((o for o in ords if o < ordinal), default=None)
     next_ord = min((o for o in ords if o > ordinal), default=None)
-    chapter = _chapter_view_data(sd, ordinal, p)
+    chapter = _chapter_view_data_from_db(cfg, p) or _chapter_view_data(sd, ordinal, p)
     chapter["prev_ord"] = prev_ord
     chapter["next_ord"] = next_ord
 

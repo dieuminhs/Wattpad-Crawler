@@ -7,8 +7,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.auth import AuthError
 from wattpad_crawler.config import Config, load_config
+from wattpad_crawler.models import Part, Story
+from wattpad_crawler.scrape.chapter_html import ChapterContent
 from wattpad_crawler.web import runner
 from wattpad_crawler.web.app import build_app
 from wattpad_crawler.web.routes import _save_cookie
@@ -328,6 +331,33 @@ def test_reader_chapter_view(output_dir: Path):
     r = client.get("/read/alice/42_my-tale/1")
     assert r.status_code == 200
     assert "Body of chapter one." in r.text
+
+
+def test_reader_chapter_view_reads_from_archive_database(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story = Story(
+        story_id="42",
+        title="My Tale",
+        author_username="alice",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    content = ChapterContent(
+        text="Body from database.",
+        paragraphs=[{"id": "p1", "text": "Body from database.", "html": "Body from database."}],
+        images=[],
+    )
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(story.story_id, story.parts[0], content, "<html/>", [], [])
+    repo.close()
+
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/read/alice/42_my-tale/1")
+
+    assert r.status_code == 200
+    assert "Body from database." in r.text
 
 
 def test_reader_chapter_view_groups_inline_comments_by_paragraph(output_dir: Path):
