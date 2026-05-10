@@ -128,6 +128,20 @@ def test_dashboard_renders(output_dir: Path):
     assert "story" in r.text.lower()
 
 
+def test_base_page_renders_job_panel_shell(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/")
+
+    assert r.status_code == 200
+    assert 'id="job-panel"' in r.text
+    assert 'id="job-panel-toggle"' in r.text
+    assert 'id="job-panel-events"' in r.text
+    assert "Open full" in r.text
+
+
 def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir, cookie="tok")
     app = build_app(cfg)
@@ -143,7 +157,8 @@ def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
     monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
     r = client.post("/jobs", data={"kind": "story", "target": "12345"}, follow_redirects=False)
     assert r.status_code == 303
-    job_id = r.headers["location"].rsplit("/", 1)[-1]
+    assert r.headers["location"].startswith("/?job_id=")
+    job_id = r.headers["location"].split("=", 1)[1]
     deadline = time.monotonic() + 2.0
     job = app.state.job_manager.get(job_id)
     while job.status.value in ("pending", "running"):
@@ -169,7 +184,8 @@ def test_post_jobs_url_resolves(output_dir: Path, monkeypatch):
         "target": "https://www.wattpad.com/story/789-foo-bar",
     }, follow_redirects=False)
     assert r.status_code == 303
-    job_id = r.headers["location"].rsplit("/", 1)[-1]
+    assert r.headers["location"].startswith("/?job_id=")
+    job_id = r.headers["location"].split("=", 1)[1]
     deadline = time.monotonic() + 2.0
     job = app.state.job_manager.get(job_id)
     while job.status.value in ("pending", "running"):
@@ -216,6 +232,46 @@ def test_job_detail_progress_uses_friendly_messages(output_dir: Path):
     assert "Could not build EPUB output" in r.text
     assert "<code>part.start</code>" not in r.text
     assert "<code>render.failed</code>" not in r.text
+
+
+def test_job_summary_returns_all_retained_events(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    job = app.state.job_manager.create("archive_story", {"story_id": "42"})
+    job.emit("part.start", {"ordinal": 1, "title": "One"})
+    job.emit("part.done", {"ordinal": 1, "inline_comments": 2, "end_comments": 3})
+    job.set_done()
+    client = TestClient(app)
+
+    r = client.get(f"/jobs/{job.job_id}/summary")
+
+    assert r.status_code == 200
+    assert r.json() == {
+        "job_id": job.job_id,
+        "kind": "archive_story",
+        "args": {"story_id": "42"},
+        "status": "done",
+        "error": None,
+        "next_seq": 2,
+        "events": [
+            {"kind": "part.start", "data": {"ordinal": 1, "title": "One"}, "seq": 1},
+            {
+                "kind": "part.done",
+                "data": {"ordinal": 1, "inline_comments": 2, "end_comments": 3},
+                "seq": 2,
+            },
+        ],
+    }
+
+
+def test_job_summary_unknown_returns_404(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/jobs/nonexistent/summary")
+
+    assert r.status_code == 404
 
 
 def test_job_detail_unknown_returns_404(output_dir: Path):

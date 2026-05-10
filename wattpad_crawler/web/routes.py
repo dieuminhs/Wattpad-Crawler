@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
@@ -244,7 +244,7 @@ async def submit_job(request: Request) -> RedirectResponse:
     else:
         raise HTTPException(status_code=400, detail=f"unknown kind: {kind}")
 
-    return RedirectResponse(url=f"/jobs/{job.job_id}", status_code=303)
+    return RedirectResponse(url=f"/?job_id={job.job_id}", status_code=303)
 
 
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -355,6 +355,28 @@ def library(request: Request) -> HTMLResponse:
             "removed_story_id": request.query_params.get("removed"),
             "bookmarked_story_id": request.query_params.get("bookmarked"),
         },
+    )
+
+
+@router.get("/jobs/{job_id}/summary")
+def job_summary(request: Request, job_id: str) -> JSONResponse:
+    mgr = request.app.state.job_manager
+    job = mgr.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return JSONResponse(
+        {
+            "job_id": job.job_id,
+            "kind": job.kind,
+            "args": job.args,
+            "status": job.status.value,
+            "error": job.error,
+            "next_seq": job.next_seq,
+            "events": [
+                {"kind": ev.kind, "data": ev.data, "seq": ev.seq}
+                for ev in job.snapshot_events(0)
+            ],
+        }
     )
 
 
