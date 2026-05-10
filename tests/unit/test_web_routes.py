@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from wattpad_crawler.auth import AuthError
-from wattpad_crawler.config import Config
+from wattpad_crawler.config import Config, load_config
 from wattpad_crawler.web import runner
 from wattpad_crawler.web.app import build_app
 from wattpad_crawler.web.routes import _save_cookie
@@ -61,6 +61,15 @@ def test_setup_post_strips_whitespace(output_dir: Path, monkeypatch):
     client.post("/setup", data={"cookie": "  tok-abc-123  \n"}, follow_redirects=False)
     text = (output_dir / "_config.toml").read_text()
     assert 'cookie = "tok-abc-123"' in text
+
+
+def test_save_cookie_escapes_toml_sensitive_characters(output_dir: Path):
+    cookie = 'token-prefix"quoted\\tail'
+
+    _save_cookie(output_dir, cookie)
+
+    cfg = load_config(output_dir)
+    assert cfg.cookie == cookie
 
 
 def test_dashboard_renders(output_dir: Path):
@@ -198,6 +207,51 @@ def test_library_lists_stories(output_dir: Path):
     assert r.status_code == 200
     assert "My Tale" in r.text
     assert "alice" in r.text
+    assert "Reset for refetch" in r.text
+
+
+def test_library_reset_story_marks_parts_pending(output_dir: Path):
+    from wattpad_crawler.archive.state import Manifest
+    from wattpad_crawler.models import Part, Story
+
+    cfg = Config(output_dir=output_dir)
+    story = Story(
+        story_id="42",
+        title="My Tale",
+        author_username="alice",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    m = Manifest(output_dir).connect()
+    m.upsert_story(story)
+    m.upsert_parts(story)
+    m.set_story_status("42", "done")
+    m.set_part_status("42", "100", "done", body_hash="abc")
+    m.close()
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "", "parts": [],
+    }))
+
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.post("/library/reset/42", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/library?reset=42"
+    m = Manifest(output_dir).connect()
+    assert m.get_story("42")["status"] == "pending"
+    assert m.get_part("42", "100")["body_hash"] is None
+    m.close()
+
+
+def test_library_reset_missing_story_404(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.post("/library/reset/missing", follow_redirects=False)
+    assert r.status_code == 404
 
 
 def test_library_cover_serves_when_present(output_dir: Path):

@@ -2,6 +2,7 @@ import json
 import logging
 from pathlib import Path
 
+from wattpad_crawler.api import comments as comments_mod
 from wattpad_crawler.api.comments import parse_comments_page
 
 
@@ -15,6 +16,79 @@ def test_parse_comments_page(fixtures_dir: Path):
     assert len(comments[0].replies) == 1
     assert comments[0].replies[0].user == "alice"
     assert next_url is None
+
+
+def test_parse_comments_page_accepts_v4_comment_shape():
+    raw = {
+        "comments": [
+            {
+                "id": "1493815966##1777570246#134769c15e",
+                "author": {"name": "tri72027"},
+                "body": "Lần 3, gét gô",
+                "createDate": "2026-04-30T17:30:46Z",
+                "paragraphId": None,
+            },
+            {
+                "id": "1493815966#para#1776348404#e22792c88c",
+                "author": {"name": "Thinreong6"},
+                "body": "Nhảy cái bộp liền",
+                "createDate": "2026-04-16T14:06:44Z",
+                "paragraphId": "para",
+            },
+        ],
+        "nextUrl": "https://api.wattpad.com/v4/parts/1493815966/comments?offsetId=next",
+    }
+
+    parsed, next_url = parse_comments_page(raw)
+
+    assert [c.user for c in parsed] == ["tri72027", "Thinreong6"]
+    assert parsed[0].created_at == "2026-04-30T17:30:46Z"
+    assert parsed[0].paragraph_id is None
+    assert parsed[1].paragraph_id == "para"
+    assert next_url == "https://api.wattpad.com/v4/parts/1493815966/comments?offsetId=next"
+
+
+def test_fetch_inline_and_end_comments_use_v4_part_comments_and_filter_by_paragraph():
+    class FakeResponse:
+        def json(self):
+            return {
+                "comments": [
+                    {
+                        "id": "end",
+                        "author": {"name": "end-user"},
+                        "body": "end",
+                        "createDate": "2026-04-30T17:30:46Z",
+                        "paragraphId": None,
+                    },
+                    {
+                        "id": "inline",
+                        "author": {"name": "inline-user"},
+                        "body": "inline",
+                        "createDate": "2026-04-16T14:06:44Z",
+                        "paragraphId": "para",
+                    },
+                ],
+                "nextUrl": None,
+            }
+
+    class FakeClient:
+        def __init__(self):
+            self.urls: list[str] = []
+
+        def get(self, url: str):
+            self.urls.append(url)
+            return FakeResponse()
+
+    inline_client = FakeClient()
+    end_client = FakeClient()
+
+    inline = comments_mod.fetch_inline_comments(inline_client, "1493815966")
+    end = comments_mod.fetch_end_comments(end_client, "1493815966")
+
+    assert inline_client.urls == ["https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"]
+    assert end_client.urls == ["https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"]
+    assert [c.comment_id for c in inline] == ["inline"]
+    assert [c.comment_id for c in end] == ["end"]
 
 
 # --- Phase 1 REL-01 recursion-cap tests ---

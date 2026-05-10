@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from wattpad_crawler.api.story import parse_story
+from wattpad_crawler.api.story import parse_part_page_story_id, parse_part_story_id, parse_story
 
 
 def test_parse_story_basic(fixtures_dir: Path):
@@ -88,3 +88,26 @@ def test_parse_story_missing_optional_fields():
     assert s.reads == 0
     assert s.completed is False
     assert s.last_modified is None
+
+
+def test_parse_part_story_id_prefers_group_id():
+    assert parse_part_story_id({"id": 1529869290, "groupId": "123456789"}) == "123456789"
+
+
+def test_parse_part_story_id_falls_back_to_group_object():
+    assert parse_part_story_id({"id": 1529869290, "group": {"id": 123456789}}) == "123456789"
+
+
+def test_parse_part_story_id_raises_on_missing_parent_story():
+    with pytest.raises(ValueError, match="parent story"):
+        parse_part_story_id({"id": 1529869290})
+
+
+def test_parse_part_page_story_id_reads_embedded_story_link():
+    html = '<meta property="og:url" content="https://www.wattpad.com/story/383728013-title">'
+    assert parse_part_page_story_id(html) == "383728013"
+
+
+def test_parse_part_page_story_id_raises_on_missing_story_link():
+    with pytest.raises(ValueError, match="parent story link"):
+        parse_part_page_story_id("<html><body>No story here</body></html>")

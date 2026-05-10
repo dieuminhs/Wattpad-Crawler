@@ -133,6 +133,31 @@ def test_set_part_status_with_error_message(output_dir: Path):
     m.close()
 
 
+def test_reset_story_marks_story_and_parts_pending(output_dir: Path):
+    m = Manifest(output_dir).connect()
+    s = make_story()
+    m.upsert_story(s)
+    m.upsert_parts(s)
+    m.set_story_status("s1", "done")
+    m.set_part_status("s1", "p1", "done", body_hash="abc")
+    m.set_part_status("s1", "p2", "failed", last_error="connection reset")
+
+    assert m.reset_story("s1") is True
+
+    assert m.get_story("s1")["status"] == "pending"
+    assert m.get_part("s1", "p1")["status"] == "pending"
+    assert m.get_part("s1", "p1")["body_hash"] is None
+    assert m.get_part("s1", "p2")["last_error"] is None
+    assert [p["part_id"] for p in m.pending_parts_for("s1")] == ["p1", "p2"]
+    m.close()
+
+
+def test_reset_story_returns_false_for_missing_story(output_dir: Path):
+    m = Manifest(output_dir).connect()
+    assert m.reset_story("missing") is False
+    m.close()
+
+
 def test_get_missing_story_returns_none(output_dir: Path):
     m = Manifest(output_dir).connect()
     assert m.get_story("nonexistent") is None

@@ -1,6 +1,8 @@
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from wattpad_crawler.archive.state import Manifest
@@ -12,7 +14,9 @@ from wattpad_crawler.jobs import (
     ResolveError,
     archive_many,
     archive_story,
+    fetch_full_chapter_html,
     resolve_story_id,
+    resolve_url_story_id,
 )
 from wattpad_crawler.models import Part, Story
 from wattpad_crawler.scrape.chapter_html import ChapterContent
@@ -94,6 +98,91 @@ def test_archive_story_marks_failed_on_chapter_error(output_dir: Path):
     manifest.close()
 
 
+def test_archive_story_keeps_part_when_comment_fetch_fails(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+    request = httpx.Request("GET", "https://www.wattpad.com/api/v3/parts/100/comments")
+    response = httpx.Response(400, request=request)
+    deps.fetch_inline_comments.side_effect = httpx.HTTPStatusError(
+        "400 Bad Request",
+        request=request,
+        response=response,
+    )
+    events: list[tuple[str, dict]] = []
+
+    archive_story(
+        cfg,
+        fake_client,
+        manifest,
+        "42",
+        deps=deps,
+        progress=lambda kind, data: events.append((kind, data)),
+    )
+
+    row = manifest.get_part("42", "100")
+    assert row["status"] == "done"
+    sd = output_dir / "stories" / "bob" / "42_hi" / "parts"
+    assert json.loads((sd / "01_100_comments-inline.json").read_text()) == []
+    assert "comments.failed" in [kind for kind, _ in events]
+    manifest.close()
+
+
+def test_fetch_full_chapter_html_appends_storytext_pages():
+    responses = {
+        "https://www.wattpad.com/1495181769-chapter-title": "<p>Page one.</p>",
+        "https://www.wattpad.com/apiv2/": "<p>Page two.</p>",
+    }
+    client = MagicMock()
+    client.get.side_effect = [
+        MagicMock(text=responses["https://www.wattpad.com/1495181769-chapter-title"]),
+        MagicMock(text=responses["https://www.wattpad.com/apiv2/"]),
+        MagicMock(text=""),
+    ]
+
+    html = fetch_full_chapter_html(
+        client,
+        "https://www.wattpad.com/1495181769-chapter-title",
+    )
+
+    assert html == "<p>Page one.</p>\n<p>Page two.</p>"
+    client.get.assert_any_call("https://www.wattpad.com/1495181769-chapter-title")
+    client.get.assert_any_call(
+        "https://www.wattpad.com/apiv2/",
+        params={"m": "storytext", "id": "1495181769", "page": 2},
+        headers={
+            "Accept": "text/html, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://www.wattpad.com/1495181769-chapter-title",
+        },
+    )
+
+
+def test_fetch_full_chapter_html_returns_parseable_combined_fragments():
+    from wattpad_crawler.scrape.chapter_html import extract_chapter
+
+    client = MagicMock()
+    client.get.side_effect = [
+        MagicMock(text="""
+            <html><body><main class="page-container">
+              <p data-p-id="p1">Page one.</p>
+            </main></body></html>
+        """),
+        MagicMock(text='<p data-p-id="p2">Page two.</p>'),
+        MagicMock(text=""),
+    ]
+
+    html = fetch_full_chapter_html(client, "https://www.wattpad.com/1495181769-title")
+    content = extract_chapter(html)
+
+    assert [p["text"] for p in content.paragraphs] == ["Page one.", "Page two."]
+
+
 def test_archive_story_isolates_cover_fetch_failure(output_dir: Path):
     """A custom JobDeps whose fetch_cover_bytes raises must not crash the job."""
     cfg = Config(output_dir=output_dir)
@@ -162,9 +251,27 @@ def test_resolve_story_url_no_slug():
 
 
 def test_resolve_part_url_to_story_requires_lookup():
-    """Part URLs need an API call; this fn just rejects them."""
+    """Part URLs need an API call; this pure helper rejects them."""
     with pytest.raises(ResolveError):
         resolve_story_id("https://www.wattpad.com/1001-chapter-one")
+
+
+def test_resolve_url_story_id_fetches_parent_story_for_part_url(monkeypatch):
+    seen = {}
+
+    def fake_fetch_part_story_id(client, part_id):
+        seen["client"] = client
+        seen["part_id"] = part_id
+        return "123456789"
+
+    monkeypatch.setattr(
+        "wattpad_crawler.jobs.api_story.fetch_part_story_id",
+        fake_fetch_part_story_id,
+    )
+
+    client = object()
+    assert resolve_url_story_id(client, "https://www.wattpad.com/1001-chapter-one") == "123456789"
+    assert seen == {"client": client, "part_id": "1001"}
 
 
 def test_resolve_garbage_input():

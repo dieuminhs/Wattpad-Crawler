@@ -1,9 +1,11 @@
 from pathlib import Path
 
+import httpx
 import pytest
 
 from wattpad_crawler.auth import AuthError
 from wattpad_crawler.cli import build_parser, main
+from wattpad_crawler.jobs import ResolveError
 
 
 def test_parser_has_expected_subcommands():
@@ -40,6 +42,13 @@ def test_parser_status_command():
     assert args.cmd == "status"
 
 
+def test_parser_reset_command():
+    parser = build_parser()
+    args = parser.parse_args(["reset", "123"])
+    assert args.cmd == "reset"
+    assert args.target == "123"
+
+
 def test_parser_default_output_dir():
     parser = build_parser()
     args = parser.parse_args(["status"])
@@ -56,6 +65,18 @@ def test_parser_requires_subcommand():
     parser = build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args([])
+
+
+def test_main_invalid_config_exits_2_without_traceback(output_dir, capsys):
+    (output_dir / "_config.toml").write_text('cookie = "unterminated\n', encoding="utf-8")
+
+    rc = main(["--output", str(output_dir), "status"])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "ConfigError" in captured.err
+    assert "_config.toml" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_main_story_calls_archive_story(output_dir, monkeypatch):
@@ -87,6 +108,50 @@ def test_main_url_command_resolves_then_archives(output_dir, monkeypatch):
     ])
     assert rc == 0
     assert captured["sid"] == "789"
+
+
+def test_main_url_command_accepts_numeric_wattpad_paths(output_dir, monkeypatch):
+    captured = {}
+
+    def fake_archive_story(cfg, client, manifest, sid, deps=None):
+        captured["sid"] = sid
+
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.resolve_url_story_id",
+        lambda client, target: "123456789",
+    )
+    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+    rc = main(["--output", str(output_dir), "url", "https://www.wattpad.com/1529869290"])
+
+    assert rc == 0
+    assert captured["sid"] == "123456789"
+
+
+@pytest.mark.parametrize("cmd_args", [
+    ["story", "12345"],
+    ["url", "https://www.wattpad.com/story/12345-foo"],
+])
+def test_main_direct_story_commands_do_not_run_auth_probe(output_dir, monkeypatch, cmd_args):
+    """Direct story archival should let the real story fetch decide auth."""
+    (output_dir / "_config.toml").write_text(
+        'cookie = "valid-looking-cookie"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.validate_cookie",
+        lambda client: (_ for _ in ()).throw(AuthError("probe rejected")),
+    )
+    captured = {}
+
+    def fake_archive_story(cfg, client, manifest, sid, deps=None):
+        captured["sid"] = sid
+
+    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+
+    rc = main(["--output", str(output_dir), *cmd_args])
+
+    assert rc == 0
+    assert captured["sid"] == "12345"
 
 
 def test_main_library_calls_fetch_library_and_archive_many(output_dir, monkeypatch):
@@ -137,6 +202,40 @@ def test_main_status_does_not_make_network_calls(output_dir, monkeypatch, capsys
     assert "Parts:" in out
 
 
+def test_main_reset_marks_story_pending(output_dir, capsys):
+    from wattpad_crawler.archive.state import Manifest
+    from wattpad_crawler.models import Part, Story
+
+    m = Manifest(output_dir).connect()
+    story = Story(
+        story_id="123",
+        title="T",
+        author_username="alice",
+        parts=[Part(part_id="p1", ordinal=1, title="One", url="https://w/p1")],
+    )
+    m.upsert_story(story)
+    m.upsert_parts(story)
+    m.set_story_status("123", "done")
+    m.set_part_status("123", "p1", "done", body_hash="abc")
+    m.close()
+
+    rc = main(["--output", str(output_dir), "reset", "123"])
+
+    assert rc == 0
+    assert "Reset story 123" in capsys.readouterr().out
+    m = Manifest(output_dir).connect()
+    assert m.get_story("123")["status"] == "pending"
+    assert m.get_part("123", "p1")["body_hash"] is None
+    m.close()
+
+
+def test_main_reset_missing_story_exits_2(output_dir, capsys):
+    rc = main(["--output", str(output_dir), "reset", "404"])
+
+    assert rc == 2
+    assert "Story not found" in capsys.readouterr().err
+
+
 def test_parser_serve_command():
     parser = build_parser()
     args = parser.parse_args(["serve"])
@@ -177,30 +276,87 @@ def _seed_blank_cookie_config(output_dir: Path) -> None:
     )
 
 
-def test_main_archive_auth_failure_exits_2(output_dir, monkeypatch, capsys):
-    """ROADMAP success criterion #1: blank cookie + archive command exits 2 with
-    AuthError on stderr BEFORE making any archive API calls."""
+def test_main_collection_auth_failure_exits_2(output_dir, monkeypatch, capsys):
+    """Blank cookie + collection command exits 2 before collection API calls."""
     _seed_blank_cookie_config(output_dir)
-    # If archive_story is reached, the gate failed.
     monkeypatch.setattr(
-        "wattpad_crawler.cli.archive_story",
-        lambda *a, **kw: pytest.fail("archive_story was called despite blank cookie"),
+        "wattpad_crawler.api.user.fetch_library",
+        lambda *a, **kw: pytest.fail("fetch_library was called despite blank cookie"),
     )
-    rc = main(["--output", str(output_dir), "story", "12345"])
+    rc = main(["--output", str(output_dir), "library", "--user", "alice"])
     captured = capsys.readouterr()
     assert rc == 2, f"Expected exit code 2, got {rc}"
     assert "AuthError" in captured.err, f"Stderr missing 'AuthError': {captured.err!r}"
     assert "/setup" in captured.err, f"Stderr missing remediation hint '/setup': {captured.err!r}"
 
 
+def test_main_auth_probe_network_error_exits_2_without_traceback(
+    output_dir,
+    monkeypatch,
+    capsys,
+):
+    _seed_blank_cookie_config(output_dir)
+    (output_dir / "_config.toml").write_text(
+        'cookie = "valid-looking-cookie"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.validate_cookie",
+        lambda client: (_ for _ in ()).throw(httpx.ConnectError("simulated reset")),
+    )
+    monkeypatch.setattr(
+        "wattpad_crawler.api.user.fetch_library",
+        lambda *a, **kw: pytest.fail("fetch_library was called despite network error"),
+    )
+
+    rc = main(["--output", str(output_dir), "library", "--user", "alice"])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "NetworkError" in captured.err
+    assert "simulated reset" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_url_resolve_error_exits_2_without_traceback(output_dir, monkeypatch, capsys):
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.resolve_url_story_id",
+        lambda client, target: (_ for _ in ()).throw(ResolveError("not a Wattpad URL")),
+    )
+
+    rc = main(["--output", str(output_dir), "url", "https://example.com/nope"])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "ResolveError" in captured.err
+    assert "not a Wattpad URL" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_http_status_error_exits_2_without_traceback(output_dir, monkeypatch, capsys):
+    request = httpx.Request("GET", "https://www.wattpad.com/api/v3/stories/bad")
+    response = httpx.Response(400, request=request)
+    error = httpx.HTTPStatusError("400 Bad Request", request=request, response=response)
+    monkeypatch.setattr(
+        "wattpad_crawler.cli.archive_story",
+        lambda *a, **kw: (_ for _ in ()).throw(error),
+    )
+
+    rc = main(["--output", str(output_dir), "story", "12345"])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "HTTPError" in captured.err
+    assert "400" in captured.err
+    assert "Traceback" not in captured.err
+
+
 @pytest.mark.parametrize("cmd_args,downstream_attr", [
-    (["story", "12345"], "wattpad_crawler.cli.archive_story"),
-    (["url", "https://www.wattpad.com/story/42-foo"], "wattpad_crawler.cli.archive_story"),
     (["library", "--user", "alice"], "wattpad_crawler.cli.archive_many"),
     (["list", "L1"], "wattpad_crawler.cli.archive_many"),
 ])
-def test_main_all_archive_branches_gated(output_dir, monkeypatch, cmd_args, downstream_attr):
-    """AUTH-02 / D-05: every archive branch (story / url / library / list) is gated."""
+def test_main_collection_archive_branches_gated(output_dir, monkeypatch, cmd_args, downstream_attr):
+    """Collection archive branches are gated because they require auth."""
     _seed_blank_cookie_config(output_dir)
     # Force validate_cookie to raise — guarantees we go through the AuthError path
     # regardless of how the cookie short-circuit is implemented.
