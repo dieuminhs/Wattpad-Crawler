@@ -161,8 +161,27 @@ def test_job_detail_page(output_dir: Path):
     client = TestClient(app)
     r = client.get(f"/jobs/{job.job_id}")
     assert r.status_code == 200
-    assert "42" in r.text
-    assert "story.start" in r.text
+    assert "Starting story: Hi" in r.text
+    assert "<code>story.start</code>" not in r.text
+
+
+def test_job_detail_progress_uses_friendly_messages(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    job = app.state.job_manager.create("archive_story", {"story_id": "42"})
+    job.emit("part.start", {"ordinal": 2, "title": "Second"})
+    job.emit("part.done", {"ordinal": 2, "inline_comments": 3, "end_comments": 1})
+    job.emit("render.failed", {"format": "epub", "error": "boom"})
+    client = TestClient(app)
+
+    r = client.get(f"/jobs/{job.job_id}")
+
+    assert r.status_code == 200
+    assert "Reading chapter 2: Second" in r.text
+    assert "Saved chapter 2 with 4 comments" in r.text
+    assert "Could not build EPUB output" in r.text
+    assert "<code>part.start</code>" not in r.text
+    assert "<code>render.failed</code>" not in r.text
 
 
 def test_job_detail_unknown_returns_404(output_dir: Path):

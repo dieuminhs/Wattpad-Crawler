@@ -76,15 +76,18 @@ input[type=text], input[type=password], textarea {
 .status-done { color: #15803d; }
 .status-failed { color: var(--accent); }
 .event-log {
-  font-family: ui-monospace, monospace;
-  font-size: 0.85em;
-  background: #f4f4f0;
-  padding: 1em;
-  border-radius: 4px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75em;
   max-height: 30em;
   overflow-y: auto;
 }
-.event-log .ev { margin-bottom: 0.2em; }
+.event-log .ev {
+  border-bottom: 1px solid var(--border);
+  padding: 0.55em 0.25em;
+}
+.event-log .ev:last-child { border-bottom: 0; }
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
