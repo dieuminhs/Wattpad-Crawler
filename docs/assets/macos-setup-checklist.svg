@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">macOS setup checklist for Wattpad Crawler</title>
+  <desc id="desc">A plain-language checklist: open Terminal, install Python, download Wattpad Crawler, create archive folder, add Wattpad cookie, start local web app.</desc>
+  <rect width="1200" height="420" rx="30" fill="#f8fafc" />
+  <rect x="50" y="46" width="1100" height="328" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="3" />
+  <text x="600" y="100" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="36" font-weight="800" fill="#0f172a">Mac setup checklist</text>
+  <text x="600" y="134" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#64748b">Follow these steps once, then use browser buttons to save stories.</text>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <g transform="translate(95 190)">
+      <circle cx="34" cy="34" r="34" fill="#f97316" />
+      <text x="34" y="45" text-anchor="middle" font-size="30" font-weight="900" fill="#ffffff">1</text>
+      <text x="86" y="28" font-size="21" font-weight="800" fill="#0f172a">Open Terminal</text>
+      <text x="86" y="56" font-size="16" fill="#64748b">Command + Space → Terminal</text>
+    </g>
+    <g transform="translate(430 190)">
+      <circle cx="34" cy="34" r="34" fill="#f97316" />
+      <text x="34" y="45" text-anchor="middle" font-size="30" font-weight="900" fill="#ffffff">2</text>
+      <text x="86" y="28" font-size="21" font-weight="800" fill="#0f172a">Install Python</text>
+      <text x="86" y="56" font-size="16" fill="#64748b">Run `brew install python@3.11`</text>
+    </g>
+    <g transform="translate(765 190)">
+      <circle cx="34" cy="34" r="34" fill="#f97316" />
+      <text x="34" y="45" text-anchor="middle" font-size="30" font-weight="900" fill="#ffffff">3</text>
+      <text x="86" y="28" font-size="21" font-weight="800" fill="#0f172a">Download app</text>
+      <text x="86" y="56" font-size="16" fill="#64748b">Clone repo and install once</text>
+    </g>
+    <g transform="translate(95 292)">
+      <circle cx="34" cy="34" r="34" fill="#16a34a" />
+      <text x="34" y="45" text-anchor="middle" font-size="30" font-weight="900" fill="#ffffff">4</text>
+      <text x="86" y="28" font-size="21" font-weight="800" fill="#0f172a">Create archive</text>
+      <text x="86" y="56" font-size="16" fill="#64748b">Folder stores saved stories</text>
+    </g>
+    <g transform="translate(430 292)">
+      <circle cx="34" cy="34" r="34" fill="#16a34a" />
+      <text x="34" y="45" text-anchor="middle" font-size="30" font-weight="900" fill="#ffffff">5</text>
+      <text x="86" y="28" font-size="21" font-weight="800" fill="#0f172a">Add cookie</text>
+      <text x="86" y="56" font-size="16" fill="#64748b">Private login token stays local</text>
+    </g>
+    <g transform="translate(765 292)">
+      <circle cx="34" cy="34" r="34" fill="#16a34a" />
+      <text x="34" y="45" text-anchor="middle" font-size="30" font-weight="900" fill="#ffffff">6</text>
+      <text x="86" y="28" font-size="21" font-weight="800" fill="#0f172a">Open web app</text>
+      <text x="86" y="56" font-size="16" fill="#64748b">Use http://127.0.0.1:8000</text>
+    </g>
+  </g>
+</svg>

@@ -3,8 +3,10 @@ import json
 import os
 import shutil
 import threading
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -26,6 +28,49 @@ from wattpad_crawler.jobs import (
 from wattpad_crawler.web.library_browser import scan_library
 
 router = APIRouter()
+_LIBRARY_PAGE_SIZE = 25
+_LIBRARY_FILTERS = {"all", "bookmarked", "has_cover", "no_cover"}
+
+
+def _search_text(value: str) -> str:
+    value = value.casefold().replace("đ", "d")
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def _entry_matches_query(entry, query: str) -> bool:
+    haystack = " ".join(
+        [
+            entry.story_id,
+            entry.title,
+            entry.author,
+            entry.description,
+            " ".join(entry.tags),
+        ]
+    )
+    return _search_text(query) in _search_text(haystack)
+
+
+def _entry_matches_filter(entry, filter_name: str) -> bool:
+    if filter_name == "bookmarked":
+        return entry.bookmarked
+    if filter_name == "has_cover":
+        return entry.has_cover
+    if filter_name == "no_cover":
+        return not entry.has_cover
+    return True
+
+
+def _library_page_url(page: int, query: str, filter_name: str) -> str:
+    params = []
+    if query:
+        params.append(("q", query))
+    if filter_name != "all":
+        params.append(("filter", filter_name))
+    params.append(("page", str(page)))
+    if not params:
+        return "/library"
+    return "/library?" + urlencode(params)
 
 
 def _toml_string(value: str) -> str:
@@ -345,12 +390,49 @@ async def job_stream(request: Request, job_id: str, after_seq: int = 0):
 @router.get("/library", response_class=HTMLResponse)
 def library(request: Request) -> HTMLResponse:
     cfg = request.app.state.cfg
-    entries = scan_library(cfg.output_dir)
+    all_entries = scan_library(cfg.output_dir)
+    query = request.query_params.get("q", "").strip()
+    filter_name = request.query_params.get("filter", "all")
+    if filter_name not in _LIBRARY_FILTERS:
+        filter_name = "all"
+    try:
+        page = max(1, int(request.query_params.get("page", "1")))
+    except ValueError:
+        page = 1
+
+    filtered_entries = [
+        entry
+        for entry in all_entries
+        if _entry_matches_filter(entry, filter_name)
+        and (not query or _entry_matches_query(entry, query))
+    ]
+    total_entries = len(all_entries)
+    total_filtered = len(filtered_entries)
+    total_pages = max(1, (total_filtered + _LIBRARY_PAGE_SIZE - 1) // _LIBRARY_PAGE_SIZE)
+    page = min(page, total_pages)
+    page_start = (page - 1) * _LIBRARY_PAGE_SIZE
+    entries = filtered_entries[page_start : page_start + _LIBRARY_PAGE_SIZE]
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="library.html",
         context={
             "entries": entries,
+            "total_entries": total_entries,
+            "total_filtered": total_filtered,
+            "query": query,
+            "filter_name": filter_name,
+            "page": page,
+            "total_pages": total_pages,
+            "prev_page_url": _library_page_url(page - 1, query, filter_name) if page > 1 else "",
+            "next_page_url": (
+                _library_page_url(page + 1, query, filter_name) if page < total_pages else ""
+            ),
+            "filter_options": [
+                ("all", "All", _library_page_url(1, query, "all")),
+                ("bookmarked", "Bookmarked", _library_page_url(1, query, "bookmarked")),
+                ("has_cover", "Has cover", _library_page_url(1, query, "has_cover")),
+                ("no_cover", "No cover", _library_page_url(1, query, "no_cover")),
+            ],
             "reset_story_id": request.query_params.get("reset"),
             "removed_story_id": request.query_params.get("removed"),
             "bookmarked_story_id": request.query_params.get("bookmarked"),

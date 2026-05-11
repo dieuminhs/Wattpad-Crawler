@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Library — Wattpad Crawler{% endblock %}
 {% block content %}
-  <h1>Library</h1>
+  <h1 class="library-title">Library</h1>
   {% if reset_story_id %}
     <p class="status-done">Reset story {{ reset_story_id }}. Next archive run will refetch it.</p>
   {% endif %}
@@ -11,8 +11,37 @@
   {% if removed_story_id %}
     <p class="status-done">Removed story {{ removed_story_id }} from the archive.</p>
   {% endif %}
+
+  <section class="library-search-panel" aria-label="Search and filter library">
+    <form class="library-search-form" method="get" action="/library">
+      <input type="hidden" name="filter" value="{{ filter_name }}">
+      <label class="library-search-box">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input type="search" name="q" value="{{ query }}" placeholder="Search title, author, tag, story ID…" autocomplete="off">
+      </label>
+      <button class="library-search-button" type="submit">Search</button>
+      {% if query or filter_name != "all" %}<a class="btn btn-light library-clear-button" href="/library">Clear</a>{% endif %}
+    </form>
+    <div class="library-filter-row" aria-label="Library filters">
+      {% for value, label, url in filter_options %}
+        <a class="filter-chip{% if filter_name == value %} filter-chip--active{% endif %}" href="{{ url }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="library-search-meta">
+      {% if total_entries %}
+        {% if total_filtered == total_entries %}
+          <span>{{ total_entries }} stories archived</span>
+        {% else %}
+          <span>{{ total_filtered }} of {{ total_entries }} stories shown</span>
+        {% endif %}
+      {% else %}
+        <span>No stories archived yet</span>
+      {% endif %}
+      {% if query %}<span>Searching for “{{ query }}”</span>{% endif %}
+    </div>
+  </section>
+
   {% if entries %}
-    <p class="muted">{{ entries|length }} stories archived.</p>
     <div class="library-grid">
       {% for e in entries %}
         <div class="library-card">
@@ -43,7 +72,18 @@
         </div>
       {% endfor %}
     </div>
+    {% if total_pages > 1 %}
+      <nav class="pagination" aria-label="Library pages">
+        {% if prev_page_url %}<a href="{{ prev_page_url }}">Previous</a>{% else %}<span>Previous</span>{% endif %}
+        <strong>Page {{ page }} of {{ total_pages }}</strong>
+        {% if next_page_url %}<a href="{{ next_page_url }}">Next</a>{% else %}<span>Next</span>{% endif %}
+      </nav>
+    {% endif %}
   {% else %}
-    <p>No stories yet. <a href="/">Archive one</a> to get started — the library is empty.</p>
+    {% if total_entries %}
+      <p>No stories match this search. <a href="/library">Clear filters</a> to see everything.</p>
+    {% else %}
+      <p>No stories yet. <a href="/">Archive one</a> to get started — the library is empty.</p>
+    {% endif %}
   {% endif %}
 {% endblock %}
