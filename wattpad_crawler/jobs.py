@@ -4,6 +4,7 @@ import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from itertools import count
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -23,7 +24,6 @@ from wattpad_crawler.scrape.chapter_html import ChapterContent, extract_chapter
 
 logger = logging.getLogger(__name__)
 
-MAX_CHAPTER_TEXT_PAGES = 100
 _HTML_BODY_CLOSE_RE = re.compile(r"</body>\s*</html>\s*$", re.IGNORECASE)
 
 
@@ -46,7 +46,7 @@ def fetch_full_chapter_html(client: RateLimitedClient, url: str) -> str:
         "Referer": url,
     }
 
-    for page in range(2, MAX_CHAPTER_TEXT_PAGES + 1):
+    for page in count(start=2):
         response = client.get(
             "https://www.wattpad.com/apiv2/",
             params={"m": "storytext", "id": part_id, "page": page},
@@ -56,12 +56,6 @@ def fetch_full_chapter_html(client: RateLimitedClient, url: str) -> str:
         if not text.strip():
             break
         extra_pages.append(text)
-    else:
-        logger.warning(
-            "chapter %s reached storytext page limit %d",
-            part_id,
-            MAX_CHAPTER_TEXT_PAGES,
-        )
 
     if not extra_pages:
         return first_page

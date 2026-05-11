@@ -362,6 +362,143 @@ def test_library_lists_stories(output_dir: Path):
     assert "Bookmark" in r.text
 
 
+def test_library_search_filters_by_title_author_description_tags_and_id(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    stories = [
+        ("alice", "42_my-tale", "42", "My Tale", "winter rescue", ["slowburn"]),
+        ("bob", "77_space-run", "77", "Space Run", "stars", ["scifi"]),
+    ]
+    for author, dirname, story_id, title, description, tags in stories:
+        story_dir = output_dir / "stories" / author / dirname
+        story_dir.mkdir(parents=True)
+        (story_dir / "metadata.json").write_text(json.dumps({
+            "story_id": story_id,
+            "title": title,
+            "author_username": author,
+            "description": description,
+            "tags": tags,
+            "parts": [],
+        }))
+
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library?q=slowburn")
+
+    assert r.status_code == 200
+    assert "My Tale" in r.text
+    assert "Space Run" not in r.text
+    assert "1 of 2 stories" in r.text
+    assert 'value="slowburn"' in r.text
+    assert 'class="filter-chip filter-chip--active"' in r.text
+    assert 'href="/library?q=slowburn&amp;filter=bookmarked&amp;page=1"' in r.text
+
+
+def test_library_search_matches_vietnamese_text_without_accents(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story_dir = output_dir / "stories" / "alice" / "42_xuyen-khong"
+    story_dir.mkdir(parents=True)
+    (story_dir / "metadata.json").write_text(json.dumps({
+        "story_id": "42",
+        "title": "Xuyên Không Thành Nữ Phụ",
+        "author_username": "alice",
+        "description": "Truyện cổ trang",
+        "tags": ["ngôn tình"],
+        "parts": [],
+    }))
+
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library?q=xuyen khong")
+
+    assert r.status_code == 200
+    assert "Xuyên Không Thành Nữ Phụ" in r.text
+    assert "1 stories archived" in r.text
+
+
+def test_library_search_matches_vietnamese_d_stroke_without_accent(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story_dir = output_dir / "stories" / "alice" / "43_de-vuong"
+    story_dir.mkdir(parents=True)
+    (story_dir / "metadata.json").write_text(json.dumps({
+        "story_id": "43",
+        "title": "Đế Vương Công Lược",
+        "author_username": "alice",
+        "description": "",
+        "tags": [],
+        "parts": [],
+    }))
+
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library?q=De Vuong")
+
+    assert r.status_code == 200
+    assert "Đế Vương Công Lược" in r.text
+
+
+def test_library_filters_bookmarked_and_cover_status(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(Story(story_id="42", title="Saved One", author_username="alice"))
+        repo.upsert_story(Story(story_id="77", title="Plain One", author_username="bob"))
+        repo.set_bookmarked("42", True)
+    repo.close()
+    cover_dir = output_dir / "stories" / "alice" / "42_saved-one"
+    cover_dir.mkdir(parents=True)
+    (cover_dir / "cover.jpg").write_bytes(b"jpg")
+
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    bookmarked = client.get("/library?filter=bookmarked")
+    assert "Saved One" in bookmarked.text
+    assert "Plain One" not in bookmarked.text
+    assert "1 of 2 stories" in bookmarked.text
+
+    has_cover = client.get("/library?filter=has_cover")
+    assert "Saved One" in has_cover.text
+    assert "Plain One" not in has_cover.text
+
+    no_cover = client.get("/library?filter=no_cover")
+    assert "Saved One" not in no_cover.text
+    assert "Plain One" in no_cover.text
+
+
+def test_library_paginates_large_result_sets(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    for index in range(26):
+        author = f"author{index:02d}"
+        story_dir = output_dir / "stories" / author / f"{index}_story-{index:02d}"
+        story_dir.mkdir(parents=True)
+        (story_dir / "metadata.json").write_text(json.dumps({
+            "story_id": str(index),
+            "title": f"Story {index:02d}",
+            "author_username": author,
+            "description": "",
+            "tags": [],
+            "parts": [],
+        }))
+
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    first = client.get("/library")
+    second = client.get("/library?page=2")
+
+    assert "Story 00" in first.text
+    assert "Story 24" in first.text
+    assert "Story 25" not in first.text
+    assert "Story 25" in second.text
+    assert "Page 1 of 2" in first.text
+    assert "Page 2 of 2" in second.text
+    assert 'href="/library?page=2"' in first.text
+    assert 'href="/library?page=1"' in second.text
+
+
 def test_library_bookmark_story_toggles_flag(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     repo = ArchiveRepository(output_dir).connect()

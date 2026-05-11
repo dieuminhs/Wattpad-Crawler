@@ -231,6 +231,32 @@ def test_fetch_full_chapter_html_appends_storytext_pages():
     )
 
 
+def test_fetch_full_chapter_html_fetches_past_old_page_limit():
+    client = MagicMock()
+    client.get.side_effect = [
+        MagicMock(text="<p>Page one.</p>"),
+        *[MagicMock(text=f"<p>Page {page}.</p>") for page in range(2, 102)],
+        MagicMock(text=""),
+    ]
+
+    html = fetch_full_chapter_html(
+        client,
+        "https://www.wattpad.com/1495181769-chapter-title",
+    )
+
+    assert "<p>Page 101.</p>" in html
+    assert client.get.call_args_list[-2].kwargs["params"] == {
+        "m": "storytext",
+        "id": "1495181769",
+        "page": 101,
+    }
+    assert client.get.call_args_list[-1].kwargs["params"] == {
+        "m": "storytext",
+        "id": "1495181769",
+        "page": 102,
+    }
+
+
 def test_fetch_full_chapter_html_returns_parseable_combined_fragments():
     from wattpad_crawler.scrape.chapter_html import extract_chapter
 
