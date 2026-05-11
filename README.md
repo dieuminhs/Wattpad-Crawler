@@ -17,6 +17,88 @@ pip install -e .
 
 Requires Python 3.11+.
 
+## macOS / MacBook Quick Start
+
+Use this flow on a fresh MacBook. It keeps the archive local on your Mac and avoids any cloud host.
+
+![MacBook local setup: before and after](docs/assets/macbook-before-after.svg)
+
+### 1. Install Python
+
+Install Python 3.11+ with Homebrew:
+
+```bash
+brew install python@3.11
+```
+
+Check the version:
+
+```bash
+python3 --version
+```
+
+If `python3 --version` prints `Python 3.11` or newer, continue.
+
+### 2. Clone and install
+
+```bash
+git clone <this-repo>
+cd "Wattpad Crawler"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+After activation, `python` and `wattpad-crawler` run from `.venv`.
+
+### 3. Create local config
+
+```bash
+wattpad-crawler --output ./wattpad-archive status
+```
+
+This creates `./wattpad-archive/_config.toml` and `./wattpad-archive/_state.sqlite`.
+
+### 4. Add your Wattpad cookie
+
+1. Log in to Wattpad in Safari, Chrome, or Firefox.
+2. Open browser developer tools.
+3. Find cookies for `https://www.wattpad.com`.
+4. Copy the value of the `token` cookie.
+5. Open `./wattpad-archive/_config.toml` and set:
+   ```toml
+   cookie = "paste-token-here"
+   ```
+
+Keep `_config.toml` private because it contains your Wattpad session cookie.
+
+### 5. Run the local Web UI
+
+```bash
+wattpad-crawler --output ./wattpad-archive serve
+```
+
+Open <http://127.0.0.1:8000> on the MacBook. Use the Setup page if you want to paste or refresh the cookie from the browser instead of editing `_config.toml` manually.
+
+### 6. Run CLI commands
+
+```bash
+wattpad-crawler --output ./wattpad-archive story 123456789
+wattpad-crawler --output ./wattpad-archive url https://www.wattpad.com/story/123456-some-title
+wattpad-crawler --output ./wattpad-archive library --user yourusername
+```
+
+Back up `./wattpad-archive/` if you move to a new Mac. That folder contains all archived stories, rendered files, config, and local state.
+
+### macOS Troubleshooting
+
+- **`python: command not found`:** use `python3` before activating `.venv`; after activation, `python` should work.
+- **`wattpad-crawler: command not found`:** run `source .venv/bin/activate`, then reinstall with `python -m pip install -e .`.
+- **Login-required stories fail:** refresh the `token` cookie in `./wattpad-archive/_config.toml` or the Web UI Setup page.
+- **Terminal closes server:** keep the terminal window open while using the Web UI.
+- **Moving Macs:** copy the full `wattpad-archive` folder, not only EPUB files.
+
 ## Setup (one time)
 
 1. Run the tool once to create a default config:
