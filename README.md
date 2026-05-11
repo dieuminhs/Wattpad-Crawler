@@ -19,13 +19,41 @@ Requires Python 3.11+.
 
 ## macOS / MacBook Quick Start
 
-Use this flow on a fresh MacBook. It keeps the archive local on your Mac and avoids any cloud host.
+This guide is for someone who wants to save Wattpad stories on a Mac, even if they do not normally use developer tools. Everything stays on your own computer. Nothing is uploaded to a cloud service.
 
 ![MacBook local setup: before and after](docs/assets/macbook-before-after.svg)
 
-### 1. Install Python
+### What you need
 
-Install Python 3.11+ with Homebrew:
+- A MacBook or Mac with internet access.
+- Your Wattpad account already logged in through Safari, Chrome, or Firefox.
+- About 15 minutes for setup. Big libraries can take much longer to download.
+- Terminal, which is already included on every Mac.
+
+![macOS setup checklist](docs/assets/macos-setup-checklist.svg)
+
+### 1. Open Terminal
+
+1. Press `Command + Space`.
+2. Type `Terminal`.
+3. Press `Return`.
+
+Terminal is the app where you paste the commands below.
+
+### 2. Install Homebrew and Python
+
+Homebrew is a common Mac installer. It helps install Python, which runs this tool.
+
+First check whether Homebrew is already installed:
+
+```bash
+brew --version
+```
+
+If that says `command not found`, install Homebrew from <https://brew.sh>, then close and reopen Terminal.
+
+Install Python:
+
 
 ```bash
 brew install python@3.11
@@ -39,9 +67,12 @@ python3 --version
 
 If `python3 --version` prints `Python 3.11` or newer, continue.
 
-### 2. Clone and install
+### 3. Download and install Wattpad Crawler
+
+Choose a folder where you want the app files to live. `Downloads` is fine for most people.
 
 ```bash
+cd ~/Downloads
 git clone <this-repo>
 cd "Wattpad Crawler"
 python3 -m venv .venv
@@ -50,38 +81,47 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-After activation, `python` and `wattpad-crawler` run from `.venv`.
+If Terminal shows `(.venv)` at the start of the line, setup is active.
 
-### 3. Create local config
+### 4. Create your local archive folder
 
 ```bash
 wattpad-crawler --output ./wattpad-archive status
 ```
 
-This creates `./wattpad-archive/_config.toml` and `./wattpad-archive/_state.sqlite`.
+This creates a folder named `wattpad-archive`. That folder is where saved stories, covers, comments, EPUB files, HTML files, and settings go.
 
-### 4. Add your Wattpad cookie
+![local archive folder contents](docs/assets/archive-folder-contents.svg)
+
+### 5. Start the local web app
+
+```bash
+wattpad-crawler --output ./wattpad-archive serve
+```
+
+Open <http://127.0.0.1:8000> in your browser. Keep Terminal open while using the web app. If you close Terminal, the web app stops.
+
+### 6. Add your Wattpad login cookie
+
+Wattpad Crawler needs your Wattpad login cookie so it can save stories your account can read. Treat this cookie like a password. Do not share it.
 
 1. Log in to Wattpad in Safari, Chrome, or Firefox.
-2. Open browser developer tools.
-3. Find cookies for `https://www.wattpad.com`.
-4. Copy the value of the `token` cookie.
-5. Open `./wattpad-archive/_config.toml` and set:
+2. Open <http://127.0.0.1:8000/setup>.
+3. Follow the browser instructions on that page to find the Wattpad `token` cookie.
+4. Paste the `token` value into the Setup page.
+5. Click **Save**.
+
+If you prefer editing a file, open `./wattpad-archive/_config.toml` and set:
+
    ```toml
    cookie = "paste-token-here"
    ```
 
 Keep `_config.toml` private because it contains your Wattpad session cookie.
 
-### 5. Run the local Web UI
+### 7. Save stories
 
-```bash
-wattpad-crawler --output ./wattpad-archive serve
-```
-
-Open <http://127.0.0.1:8000> on the MacBook. Use the Setup page if you want to paste or refresh the cookie from the browser instead of editing `_config.toml` manually.
-
-### 6. Run CLI commands
+Use the web app buttons to save your library, a reading list, or one story. If you are comfortable with commands, these do the same thing:
 
 ```bash
 wattpad-crawler --output ./wattpad-archive story 123456789
@@ -89,15 +129,18 @@ wattpad-crawler --output ./wattpad-archive url https://www.wattpad.com/story/123
 wattpad-crawler --output ./wattpad-archive library --user yourusername
 ```
 
-Back up `./wattpad-archive/` if you move to a new Mac. That folder contains all archived stories, rendered files, config, and local state.
+### 8. Back up your saved stories
+
+Back up the whole `wattpad-archive` folder. Do not copy only the EPUB files. The full folder contains story data, comments, cover images, settings, and local progress.
 
 ### macOS Troubleshooting
 
+- **`brew: command not found`:** install Homebrew from <https://brew.sh>, then reopen Terminal.
 - **`python: command not found`:** use `python3` before activating `.venv`; after activation, `python` should work.
-- **`wattpad-crawler: command not found`:** run `source .venv/bin/activate`, then reinstall with `python -m pip install -e .`.
-- **Login-required stories fail:** refresh the `token` cookie in `./wattpad-archive/_config.toml` or the Web UI Setup page.
-- **Terminal closes server:** keep the terminal window open while using the Web UI.
-- **Moving Macs:** copy the full `wattpad-archive` folder, not only EPUB files.
+- **`wattpad-crawler: command not found`:** run `cd ~/Downloads/Wattpad\ Crawler`, then `source .venv/bin/activate`.
+- **Web app will not open:** make sure Terminal is still running `wattpad-crawler --output ./wattpad-archive serve`.
+- **Private stories fail:** refresh your Wattpad `token` cookie in the Setup page or `./wattpad-archive/_config.toml`.
+- **Moving to a new Mac:** copy the full `wattpad-archive` folder.
 
 ## Setup (one time)
 
