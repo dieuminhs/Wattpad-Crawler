@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.title }} — Wattpad Crawler{% endblock %}
+{% block content %}
+  <div class="reader">
+    {% if not chapter %}
+      <h1>{{ meta.title }}</h1>
+      <p class="muted">by {{ meta.author_username }}</p>
+      {% if meta.description %}<p>{{ meta.description }}</p>{% endif %}
+      {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+      <h2>Chapters</h2>
+      <ol>
+        {% for p in meta.parts %}
+          <li>
+            <a href="/read/{{ author }}/{{ dir_name }}/{{ p.ordinal }}">{{ p.title }}</a>
+          </li>
+        {% endfor %}
+      </ol>
+      <p>
+        <a href="/library">← Library</a> ·
+        Other formats:
+        {% if has_epub %}<a href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
+        {% if has_html %}<a href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
+        {% if has_txt %}<a href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
+      </p>
+    {% else %}
+      <p class="muted"><a href="/read/{{ author }}/{{ dir_name }}">← {{ meta.title }}</a></p>
+      <h1>{{ chapter.title }}</h1>
+      <div class="chapter-body">
+        {% if chapter.paragraphs %}
+          {% for paragraph in chapter.paragraphs %}
+            <section class="reader-paragraph" id="p-{{ paragraph.id }}">
+              <div class="paragraph-text">{{ paragraph.html | safe }}</div>
+              {% if paragraph.comments %}
+                <button
+                  class="comment-count-button"
+                  type="button"
+                  data-comments-target="comments-{{ paragraph.id }}"
+                  aria-controls="comments-{{ paragraph.id }}"
+                  aria-expanded="false"
+                  title="Show {{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}"
+                >{{ paragraph.comment_count }}</button>
+                <aside class="comment-drawer" id="comments-{{ paragraph.id }}" hidden aria-hidden="true">
+                  <div class="comment-drawer-header">
+                    <h2>{{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}</h2>
+                    <button class="comment-drawer-close" type="button">Hide comments</button>
+                  </div>
+                  {% for comment in paragraph.comments recursive %}
+                    <article class="comment">
+                      <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+                      {% if comment.replies %}
+                        <div class="comment-replies">{{ loop(comment.replies) }}</div>
+                      {% endif %}
+                    </article>
+                  {% endfor %}
+                </aside>
+              {% endif %}
+            </section>
+          {% endfor %}
+        {% else %}
+          <pre>{{ chapter.body }}</pre>
+        {% endif %}
+      </div>
+      {% if chapter.end_comments %}
+        <section class="end-comments">
+          <h2>End comments</h2>
+          {% for comment in chapter.end_comments recursive %}
+            <article class="comment">
+              <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+              {% if comment.replies %}
+                <div class="comment-replies">{{ loop(comment.replies) }}</div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
+      <p>
+        {% if chapter.prev_ord %}<a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.prev_ord }}">← Previous</a>{% endif %}
+        {% if chapter.next_ord %} · <a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.next_ord }}">Next →</a>{% endif %}
+      </p>
+      <script>
+        document.querySelectorAll('.comment-count-button').forEach((button) => {
+          const drawer = document.getElementById(button.dataset.commentsTarget);
+          if (!drawer) return;
+          const close = drawer.querySelector('.comment-drawer-close');
+          const hideDrawer = () => {
+            drawer.classList.remove('is-open');
+            drawer.hidden = true;
+            drawer.setAttribute('aria-hidden', 'true');
+            button.setAttribute('aria-expanded', 'false');
+          };
+          button.addEventListener('click', () => {
+            document.querySelectorAll('.comment-drawer.is-open').forEach((openDrawer) => {
+              if (openDrawer !== drawer) {
+                openDrawer.classList.remove('is-open');
+                openDrawer.hidden = true;
+                openDrawer.setAttribute('aria-hidden', 'true');
+              }
+            });
+            document.querySelectorAll('.comment-count-button[aria-expanded="true"]').forEach((openButton) => {
+              if (openButton !== button) openButton.setAttribute('aria-expanded', 'false');
+            });
+            drawer.hidden = false;
+            drawer.classList.add('is-open');
+            drawer.setAttribute('aria-hidden', 'false');
+            button.setAttribute('aria-expanded', 'true');
+          });
+          if (close) close.addEventListener('click', hideDrawer);
+        });
+      </script>
+    {% endif %}
+  </div>
+{% endblock %}

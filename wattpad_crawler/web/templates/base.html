@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Wattpad Crawler{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260511-ui-refresh">
+  <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+</head>
+<body>
+  <nav class="topbar">
+    <a class="brand-mark" href="/" aria-label="Wattpad Crawler dashboard">
+      <span class="brand-icon">W</span>
+      <span>Archive</span>
+    </a>
+    <div class="topbar-links">
+      <a href="/">Dashboard</a>
+      <a href="/library">Library</a>
+      <a href="/setup">Setup</a>
+      <a href="/config">Config</a>
+    </div>
+  </nav>
+  <main class="container app-shell">
+    {% block content %}{% endblock %}
+  </main>
+  <section class="job-panel is-hidden" id="job-panel" aria-live="polite">
+    <div class="job-panel-header" id="job-panel-header" role="button" tabindex="0">
+      <button id="job-panel-toggle" type="button" class="job-panel-title">Archive progress</button>
+      <div class="job-panel-actions">
+        <a id="job-panel-open" href="#">Open full</a>
+        <button id="job-panel-hide" type="button">Hide</button>
+      </div>
+    </div>
+    <div class="job-panel-body" id="job-panel-body">
+      <div class="muted" id="job-panel-status">No active job.</div>
+      <div class="job-panel-events" id="job-panel-events"></div>
+    </div>
+  </section>
+  <button class="job-panel-bubble is-hidden" id="job-panel-bubble" type="button">Show progress</button>
+  <script>
+    (function () {
+      var panel = document.getElementById('job-panel');
+      var bubble = document.getElementById('job-panel-bubble');
+      var header = document.getElementById('job-panel-header');
+      var toggle = document.getElementById('job-panel-toggle');
+      var hide = document.getElementById('job-panel-hide');
+      var open = document.getElementById('job-panel-open');
+      var status = document.getElementById('job-panel-status');
+      var events = document.getElementById('job-panel-events');
+      var params = new URLSearchParams(window.location.search);
+      var jobId = params.get('job_id') || localStorage.getItem('activeJobId');
+      var source = null;
+      var seenSeq = 0;
+
+      function friendlyMessage(data) {
+        var detail = data.data || {};
+        if (data.kind === 'story.fetch') return 'Looking up story ' + detail.story_id + '…';
+        if (data.kind === 'story.start') return 'Starting story: ' + (detail.title || detail.story_id);
+        if (data.kind === 'part.start') return 'Reading chapter ' + detail.ordinal + ': ' + detail.title;
+        if (data.kind === 'part.done') {
+          return 'Saved chapter ' + detail.ordinal + ' with ' + ((detail.inline_comments || 0) + (detail.end_comments || 0)) + ' comments';
+        }
+        if (data.kind === 'part.skipped') return 'Skipped chapter ' + detail.ordinal + ' because it is already archived';
+        if (data.kind === 'comments.failed') return 'Could not fetch ' + detail.kind + ' comments for one chapter; saved chapter body anyway';
+        if (data.kind === 'render.start') return 'Building output files…';
+        if (data.kind === 'render.failed') return 'Could not build ' + String(detail.format || '').toUpperCase() + ' output';
+        if (data.kind === 'story.done') return 'Story archived successfully';
+        if (data.kind === 'batch.start') return 'Starting batch with ' + detail.total + ' stories';
+        if (data.kind === 'batch.story') return 'Archiving story ' + (detail.index + 1) + ' of ' + detail.total;
+        if (data.kind === 'batch.done') return 'Batch finished';
+        if (data.kind === 'auth.failed') return 'Wattpad login expired or was rejected. Update cookie in Setup.';
+        if (data.kind === 'events.evicted') return 'Older progress messages were dropped to keep memory small.';
+        return 'Working…';
+      }
+
+      function setCollapsed(collapsed) {
+        panel.classList.toggle('is-collapsed', collapsed);
+        panel.classList.toggle('is-hidden', collapsed);
+        bubble.classList.toggle('is-hidden', !collapsed);
+        localStorage.setItem('jobPanelCollapsed', collapsed ? '1' : '0');
+      }
+
+      function appendEvent(ev) {
+        if (ev.seq && ev.seq <= seenSeq) return;
+        if (ev.seq) seenSeq = ev.seq;
+        var nearBottom = events.scrollTop + events.clientHeight >= events.scrollHeight - 16;
+        var div = document.createElement('div');
+        div.className = 'job-panel-event';
+        div.textContent = friendlyMessage(ev);
+        events.appendChild(div);
+        if (nearBottom) events.scrollTop = events.scrollHeight;
+      }
+
+      function connectStream() {
+        if (source) source.close();
+        source = new EventSource('/jobs/' + encodeURIComponent(jobId) + '/stream?after_seq=' + seenSeq);
+        source.onmessage = function (e) {
+          var data = JSON.parse(e.data);
+          if (data.kind === '__status__') {
+            status.textContent = 'Job ' + data.data.status + (data.data.error ? ': ' + data.data.error : '.');
+            source.close();
+            return;
+          }
+          appendEvent(data);
+        };
+        source.onerror = function () { source.close(); };
+      }
+
+      function loadJob() {
+        if (!jobId) return;
+        localStorage.setItem('activeJobId', jobId);
+        open.href = '/jobs/' + encodeURIComponent(jobId);
+        setCollapsed(localStorage.getItem('jobPanelCollapsed') === '1');
+        fetch('/jobs/' + encodeURIComponent(jobId) + '/summary')
+          .then(function (response) {
+            if (!response.ok) throw new Error('missing');
+            return response.json();
+          })
+          .then(function (job) {
+            status.textContent = 'Job ' + job.status + '.';
+            job.events.forEach(appendEvent);
+            setCollapsed(localStorage.getItem('jobPanelCollapsed') === '1');
+            if (job.status !== 'done' && job.status !== 'failed') connectStream();
+          })
+          .catch(function () {
+            localStorage.removeItem('activeJobId');
+            status.textContent = 'No active job.';
+          });
+      }
+
+      header.addEventListener('click', function () { setCollapsed(true); });
+      header.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setCollapsed(true);
+        }
+      });
+      hide.addEventListener('click', function (event) { event.stopPropagation(); setCollapsed(true); });
+      bubble.addEventListener('click', function () { setCollapsed(false); });
+      open.addEventListener('click', function (event) { event.stopPropagation(); });
+      toggle.addEventListener('click', function (event) { event.stopPropagation(); setCollapsed(true); });
+      loadJob();
+    })();
+  </script>
+</body>
+</html>

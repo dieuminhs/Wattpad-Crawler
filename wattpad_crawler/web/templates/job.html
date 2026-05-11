@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.job_id }} — Wattpad Crawler{% endblock %}
+{% block content %}
+  {% macro progress_message(ev) -%}
+    {%- if ev.kind == "story.fetch" -%}
+      Looking up story {{ ev.data.story_id }}…
+    {%- elif ev.kind == "story.start" -%}
+      Starting story: {{ ev.data.title or ev.data.story_id }}
+    {%- elif ev.kind == "part.start" -%}
+      Reading chapter {{ ev.data.ordinal }}: {{ ev.data.title }}
+    {%- elif ev.kind == "part.done" -%}
+      Saved chapter {{ ev.data.ordinal }} with {{ (ev.data.inline_comments or 0) + (ev.data.end_comments or 0) }} comments
+    {%- elif ev.kind == "part.skipped" -%}
+      Skipped chapter {{ ev.data.ordinal }} because it is already archived
+    {%- elif ev.kind == "comments.failed" -%}
+      Could not fetch {{ ev.data.kind }} comments for one chapter; saved chapter body anyway
+    {%- elif ev.kind == "render.start" -%}
+      Building output files…
+    {%- elif ev.kind == "render.failed" -%}
+      Could not build {{ ev.data.format | upper }} output
+    {%- elif ev.kind == "story.done" -%}
+      Story archived successfully
+    {%- elif ev.kind == "batch.start" -%}
+      Starting batch with {{ ev.data.total }} stories
+    {%- elif ev.kind == "batch.story" -%}
+      Archiving story {{ ev.data.index + 1 }} of {{ ev.data.total }}
+    {%- elif ev.kind == "batch.done" -%}
+      Batch finished
+    {%- elif ev.kind == "auth.failed" -%}
+      Wattpad login expired or was rejected. Update cookie in Setup.
+    {%- elif ev.kind == "events.evicted" -%}
+      Older progress messages were dropped to keep memory small.
+    {%- else -%}
+      Working…
+    {%- endif -%}
+  {%- endmacro %}
+  <h1>
+    <span class="status-{{ job.status.value }}">[{{ job.status.value }}]</span>
+    {{ job.kind }}
+  </h1>
+  <p class="muted">
+    Job ID: <code>{{ job.job_id }}</code>
+    {% for k, v in job.args.items() %}— {{ k }}: <code>{{ v }}</code>{% endfor %}
+  </p>
+
+  {% if job.error %}
+    <div class="card status-failed">
+      <strong>Error:</strong> {{ job.error }}
+    </div>
+  {% endif %}
+
+  <h2>Progress</h2>
+  <div class="event-log" id="event-log">
+    {% for ev in job.events %}
+      <div class="ev">{{ progress_message(ev) }}</div>
+    {% endfor %}
+  </div>
+
+  {% if job.status.value not in ("done", "failed") %}
+    <script>
+      (function () {
+        var log = document.getElementById('event-log');
+        var es = new EventSource("/jobs/{{ job.job_id }}/stream?after_seq={{ job.next_seq }}");
+        function friendlyMessage(data) {
+          var detail = data.data || {};
+          if (data.kind === 'story.fetch') return 'Looking up story ' + detail.story_id + '…';
+          if (data.kind === 'story.start') return 'Starting story: ' + (detail.title || detail.story_id);
+          if (data.kind === 'part.start') return 'Reading chapter ' + detail.ordinal + ': ' + detail.title;
+          if (data.kind === 'part.done') {
+            var comments = (detail.inline_comments || 0) + (detail.end_comments || 0);
+            return 'Saved chapter ' + detail.ordinal + ' with ' + comments + ' comments';
+          }
+          if (data.kind === 'part.skipped') return 'Skipped chapter ' + detail.ordinal + ' because it is already archived';
+          if (data.kind === 'comments.failed') return 'Could not fetch ' + detail.kind + ' comments for one chapter; saved chapter body anyway';
+          if (data.kind === 'render.start') return 'Building output files…';
+          if (data.kind === 'render.failed') return 'Could not build ' + String(detail.format || '').toUpperCase() + ' output';
+          if (data.kind === 'story.done') return 'Story archived successfully';
+          if (data.kind === 'batch.start') return 'Starting batch with ' + detail.total + ' stories';
+          if (data.kind === 'batch.story') return 'Archiving story ' + (detail.index + 1) + ' of ' + detail.total;
+          if (data.kind === 'batch.done') return 'Batch finished';
+          if (data.kind === 'auth.failed') return 'Wattpad login expired or was rejected. Update cookie in Setup.';
+          if (data.kind === 'events.evicted') return 'Older progress messages were dropped to keep memory small.';
+          return 'Working…';
+        }
+        es.onmessage = function (e) {
+          var data = JSON.parse(e.data);
+          if (data.kind === '__status__') {
+            es.close();
+            setTimeout(function () { location.reload(); }, 500);
+            return;
+          }
+          var div = document.createElement('div');
+          div.className = 'ev';
+          div.textContent = friendlyMessage(data);
+          log.appendChild(div);
+          log.scrollTop = log.scrollHeight;
+        };
+        es.onerror = function () { es.close(); };
+      })();
+    </script>
+  {% endif %}
+
+  <p><a href="/">← Dashboard</a></p>
+{% endblock %}

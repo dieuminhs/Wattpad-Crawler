@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Config — Wattpad Crawler{% endblock %}
+{% block content %}
+  <h1>Archive settings</h1>
+  <p class="muted">Tune crawl speed without editing <code>_config.toml</code> manually.</p>
+
+  {% if saved %}
+    <p class="status-done">Saved settings.</p>
+  {% endif %}
+  {% if error_message %}
+    <div class="card status-failed" role="alert">{{ error_message }}</div>
+  {% endif %}
+
+  <form method="post" action="/config" class="card">
+    <p>
+      <label for="rate_limit_per_sec"><strong>Requests per second</strong></label><br>
+      <input type="text" id="rate_limit_per_sec" name="rate_limit_per_sec" value="{{ cfg.rate_limit_per_sec }}" required>
+      <span class="muted">Shared across all chapter workers. Keep low to avoid rate limits.</span>
+    </p>
+    <p>
+      <label for="workers_per_story"><strong>Chapter workers per story</strong></label><br>
+      <input type="text" id="workers_per_story" name="workers_per_story" value="{{ cfg.workers_per_story }}" required>
+      <span class="muted">Fetches independent chapters concurrently.</span>
+    </p>
+    <p><button type="submit">Save settings</button></p>
+  </form>
+{% endblock %}

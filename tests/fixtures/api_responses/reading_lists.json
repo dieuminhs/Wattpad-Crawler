@@ -1,0 +1,6 @@
+{
+  "lists": [
+    {"id": "L1", "name": "Favorites", "numStories": 2},
+    {"id": "L2", "name": "To Read", "numStories": 5}
+  ]
+}
