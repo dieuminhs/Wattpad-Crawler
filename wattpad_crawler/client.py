@@ -60,14 +60,17 @@ class RateLimitedClient:
         resp: httpx.Response | None = None
         for attempt in range(1, max_attempts + 1):
             self._bucket.take()
+            logger.info("GET %s attempt %d", url, attempt)
             try:
                 resp = self._client.get(url, **kwargs)
             except httpx.RequestError as e:
+                logger.warning("GET %s attempt %d failed: %s", url, attempt, e)
                 last_exc = e
                 resp = None
                 if attempt < max_attempts:
                     self._sleep_backoff(attempt)
                 continue
+            logger.info("HTTP %d %s attempt %d", resp.status_code, url, attempt)
             # We got a response — clear any stashed network error.
             last_exc = None
 

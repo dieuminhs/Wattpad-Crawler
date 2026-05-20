@@ -330,6 +330,60 @@ def archive_story(
     repo.close()
 
 
+def refresh_story_comments(
+    cfg: Config,
+    client: RateLimitedClient,
+    story_id: str,
+    *,
+    deps: JobDeps | None = None,
+    progress: ProgressCallback | None = None,
+) -> None:
+    deps = deps or _default_deps()
+    emit = progress or _noop_progress
+    logger.info("Refreshing comments for story %s", story_id)
+    emit("comments.refresh.start", {"story_id": story_id})
+    story: Story = deps.fetch_story(client, story_id)
+    store.write_story_metadata(cfg.output_dir, story)
+    repo = ArchiveRepository(cfg.output_dir).connect()
+    try:
+        with repo.transaction():
+            repo.upsert_story(story)
+        for part in story.parts:
+            emit(
+                "comments.refresh.part",
+                {"part_id": part.part_id, "ordinal": part.ordinal, "title": part.title},
+            )
+            inline = _fetch_comments_or_empty(
+                deps.fetch_inline_comments,
+                client,
+                part.part_id,
+                "inline",
+                emit,
+            )
+            end = _fetch_comments_or_empty(
+                deps.fetch_end_comments,
+                client,
+                part.part_id,
+                "end",
+                emit,
+            )
+            store.write_comment_files(cfg.output_dir, story, part, inline, end)
+            with repo.transaction():
+                repo.replace_comments(part.part_id, inline, end)
+            emit(
+                "comments.refresh.done",
+                {
+                    "part_id": part.part_id,
+                    "ordinal": part.ordinal,
+                    "inline_comments": len(inline),
+                    "end_comments": len(end),
+                },
+            )
+        emit("comments.refresh.story_done", {"story_id": story.story_id})
+    finally:
+        repo.close()
+
+
 class ResolveError(Exception):
     pass
 

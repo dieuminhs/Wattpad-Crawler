@@ -100,6 +100,7 @@ def _comment_to_dict(c: Comment) -> dict:
         "body": _scrub_surrogates(c.body),
         "created_at": _scrub_surrogates(c.created_at),
         "paragraph_id": _scrub_surrogates(c.paragraph_id) if c.paragraph_id else None,
+        "like_count": c.like_count,
         "replies": [_comment_to_dict(r) for r in c.replies],
     }
 
@@ -127,6 +128,25 @@ def write_part_files(
     }, ensure_ascii=False, indent=2))
     atomic_write_text(parts_dir / f"{base}.html", raw_html)
     atomic_write_text(parts_dir / f"{base}.txt", content.text)
+    atomic_write_text(
+        parts_dir / f"{cbase}_comments-inline.json",
+        json.dumps([_comment_to_dict(c) for c in inline_comments], ensure_ascii=False, indent=2),
+    )
+    atomic_write_text(
+        parts_dir / f"{cbase}_comments-end.json",
+        json.dumps([_comment_to_dict(c) for c in end_comments], ensure_ascii=False, indent=2),
+    )
+
+
+def write_comment_files(
+    output_dir: Path,
+    story: Story,
+    part: Part,
+    inline_comments: list[Comment],
+    end_comments: list[Comment],
+) -> None:
+    parts_dir = story_dir(output_dir, story) / "parts"
+    cbase = _comments_basename(part)
     atomic_write_text(
         parts_dir / f"{cbase}_comments-inline.json",
         json.dumps([_comment_to_dict(c) for c in inline_comments], ensure_ascii=False, indent=2),

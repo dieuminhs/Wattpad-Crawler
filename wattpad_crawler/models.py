@@ -40,4 +40,5 @@ class Comment:
     body: str
     created_at: str
     paragraph_id: str | None = None     # set for inline comments
+    like_count: int = 0
     replies: list["Comment"] = field(default_factory=list)

@@ -35,6 +35,64 @@ def test_static_css_served(output_dir: Path):
     assert "text/css" in r.headers["content-type"]
 
 
+def test_reader_comment_button_hover_scales_without_dropping(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/static/style.css")
+
+    assert r.status_code == 200
+    assert ".comment-count-button:hover" in r.text
+    assert "transform: translateY(-50%) scale(1.08);" in r.text
+    assert "transition: transform 0.16s ease" in r.text
+
+
+def test_reader_comment_button_click_toggles_drawer_closed(output_dir: Path):
+    template = (
+        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+    ).read_text(encoding="utf-8")
+
+    assert "if (drawer.classList.contains('is-open'))" in template
+    assert "hideDrawer();" in template
+
+
+def test_reader_comment_drawer_has_visible_close_button(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    template = (
+        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+    ).read_text(encoding="utf-8")
+    css = client.get("/static/style.css")
+
+    assert 'aria-label="Hide comment section"' in template
+    assert 'class="comment-drawer-close"' in template
+    assert 'class="comment-drawer-edge-close"' in template
+    assert 'class="comment-drawer-body"' in template
+    assert (
+        "drawer.querySelectorAll('.comment-drawer-close, .comment-drawer-edge-close')"
+        in template
+    )
+    assert ".comment-drawer-close" in css.text
+    assert ".comment-drawer-edge-close" in css.text
+    assert ".comment-drawer-body" in css.text
+    assert "min-width: 2.25rem;" in css.text
+    assert "justify-content: space-between;" in css.text
+    assert "flex: 0 0 auto;" in css.text
+    assert "overflow: visible;" in css.text
+    assert "overflow-y: auto;" in css.text
+    assert "left: -1rem;" in css.text
+    assert "z-index: 11;" in css.text
+    assert "transform: translateY(-50%);" in css.text
+    assert "line-height: 2rem;" in css.text
+    assert "font-weight: 700;" in css.text
+    assert "transform: translateY(-50%) scale(1.08);" in css.text
+    assert "top: var(--topbar-offset);" in css.text
+    assert "height: calc(100vh - var(--topbar-offset));" in css.text
+    assert "z-index: 10;" in css.text
+
+
 def test_setup_page_renders(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
@@ -86,6 +144,7 @@ def test_pages_cache_bust_static_css(output_dir: Path):
     r = client.get("/setup")
     assert r.status_code == 200
     assert 'href="/static/style.css?v=' in r.text
+    assert "20260511-ui-refresh" not in r.text
 
 
 def test_setup_post_saves_cookie(output_dir: Path, monkeypatch):
@@ -167,7 +226,19 @@ def test_base_page_renders_brand_shell(output_dir: Path):
     assert r.status_code == 200
     assert 'class="brand-mark"' in r.text
     assert 'class="topbar-links"' in r.text
+    assert 'class="topbar-link is-active" href="/"' in r.text
     assert "app-shell" in r.text
+
+
+def test_library_marks_topbar_active(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library")
+
+    assert r.status_code == 200
+    assert 'class="topbar-link is-active" href="/library"' in r.text
 
 
 def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
@@ -360,6 +431,102 @@ def test_library_lists_stories(output_dir: Path):
     assert "Reset for refetch" in r.text
     assert "Remove from archive" in r.text
     assert "Bookmark" in r.text
+    assert 'name="story_ids" value="42"' in r.text
+    assert 'name="bulk_action"' in r.text
+    assert "Refresh comments" in r.text
+    assert 'id="library-select-all"' in r.text
+    assert "Select all" in r.text
+    assert 'class="sr-only"' in r.text
+    assert ">Select</label>" not in r.text
+    assert "library-bulk-card" in r.text
+    assert 'class="library-cover-placeholder" aria-hidden="true"' in r.text
+    assert "no cover" not in r.text
+
+
+def test_library_story_cards_show_read_actions(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42",
+        "title": "My Tale",
+        "author_username": "alice",
+        "tags": [],
+        "description": "",
+        "parts": [
+            {"part_id": "100", "ordinal": 1, "title": "One"},
+            {"part_id": "101", "ordinal": 3, "title": "Three"},
+        ],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library")
+
+    assert r.status_code == 200
+    assert 'href="/read/alice/42_my-tale/1"' in r.text
+    assert 'href="/read/alice/42_my-tale/3"' in r.text
+    assert 'data-continue-story="42"' in r.text
+    assert 'data-default-continue="/read/alice/42_my-tale/1"' in r.text
+
+
+def test_library_bulk_refresh_comments_starts_job(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+    captured: list[str] = []
+
+    def fake_refresh_comments(cfg_arg, _client, story_id, *, deps=None, progress=None):
+        captured.append(story_id)
+        if progress:
+            progress("comments.refresh.story_done", {"story_id": story_id})
+
+    monkeypatch.setattr("wattpad_crawler.web.routes.refresh_story_comments", fake_refresh_comments)
+
+    r = client.post(
+        "/library/bulk",
+        data={"bulk_action": "refresh_comments", "story_ids": ["42", "77"]},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/?job_id=")
+    job_id = r.headers["location"].split("=", 1)[1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
+        time.sleep(0.01)
+    assert captured == ["42", "77"]
+
+
+def test_library_bulk_remove_deletes_selected_stories(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    for story_id in ("42", "77"):
+        story_dir = output_dir / "stories" / "alice" / f"{story_id}_story"
+        story_dir.mkdir(parents=True)
+        (story_dir / "metadata.json").write_text(json.dumps({
+            "story_id": story_id,
+            "title": "Story",
+            "author_username": "alice",
+            "tags": [],
+            "description": "",
+            "parts": [],
+        }))
+
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.post(
+        "/library/bulk",
+        data={"bulk_action": "remove", "story_ids": ["42", "77"]},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/library?removed=2"
+    assert not (output_dir / "stories" / "alice" / "42_story").exists()
+    assert not (output_dir / "stories" / "alice" / "77_story").exists()
 
 
 def test_library_search_filters_by_title_author_description_tags_and_id(output_dir: Path):
@@ -676,7 +843,10 @@ def test_reader_story_toc(output_dir: Path):
     (sd / "metadata.json").write_text(json.dumps({
         "story_id": "42", "title": "My Tale", "author_username": "alice",
         "tags": [], "description": "",
-        "parts": [{"part_id": "100", "ordinal": 1, "title": "One"}],
+        "parts": [
+            {"part_id": "100", "ordinal": 1, "title": "One"},
+            {"part_id": "101", "ordinal": 2, "title": "Two"},
+        ],
     }))
     app = build_app(cfg)
     client = TestClient(app)
@@ -684,6 +854,9 @@ def test_reader_story_toc(output_dir: Path):
     assert r.status_code == 200
     assert "My Tale" in r.text
     assert "One" in r.text
+    assert 'href="/read/alice/42_my-tale/1"' in r.text
+    assert 'href="/read/alice/42_my-tale/2"' in r.text
+    assert 'data-continue-story="42"' in r.text
 
 
 def test_reader_chapter_view(output_dir: Path):
@@ -701,6 +874,35 @@ def test_reader_chapter_view(output_dir: Path):
     r = client.get("/read/alice/42_my-tale/1")
     assert r.status_code == 200
     assert "Body of chapter one." in r.text
+    assert "lastReadByStory" in r.text
+    assert "/read/alice/42_my-tale/1" in r.text
+
+
+def test_reader_chapter_view_has_floating_prev_next_nav(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    (sd / "parts").mkdir(parents=True)
+    (sd / "parts" / "02_101_two.txt").write_text("Body of chapter two.")
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "",
+        "parts": [
+            {"part_id": "100", "ordinal": 1, "title": "One"},
+            {"part_id": "101", "ordinal": 2, "title": "Two"},
+            {"part_id": "102", "ordinal": 3, "title": "Three"},
+        ],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/read/alice/42_my-tale/2")
+
+    assert r.status_code == 200
+    assert 'class="reader-floating-nav"' in r.text
+    assert 'href="/read/alice/42_my-tale/1"' in r.text
+    assert 'href="/read/alice/42_my-tale/3"' in r.text
+    assert "readerFloatingNav" in r.text
+    assert "reader-nav-hidden" in r.text
 
 
 def test_reader_chapter_view_reads_from_archive_database(output_dir: Path):
@@ -753,6 +955,7 @@ def test_reader_chapter_view_groups_inline_comments_by_paragraph(output_dir: Pat
             "body": "Inline on first.",
             "created_at": "t",
             "paragraph_id": "p1",
+            "like_count": 5,
             "replies": [],
         },
         {
@@ -793,8 +996,14 @@ def test_reader_chapter_view_groups_inline_comments_by_paragraph(output_dir: Pat
     assert "Hide comments" in r.text
     assert "bob" in r.text
     assert "Inline on first." in r.text
+    assert 'class="comment-like-count"' in r.text
+    assert "♡" in r.text
+    assert "5" in r.text
     assert "carol" in r.text
     assert "Inline on second." in r.text
+    assert 'class="comment-replies-toggle" type="button" aria-expanded="false"' in r.text
+    assert "Show 1 reply" in r.text
+    assert 'class="comment-replies" hidden' in r.text
     assert "dave" in r.text
     assert "Reply." in r.text
 

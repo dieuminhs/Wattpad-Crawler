@@ -8,6 +8,7 @@ from wattpad_crawler.models import Comment
 logger = logging.getLogger(__name__)
 
 PART_COMMENTS_URL = "https://www.wattpad.com/v4/parts/{part_id}/comments?limit=100"
+COMMENT_REPLIES_URL = "https://www.wattpad.com/v4/comments/{comment_id}/replies?limit=100"
 _MAX_PAGES = 200
 # REL-01 / D-11: cap nested-reply recursion to avoid RecursionError on
 # malformed or adversarial Wattpad responses. Module constant rather than
@@ -46,7 +47,7 @@ def _parse_one(
         if raw.get("replies"):
             truncated = True
     else:
-        replies_raw = raw.get("replies") or []
+        replies_raw = raw.get("replies") or raw.get("latestReplies") or []
         replies = []
         for r in replies_raw:
             if not isinstance(r, dict):
@@ -64,15 +65,31 @@ def _parse_one(
             body=raw.get("body") or "",
             created_at=raw.get("createdAt") or raw.get("createDate") or "",
             paragraph_id=raw.get("paragraphId"),
+            like_count=_like_count(raw),
             replies=replies,
         ),
         truncated,
     )
 
+def _like_count(raw: dict[str, Any]) -> int:
+    count = None
+    for key in ("voteCount", "votesCount", "likeCount", "likesCount", "numLikes", "numVotes", "likes", "votes"):
+        value = raw.get(key)
+        if isinstance(value, dict):
+            value = value.get("count") or value.get("total")
+        if value is not None:
+            count = value
+            break
+    try:
+        return int(count or 0)
+    except (TypeError, ValueError):
+        return 0
+
 
 def parse_comments_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]:
     raw_comments = raw.get("comments") or []
     parsed: list[Comment] = []
+    parent_by_id: dict[str, str | None] = {}
     for r in raw_comments:
         if not isinstance(r, dict):
             continue
@@ -80,6 +97,7 @@ def parse_comments_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]
         if comment is None:
             continue
         parsed.append(comment)
+        parent_by_id[comment.comment_id] = _parent_comment_id(r)
         if was_truncated:
             # D-18: one warning per truncated top-level subtree, naming
             # the comment id and the depth cap. Loud enough to notice in
@@ -89,7 +107,63 @@ def parse_comments_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]
                 comment.comment_id,
                 _MAX_COMMENT_DEPTH,
             )
+    return _nest_flat_replies(parsed, parent_by_id), raw.get("nextUrl")
+
+def parse_replies_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]:
+    raw_replies = raw.get("replies") or []
+    parsed: list[Comment] = []
+    for r in raw_replies:
+        if not isinstance(r, dict):
+            continue
+        comment, was_truncated = _parse_one(r)
+        if comment is None:
+            continue
+        parsed.append(comment)
+        if was_truncated:
+            logger.warning(
+                "comment %s truncated: replies beyond depth %d dropped",
+                comment.comment_id,
+                _MAX_COMMENT_DEPTH,
+            )
     return parsed, raw.get("nextUrl")
+
+
+def _parent_comment_id(raw: dict[str, Any]) -> str | None:
+    parent_id = (
+        raw.get("parentId")
+        or raw.get("parent_id")
+        or raw.get("parentCommentId")
+        or raw.get("parent_comment_id")
+    )
+    return str(parent_id) if parent_id is not None else None
+
+def _reply_count(raw: dict[str, Any]) -> int:
+    count = raw.get("replyCount")
+    if count is None:
+        count = raw.get("reply_count")
+    if count is None:
+        count = raw.get("numReplies")
+    try:
+        return int(count or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _nest_flat_replies(
+    comments: list[Comment],
+    parent_by_id: dict[str, str | None],
+) -> list[Comment]:
+    by_id = {comment.comment_id: comment for comment in comments}
+    roots: list[Comment] = []
+    for comment in comments:
+        parent_id = parent_by_id.get(comment.comment_id)
+        parent = by_id.get(parent_id or "")
+        if parent is None:
+            roots.append(comment)
+            continue
+        if comment not in parent.replies:
+            parent.replies.append(comment)
+    return roots
 
 
 def _fetch_all(client: RateLimitedClient, url: str) -> list[Comment]:
@@ -101,9 +175,46 @@ def _fetch_all(client: RateLimitedClient, url: str) -> list[Comment]:
         pages += 1
         data = client.get(url).json()
         comments, next_url = parse_comments_page(data)
+        _fetch_declared_replies(client, comments, data)
         out.extend(comments)
         url = next_url or ""
     return out
+
+def _fetch_declared_replies(
+    client: RateLimitedClient,
+    comments: list[Comment],
+    raw_page: dict[str, Any],
+) -> None:
+    raw_by_id = {
+        str(raw["id"]): raw
+        for raw in raw_page.get("comments") or []
+        if isinstance(raw, dict) and raw.get("id") is not None
+    }
+    for comment in comments:
+        raw = raw_by_id.get(comment.comment_id)
+        if raw is None or comment.replies or _reply_count(raw) <= 0:
+            continue
+        replies = _fetch_reply_pages(
+            client,
+            COMMENT_REPLIES_URL.format(comment_id=_url_comment_id(comment.comment_id)),
+        )
+        comment.replies.extend(replies)
+
+def _fetch_reply_pages(client: RateLimitedClient, url: str) -> list[Comment]:
+    out: list[Comment] = []
+    seen: set[str] = set()
+    pages = 0
+    while url and url not in seen and pages < _MAX_PAGES:
+        seen.add(url)
+        pages += 1
+        data = client.get(url).json()
+        replies, next_url = parse_replies_page(data)
+        out.extend(replies)
+        url = next_url or ""
+    return out
+
+def _url_comment_id(comment_id: str) -> str:
+    return quote(comment_id.replace("#", "_"), safe="")
 
 
 def fetch_inline_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:

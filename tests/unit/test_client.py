@@ -99,6 +99,19 @@ def make_client(tmp_path, transport):
     return rlc
 
 
+def test_client_logs_api_get_attempts(tmp_path, caplog):
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={"ok": True}))
+    rlc = make_client(tmp_path, transport)
+
+    with caplog.at_level("INFO", logger="wattpad_crawler.client"):
+        r = rlc.get("https://example.com/v4/parts/1/comments")
+
+    assert r.status_code == 200
+    assert "GET https://example.com/v4/parts/1/comments attempt 1" in caplog.text
+    assert "HTTP 200 https://example.com/v4/parts/1/comments attempt 1" in caplog.text
+    rlc.close()
+
+
 def test_client_retries_on_5xx(tmp_path):
     calls = {"n": 0}
 

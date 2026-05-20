@@ -36,6 +36,11 @@ def scan_library(output_dir: Path) -> list[LibraryEntry]:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
+            ordinals = [
+                int(part.get("ordinal", 0))
+                for part in meta.get("parts", []) or []
+                if isinstance(part, dict) and part.get("ordinal") is not None
+            ]
             entries.append(LibraryEntry(
                 story_id=str(meta.get("story_id", "")),
                 title=meta.get("title", ""),
@@ -46,6 +51,8 @@ def scan_library(output_dir: Path) -> list[LibraryEntry]:
                 dir_name=story_dir.name,
                 has_cover=(story_dir / "cover.jpg").exists(),
                 storage_path=story_dir,
+                first_ordinal=min(ordinals) if ordinals else None,
+                last_ordinal=max(ordinals) if ordinals else None,
             ))
     entries.sort(key=lambda e: (e.author.lower(), e.title.lower()))
     return entries

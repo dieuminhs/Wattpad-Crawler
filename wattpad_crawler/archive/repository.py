@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS comments (
     user                TEXT NOT NULL DEFAULT '',
     body                TEXT NOT NULL DEFAULT '',
     created_at          TEXT NOT NULL DEFAULT '',
+    like_count          INTEGER NOT NULL DEFAULT 0,
     ordinal             INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (part_id) REFERENCES parts(part_id) ON DELETE CASCADE,
     FOREIGN KEY (parent_comment_id) REFERENCES comments(comment_id) ON DELETE CASCADE
@@ -139,6 +140,11 @@ class ArchiveRepository:
         }
         if "bookmarked" not in story_columns:
             self.db.execute("ALTER TABLE stories ADD COLUMN bookmarked INTEGER NOT NULL DEFAULT 0")
+        comment_columns = {
+            row["name"] for row in self.db.execute("PRAGMA table_info(comments)")
+        }
+        if "like_count" not in comment_columns:
+            self.db.execute("ALTER TABLE comments ADD COLUMN like_count INTEGER NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         if self.conn is not None:
@@ -295,9 +301,9 @@ class ArchiveRepository:
                 """
                 INSERT INTO comments(
                     comment_id, part_id, parent_comment_id, paragraph_id,
-                    comment_kind, depth, user, body, created_at, ordinal
+                    comment_kind, depth, user, body, created_at, like_count, ordinal
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(comment_id) DO UPDATE SET
                     part_id = excluded.part_id,
                     parent_comment_id = excluded.parent_comment_id,
@@ -307,6 +313,7 @@ class ArchiveRepository:
                     user = excluded.user,
                     body = excluded.body,
                     created_at = excluded.created_at,
+                    like_count = excluded.like_count,
                     ordinal = excluded.ordinal
                 """,
                 (
@@ -319,6 +326,7 @@ class ArchiveRepository:
                     comment.user,
                     comment.body,
                     comment.created_at,
+                    comment.like_count,
                     ordinal,
                 ),
             )
@@ -376,6 +384,23 @@ class ArchiveRepository:
     def end_comments(self, part_id: str) -> list[dict[str, Any]]:
         return self._comments_for(part_id, "end")
 
+    def replace_comments(
+        self,
+        part_id: str,
+        inline_comments: list[Comment],
+        end_comments: list[Comment],
+    ) -> bool:
+        part_exists = self.db.execute(
+            "SELECT 1 FROM parts WHERE part_id = ?",
+            (part_id,),
+        ).fetchone()
+        if part_exists is None:
+            return False
+        self.db.execute("DELETE FROM comments WHERE part_id = ?", (part_id,))
+        self._insert_comments(part_id, inline_comments, "inline")
+        self._insert_comments(part_id, end_comments, "end")
+        return True
+
     def _comments_for(self, part_id: str, comment_kind: str) -> list[dict[str, Any]]:
         rows = [
             dict(row)
@@ -396,6 +421,7 @@ class ArchiveRepository:
                 "user": row["user"],
                 "body": row["body"],
                 "created_at": row["created_at"],
+                "like_count": row["like_count"],
                 "paragraph_id": row["paragraph_id"],
                 "replies": [],
             }
@@ -413,7 +439,10 @@ class ArchiveRepository:
         entries = []
         rows = self.db.execute(
             """
-            SELECT s.*, COUNT(p.part_id) AS parts_count
+            SELECT s.*,
+                   COUNT(p.part_id) AS parts_count,
+                   MIN(p.ordinal) AS first_ordinal,
+                   MAX(p.ordinal) AS last_ordinal
             FROM stories s
             LEFT JOIN parts p ON p.story_id = s.story_id
             GROUP BY s.story_id
@@ -444,6 +473,8 @@ class ArchiveRepository:
                     has_cover=(story_path / "cover.jpg").exists(),
                     storage_path=story_path,
                     bookmarked=story["bookmarked"],
+                    first_ordinal=row["first_ordinal"],
+                    last_ordinal=row["last_ordinal"],
                 )
             )
         return entries

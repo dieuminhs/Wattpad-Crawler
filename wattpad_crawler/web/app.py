@@ -16,6 +16,8 @@ def build_app(cfg: Config) -> FastAPI:
     app = FastAPI(title="Wattpad Crawler", docs_url=None, redoc_url=None)
     app.state.cfg = cfg
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    style_mtime = int((_STATIC_DIR / "style.css").stat().st_mtime)
+    app.state.templates.env.globals["static_version"] = str(style_mtime)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     from wattpad_crawler.web.runner import JobManager, JobRunner

@@ -7,6 +7,13 @@
       <p class="muted">by {{ meta.author_username }}</p>
       {% if meta.description %}<p>{{ meta.description }}</p>{% endif %}
       {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+      {% if first_ord %}
+        <p class="reader-nav-actions">
+          <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
+          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
+          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
+        </p>
+      {% endif %}
       <h2>Chapters</h2>
       <ol>
         {% for p in meta.parts %}
@@ -25,6 +32,11 @@
     {% else %}
       <p class="muted"><a href="/read/{{ author }}/{{ dir_name }}">← {{ meta.title }}</a></p>
       <h1>{{ chapter.title }}</h1>
+      <form method="post" action="/jobs" class="reader-action-form">
+        <input type="hidden" name="kind" value="comments">
+        <input type="hidden" name="story_id" value="{{ meta.story_id }}">
+        <button type="submit">Refresh comments</button>
+      </form>
       <div class="chapter-body">
         {% if chapter.paragraphs %}
           {% for paragraph in chapter.paragraphs %}
@@ -42,16 +54,28 @@
                 <aside class="comment-drawer" id="comments-{{ paragraph.id }}" hidden aria-hidden="true">
                   <div class="comment-drawer-header">
                     <h2>{{ paragraph.comment_count }} inline comment{% if paragraph.comment_count != 1 %}s{% endif %}</h2>
-                    <button class="comment-drawer-close" type="button">Hide comments</button>
+                    <button class="comment-drawer-close" type="button" aria-label="Hide comment section" title="Hide comment section">Hide comments ×</button>
                   </div>
+                  <button class="comment-drawer-edge-close" type="button" aria-label="Hide comment section" title="Hide comment section">&gt;</button>
+                  <div class="comment-drawer-body">
                   {% for comment in paragraph.comments recursive %}
                     <article class="comment">
-                      <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+                      <div class="comment-main">
+                        <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+                        <span class="comment-like-count" aria-label="{{ comment.like_count | default(0) }} like{% if (comment.like_count | default(0)) != 1 %}s{% endif %}">
+                          <span aria-hidden="true">♡</span>
+                          {% if comment.like_count | default(0) %}<span>{{ comment.like_count }}</span>{% endif %}
+                        </span>
+                      </div>
                       {% if comment.replies %}
-                        <div class="comment-replies">{{ loop(comment.replies) }}</div>
+                        <button class="comment-replies-toggle" type="button" aria-expanded="false">
+                          Show {{ comment.replies | length }} repl{% if (comment.replies | length) == 1 %}y{% else %}ies{% endif %}
+                        </button>
+                        <div class="comment-replies" hidden>{{ loop(comment.replies) }}</div>
                       {% endif %}
                     </article>
                   {% endfor %}
+                  </div>
                 </aside>
               {% endif %}
             </section>
@@ -65,9 +89,18 @@
           <h2>End comments</h2>
           {% for comment in chapter.end_comments recursive %}
             <article class="comment">
-              <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+              <div class="comment-main">
+                <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
+                <span class="comment-like-count" aria-label="{{ comment.like_count | default(0) }} like{% if (comment.like_count | default(0)) != 1 %}s{% endif %}">
+                  <span aria-hidden="true">♡</span>
+                  {% if comment.like_count | default(0) %}<span>{{ comment.like_count }}</span>{% endif %}
+                </span>
+              </div>
               {% if comment.replies %}
-                <div class="comment-replies">{{ loop(comment.replies) }}</div>
+                <button class="comment-replies-toggle" type="button" aria-expanded="false">
+                  Show {{ comment.replies | length }} repl{% if (comment.replies | length) == 1 %}y{% else %}ies{% endif %}
+                </button>
+                <div class="comment-replies" hidden>{{ loop(comment.replies) }}</div>
               {% endif %}
             </article>
           {% endfor %}
@@ -77,11 +110,31 @@
         {% if chapter.prev_ord %}<a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.prev_ord }}">← Previous</a>{% endif %}
         {% if chapter.next_ord %} · <a href="/read/{{ author }}/{{ dir_name }}/{{ chapter.next_ord }}">Next →</a>{% endif %}
       </p>
+      {% if chapter.prev_ord or chapter.next_ord %}
+        <nav class="reader-floating-nav" id="readerFloatingNav" aria-label="Chapter navigation">
+          {% if chapter.prev_ord %}
+            <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ chapter.prev_ord }}">← Previous</a>
+          {% else %}
+            <span class="btn btn-light is-disabled">← Previous</span>
+          {% endif %}
+          {% if chapter.next_ord %}
+            <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ chapter.next_ord }}">Next →</a>
+          {% else %}
+            <span class="btn is-disabled">Next →</span>
+          {% endif %}
+        </nav>
+      {% endif %}
       <script>
+        (function () {
+          let lastRead = {};
+          try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
+          lastRead['{{ meta.story_id }}'] = '/read/{{ author }}/{{ dir_name }}/{{ chapter.ordinal }}';
+          localStorage.setItem('lastReadByStory', JSON.stringify(lastRead));
+        })();
         document.querySelectorAll('.comment-count-button').forEach((button) => {
           const drawer = document.getElementById(button.dataset.commentsTarget);
           if (!drawer) return;
-          const close = drawer.querySelector('.comment-drawer-close');
+          const closeButtons = drawer.querySelectorAll('.comment-drawer-close, .comment-drawer-edge-close');
           const hideDrawer = () => {
             drawer.classList.remove('is-open');
             drawer.hidden = true;
@@ -89,6 +142,10 @@
             button.setAttribute('aria-expanded', 'false');
           };
           button.addEventListener('click', () => {
+            if (drawer.classList.contains('is-open')) {
+              hideDrawer();
+              return;
+            }
             document.querySelectorAll('.comment-drawer.is-open').forEach((openDrawer) => {
               if (openDrawer !== drawer) {
                 openDrawer.classList.remove('is-open');
@@ -104,8 +161,42 @@
             drawer.setAttribute('aria-hidden', 'false');
             button.setAttribute('aria-expanded', 'true');
           });
-          if (close) close.addEventListener('click', hideDrawer);
+          closeButtons.forEach((closeButton) => closeButton.addEventListener('click', hideDrawer));
         });
+        document.querySelectorAll('.comment-replies-toggle').forEach((button) => {
+          const replies = button.nextElementSibling;
+          if (!replies || !replies.classList.contains('comment-replies')) return;
+          const hiddenLabel = button.textContent.trim();
+          const shownLabel = hiddenLabel.replace(/^Show /, 'Hide ');
+          button.addEventListener('click', () => {
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            replies.hidden = expanded;
+            button.textContent = expanded ? hiddenLabel : shownLabel;
+          });
+        });
+        (function () {
+          const nav = document.getElementById('readerFloatingNav');
+          if (!nav) return;
+          let lastY = window.scrollY;
+          window.addEventListener('scroll', () => {
+            const currentY = window.scrollY;
+            nav.classList.toggle('reader-nav-hidden', currentY > lastY && currentY > 80);
+            lastY = Math.max(currentY, 0);
+          }, { passive: true });
+        })();
+      </script>
+    {% endif %}
+    {% if not chapter and first_ord %}
+      <script>
+        (function () {
+          let lastRead = {};
+          try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
+          document.querySelectorAll('[data-continue-story]').forEach((link) => {
+            const storyId = link.dataset.continueStory;
+            link.href = lastRead[storyId] || link.dataset.defaultContinue;
+          });
+        })();
       </script>
     {% endif %}
   </div>

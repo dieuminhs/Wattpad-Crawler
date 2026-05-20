@@ -42,19 +42,43 @@
   </section>
 
   {% if entries %}
+    <div class="library-bulk-card">
+      <label class="library-select-all">
+        <input id="library-select-all" type="checkbox">
+        Select all
+      </label>
+      <form class="library-bulk-actions" id="library-bulk-form" method="post" action="/library/bulk">
+        <select name="bulk_action" aria-label="Bulk action">
+          <option value="refresh_comments">Refresh comments</option>
+          <option value="remove">Remove from archive</option>
+        </select>
+        <button type="submit">Apply to selected</button>
+      </form>
+    </div>
     <div class="library-grid">
       {% for e in entries %}
         <div class="library-card">
+          <label class="library-select-story">
+            <input form="library-bulk-form" type="checkbox" name="story_ids" value="{{ e.story_id }}">
+            <span class="sr-only">Select {{ e.title }}</span>
+          </label>
           <a class="library-item" href="/read/{{ e.author }}/{{ e.dir_name }}">
             {% if e.has_cover %}
               <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
             {% else %}
-              <div style="aspect-ratio:2/3;background:#eee;display:flex;align-items:center;justify-content:center;color:#999;">no cover</div>
+              <div class="library-cover-placeholder" aria-hidden="true"></div>
             {% endif %}
             {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
             <div class="title">{{ e.title }}</div>
             <div class="author">by {{ e.author }}</div>
           </a>
+          {% if e.first_ordinal %}
+            <div class="library-read-actions">
+              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Read first</a>
+              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.last_ordinal }}">Read last</a>
+              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</a>
+            </div>
+          {% endif %}
           <details class="library-menu">
             <summary aria-label="Story actions">⋯</summary>
             <div class="library-menu-items">
@@ -63,6 +87,11 @@
               </form>
               <form method="post" action="/library/reset/{{ e.story_id }}">
                 <button type="submit">Reset for refetch</button>
+              </form>
+              <form method="post" action="/jobs">
+                <input type="hidden" name="kind" value="comments">
+                <input type="hidden" name="story_id" value="{{ e.story_id }}">
+                <button type="submit">Refresh comments</button>
               </form>
               <form method="post" action="/library/remove/{{ e.story_id }}" onsubmit="return confirm('Remove this story from the archive?');">
                 <button type="submit" class="danger-button">Remove from archive</button>
@@ -79,6 +108,31 @@
         {% if next_page_url %}<a href="{{ next_page_url }}">Next</a>{% else %}<span>Next</span>{% endif %}
       </nav>
     {% endif %}
+    <script>
+      (function () {
+        const selectAll = document.getElementById('library-select-all');
+        if (!selectAll) return;
+        const boxes = Array.from(document.querySelectorAll('input[name="story_ids"]'));
+        selectAll.addEventListener('change', () => {
+          boxes.forEach((box) => { box.checked = selectAll.checked; });
+        });
+        boxes.forEach((box) => {
+          box.addEventListener('change', () => {
+            selectAll.checked = boxes.length > 0 && boxes.every((item) => item.checked);
+          });
+        });
+      })();
+    </script>
+    <script>
+      (function () {
+        let lastRead = {};
+        try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
+        document.querySelectorAll('[data-continue-story]').forEach((link) => {
+          const storyId = link.dataset.continueStory;
+          link.href = lastRead[storyId] || link.dataset.defaultContinue;
+        });
+      })();
+    </script>
   {% else %}
     {% if total_entries %}
       <p>No stories match this search. <a href="/library">Clear filters</a> to see everything.</p>

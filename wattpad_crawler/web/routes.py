@@ -23,6 +23,7 @@ from wattpad_crawler.jobs import (
     ResolveError,
     archive_many,
     archive_story,
+    refresh_story_comments,
     resolve_url_story_id,
 )
 from wattpad_crawler.web.library_browser import scan_library
@@ -250,6 +251,11 @@ def _build_work(cfg, kind: str, args: dict):
             elif kind == "list":
                 ids = fetch_list_story_ids(client, args["list_id"])
                 archive_many(cfg, client, manifest, ids, progress=emit)
+            elif kind == "comments":
+                refresh_story_comments(cfg, client, args["story_id"], progress=emit)
+            elif kind == "comments_many":
+                for story_id in args["story_ids"]:
+                    refresh_story_comments(cfg, client, story_id, progress=emit)
         finally:
             manifest.close()
             client.close()
@@ -286,10 +292,40 @@ async def submit_job(request: Request) -> RedirectResponse:
             raise HTTPException(status_code=400, detail="list_id required")
         job = mgr.create("archive_list", {"list_id": list_id})
         runner.submit(job, _build_work(cfg, "list", {"list_id": list_id}))
+    elif kind == "comments":
+        story_id = form.get("story_id", "").strip()
+        if not story_id:
+            raise HTTPException(status_code=400, detail="story_id required")
+        job = mgr.create("refresh_comments", {"story_id": story_id})
+        runner.submit(job, _build_work(cfg, "comments", {"story_id": story_id}))
     else:
         raise HTTPException(status_code=400, detail=f"unknown kind: {kind}")
 
     return RedirectResponse(url=f"/?job_id={job.job_id}", status_code=303)
+
+
+@router.post("/library/bulk")
+async def library_bulk(request: Request) -> RedirectResponse:
+    form = await request.form()
+    action = str(form.get("bulk_action") or "")
+    story_ids = [str(value).strip() for value in form.getlist("story_ids") if str(value).strip()]
+    if not story_ids:
+        raise HTTPException(status_code=400, detail="select at least one story")
+
+    cfg = request.app.state.cfg
+    if action == "refresh_comments":
+        job = request.app.state.job_manager.create("refresh_comments", {"story_ids": story_ids})
+        request.app.state.job_runner.submit(
+            job,
+            _build_work(cfg, "comments_many", {"story_ids": story_ids}),
+        )
+        return RedirectResponse(url=f"/?job_id={job.job_id}", status_code=303)
+
+    if action == "remove":
+        removed = sum(1 for story_id in story_ids if _remove_story_archive(cfg, story_id))
+        return RedirectResponse(url=f"/library?removed={removed}", status_code=303)
+
+    raise HTTPException(status_code=400, detail=f"unknown bulk action: {action}")
 
 
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -551,12 +587,18 @@ def library_bookmark(request: Request, story_id: str) -> RedirectResponse:
 @router.post("/library/remove/{story_id}")
 def library_remove(request: Request, story_id: str) -> RedirectResponse:
     cfg = request.app.state.cfg
+    if not _remove_story_archive(cfg, story_id):
+        raise HTTPException(status_code=404, detail="story not found")
+    return RedirectResponse(url=f"/library?removed={story_id}", status_code=303)
+
+
+def _remove_story_archive(cfg, story_id: str) -> bool:
     repo = ArchiveRepository(cfg.output_dir).connect()
     try:
         story = repo.get_story(story_id)
         story_path = _story_path_for_remove(cfg.output_dir, story_id, story)
         if story is None and story_path is None:
-            raise HTTPException(status_code=404, detail="story not found")
+            return False
         stories_root = (cfg.output_dir / "stories").resolve()
         resolved_story_path = story_path.resolve() if story_path is not None else None
         if (
@@ -570,7 +612,7 @@ def library_remove(request: Request, story_id: str) -> RedirectResponse:
                 repo.remove_story(story_id)
     finally:
         repo.close()
-    return RedirectResponse(url=f"/library?removed={story_id}", status_code=303)
+    return True
 
 
 def _story_path_for_remove(output_dir: Path, story_id: str, story: dict | None) -> Path | None:
@@ -758,6 +800,7 @@ def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
     cfg = request.app.state.cfg
     sd = _resolve_story_dir(cfg, author, dir_name)
     meta = _metadata_for_story(cfg, sd, dir_name)
+    ords = [int(p["ordinal"]) for p in meta.get("parts", []) if p.get("ordinal") is not None]
     out = sd / "output"
     return request.app.state.templates.TemplateResponse(
         request=request,
@@ -770,6 +813,8 @@ def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
             "has_epub": any(out.glob("*.epub")) if out.exists() else False,
             "has_html": any(out.glob("*.html")) if out.exists() else False,
             "has_txt": any(out.glob("*.txt")) if out.exists() else False,
+            "first_ord": min(ords) if ords else None,
+            "last_ord": max(ords) if ords else None,
         },
     )
 
@@ -787,6 +832,7 @@ def reader_chapter(request: Request, author: str, dir_name: str, ordinal: int) -
     prev_ord = max((o for o in ords if o < ordinal), default=None)
     next_ord = min((o for o in ords if o > ordinal), default=None)
     chapter = _chapter_view_data_from_db(cfg, p) or _chapter_view_data(sd, ordinal, p)
+    chapter["ordinal"] = ordinal
     chapter["prev_ord"] = prev_ord
     chapter["next_ord"] = next_ord
 

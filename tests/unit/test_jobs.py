@@ -18,10 +18,11 @@ from wattpad_crawler.jobs import (
     archive_many,
     archive_story,
     fetch_full_chapter_html,
+    refresh_story_comments,
     resolve_story_id,
     resolve_url_story_id,
 )
-from wattpad_crawler.models import Part, Story
+from wattpad_crawler.models import Comment, Part, Story
 from wattpad_crawler.scrape.chapter_html import ChapterContent
 
 
@@ -60,6 +61,47 @@ def test_archive_story_writes_all_artifacts(output_dir: Path):
     row = manifest.get_part("42", "100")
     assert row["status"] == "done"
     manifest.close()
+
+
+def test_refresh_story_comments_updates_comment_files_and_database(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    deps = _make_deps(story)
+    deps.fetch_inline_comments.return_value = [
+        Comment(
+            comment_id="c1",
+            user="bob",
+            body="parent",
+            created_at="t",
+            paragraph_id="p1",
+            replies=[Comment(comment_id="r1", user="alice", body="reply", created_at="t")],
+        )
+    ]
+    deps.fetch_end_comments.return_value = []
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(
+            "42",
+            story.parts[0],
+            ChapterContent(text="Old body", paragraphs=[], images=[]),
+            "<html/>",
+            [],
+            [],
+        )
+    repo.close()
+
+    refresh_story_comments(cfg, MagicMock(), "42", deps=deps)
+
+    comments_path = output_dir / "stories" / "bob" / "42_hi" / "parts"
+    data = json.loads((comments_path / "01_100_comments-inline.json").read_text())
+    assert data[0]["replies"][0]["body"] == "reply"
+    repo = ArchiveRepository(output_dir).connect()
+    assert repo.comments_by_paragraph("100")["p1"][0]["replies"][0]["body"] == "reply"
+    repo.close()
 
 
 def test_archive_story_skips_already_done_parts(output_dir: Path):

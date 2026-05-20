@@ -27,6 +27,7 @@ def test_parse_comments_page_accepts_v4_comment_shape():
                 "body": "Lần 3, gét gô",
                 "createDate": "2026-04-30T17:30:46Z",
                 "paragraphId": None,
+                "voteCount": 5,
             },
             {
                 "id": "1493815966#para#1776348404#e22792c88c",
@@ -44,8 +45,91 @@ def test_parse_comments_page_accepts_v4_comment_shape():
     assert [c.user for c in parsed] == ["tri72027", "Thinreong6"]
     assert parsed[0].created_at == "2026-04-30T17:30:46Z"
     assert parsed[0].paragraph_id is None
+    assert parsed[0].like_count == 5
     assert parsed[1].paragraph_id == "para"
     assert next_url == "https://api.wattpad.com/v4/parts/1493815966/comments?offsetId=next"
+
+def test_parse_comments_page_accepts_nested_vote_count_shape():
+    raw = {
+        "comments": [
+            {
+                "id": "c1",
+                "author": {"name": "bob"},
+                "body": "hello",
+                "createDate": "2026-04-30T17:30:46Z",
+                "paragraphId": None,
+                "votes": {"count": 7},
+            },
+        ],
+        "nextUrl": None,
+    }
+
+    parsed, _ = parse_comments_page(raw)
+
+    assert parsed[0].like_count == 7
+
+
+def test_parse_comments_page_nests_flat_reply_rows():
+    raw = {
+        "comments": [
+            {
+                "id": "parent",
+                "author": {"name": "parent-user"},
+                "body": "parent body",
+                "createDate": "2026-04-16T14:06:44Z",
+                "paragraphId": "para",
+            },
+            {
+                "id": "reply",
+                "author": {"name": "reply-user"},
+                "body": "reply body",
+                "createDate": "2026-04-16T14:07:44Z",
+                "paragraphId": None,
+                "parentId": "parent",
+            },
+        ],
+        "nextUrl": None,
+    }
+
+    parsed, next_url = parse_comments_page(raw)
+
+    assert next_url is None
+    assert len(parsed) == 1
+    assert parsed[0].comment_id == "parent"
+    assert parsed[0].paragraph_id == "para"
+    assert parsed[0].replies[0].comment_id == "reply"
+    assert parsed[0].replies[0].user == "reply-user"
+
+def test_parse_comments_page_accepts_latest_replies_shape():
+    raw = {
+        "comments": [
+            {
+                "id": "parent",
+                "author": {"name": "parent-user"},
+                "body": "parent body",
+                "createDate": "2026-04-16T14:06:44Z",
+                "paragraphId": "para",
+                "latestReplies": [
+                    {
+                        "id": "reply",
+                        "author": {"name": "reply-user"},
+                        "body": "reply body",
+                        "createDate": "2026-04-16T14:07:44Z",
+                        "paragraphId": None,
+                        "parentId": "parent",
+                    }
+                ],
+            },
+        ],
+        "nextUrl": None,
+    }
+
+    parsed, next_url = parse_comments_page(raw)
+
+    assert next_url is None
+    assert len(parsed) == 1
+    assert parsed[0].comment_id == "parent"
+    assert parsed[0].replies[0].comment_id == "reply"
 
 
 def test_fetch_inline_and_end_comments_use_v4_part_comments_and_filter_by_paragraph():
@@ -89,6 +173,93 @@ def test_fetch_inline_and_end_comments_use_v4_part_comments_and_filter_by_paragr
     assert end_client.urls == ["https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"]
     assert [c.comment_id for c in inline] == ["inline"]
     assert [c.comment_id for c in end] == ["end"]
+
+def test_fetch_inline_comments_fetches_declared_reply_pages():
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __init__(self):
+            self.urls: list[str] = []
+
+        def get(self, url: str):
+            self.urls.append(url)
+            if "/comments/parent/replies" in url:
+                return FakeResponse({
+                    "replies": [
+                        {
+                            "id": "reply",
+                            "author": {"name": "reply-user"},
+                            "body": "reply body",
+                            "createDate": "2026-04-16T14:07:44Z",
+                            "paragraphId": None,
+                            "parentId": "parent",
+                        }
+                    ],
+                    "nextUrl": None,
+                })
+            return FakeResponse({
+                "comments": [
+                    {
+                        "id": "parent",
+                        "author": {"name": "parent-user"},
+                        "body": "parent body",
+                        "createDate": "2026-04-16T14:06:44Z",
+                        "paragraphId": "para",
+                        "replyCount": 1,
+                    }
+                ],
+                "nextUrl": None,
+            })
+
+    comments = comments_mod.fetch_inline_comments(FakeClient(), "1493815966")
+
+    assert len(comments) == 1
+    assert comments[0].comment_id == "parent"
+    assert [reply.comment_id for reply in comments[0].replies] == ["reply"]
+
+def test_fetch_inline_comments_uses_underscore_comment_id_for_replies():
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __init__(self):
+            self.urls: list[str] = []
+
+        def get(self, url: str):
+            self.urls.append(url)
+            if "/replies" in url:
+                return FakeResponse({"replies": [], "nextUrl": None})
+            return FakeResponse({
+                "comments": [
+                    {
+                        "id": "part#paragraph#timestamp#hash",
+                        "author": {"name": "parent-user"},
+                        "body": "parent body",
+                        "createDate": "2026-04-16T14:06:44Z",
+                        "paragraphId": "para",
+                        "numReplies": 1,
+                    }
+                ],
+                "nextUrl": None,
+            })
+
+    client = FakeClient()
+
+    comments_mod.fetch_inline_comments(client, "1493815966")
+
+    assert client.urls[1] == (
+        "https://www.wattpad.com/v4/comments/"
+        "part_paragraph_timestamp_hash/replies?limit=100"
+    )
 
 
 # --- Phase 1 REL-01 recursion-cap tests ---

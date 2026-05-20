@@ -14,6 +14,14 @@
       Skipped chapter {{ ev.data.ordinal }} because it is already archived
     {%- elif ev.kind == "comments.failed" -%}
       Could not fetch {{ ev.data.kind }} comments for one chapter; saved chapter body anyway
+    {%- elif ev.kind == "comments.refresh.start" -%}
+      Refreshing comments for story {{ ev.data.story_id }}
+    {%- elif ev.kind == "comments.refresh.part" -%}
+      Refreshing comments for chapter {{ ev.data.ordinal }}: {{ ev.data.title }}
+    {%- elif ev.kind == "comments.refresh.done" -%}
+      Updated chapter {{ ev.data.ordinal }} comments
+    {%- elif ev.kind == "comments.refresh.story_done" -%}
+      Comment refresh finished
     {%- elif ev.kind == "render.start" -%}
       Building output files…
     {%- elif ev.kind == "render.failed" -%}
@@ -72,6 +80,10 @@
           }
           if (data.kind === 'part.skipped') return 'Skipped chapter ' + detail.ordinal + ' because it is already archived';
           if (data.kind === 'comments.failed') return 'Could not fetch ' + detail.kind + ' comments for one chapter; saved chapter body anyway';
+          if (data.kind === 'comments.refresh.start') return 'Refreshing comments for story ' + detail.story_id + '…';
+          if (data.kind === 'comments.refresh.part') return 'Refreshing comments for chapter ' + detail.ordinal + ': ' + detail.title;
+          if (data.kind === 'comments.refresh.done') return 'Updated chapter ' + detail.ordinal + ' comments';
+          if (data.kind === 'comments.refresh.story_done') return 'Comment refresh finished';
           if (data.kind === 'render.start') return 'Building output files…';
           if (data.kind === 'render.failed') return 'Could not build ' + String(detail.format || '').toUpperCase() + ' output';
           if (data.kind === 'story.done') return 'Story archived successfully';
