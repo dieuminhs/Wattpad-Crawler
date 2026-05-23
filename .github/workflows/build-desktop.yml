@@ -3,6 +3,8 @@ name: Build Desktop Installers
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "main"
     tags:
       - "v*"
 
@@ -105,3 +107,4 @@ jobs:
           path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
           retention-days: 14
+
