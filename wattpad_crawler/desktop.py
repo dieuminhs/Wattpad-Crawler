@@ -6,6 +6,7 @@ import os
 import socket
 import sys
 import tomllib
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import uvicorn
@@ -41,6 +42,11 @@ def desktop_settings_path() -> Path:
     return default_app_data_dir() / DESKTOP_SETTINGS_FILE
 
 
+def desktop_log_path() -> Path:
+    """Return the desktop backend log path."""
+    return default_app_data_dir() / "logs" / "backend.log"
+
+
 def load_desktop_archive_dir() -> Path:
     """Read the saved desktop archive path, falling back to the native default."""
     settings_path = desktop_settings_path()
@@ -56,10 +62,28 @@ def load_desktop_archive_dir() -> Path:
     return Path(archive_dir).expanduser()
 
 
+def _setup_logging(verbose: bool) -> None:
+    log_path = desktop_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    level = logging.DEBUG if verbose else logging.INFO
+    handler = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=[handler],
+        force=True,
+    )
+
+
 def _free_local_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
+
+
+def _write_startup_url(path: Path, url: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(url, encoding="utf-8")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,6 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Local archive directory for the desktop app.",
     )
+    parser.add_argument(
+        "--startup-url-file",
+        type=Path,
+        default=None,
+        help="Write the backend URL to this file after startup.",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0, help="0 chooses a free local port.")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -81,22 +111,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    _setup_logging(args.verbose)
+    logger = logging.getLogger(__name__)
     port = args.port or _free_local_port()
     output_dir = args.output or load_desktop_archive_dir()
     try:
         cfg = load_config(output_dir)
     except ConfigError as exc:
-        print(f"ConfigError: {exc}", file=sys.stderr)
+        logger.error("ConfigError: %s", exc)
         return 2
 
     app = build_app(cfg)
     app.state.desktop_settings_path = desktop_settings_path()
-    print(f"WATTPAD_CRAWLER_DESKTOP_URL=http://{args.host}:{port}", flush=True)
-    uvicorn.run(app, host=args.host, port=port, log_level="info")
+    backend_url = f"http://{args.host}:{port}"
+    if args.startup_url_file is not None:
+        _write_startup_url(args.startup_url_file, backend_url)
+    logger.info("Starting desktop backend at %s using archive %s", backend_url, cfg.output_dir)
+    uvicorn.run(app, host=args.host, port=port, log_level="info", access_log=False)
     return 0
 
 

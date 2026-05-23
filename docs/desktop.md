@@ -61,6 +61,15 @@ The current build command first rebuilds the Python backend executable and then 
 
 
 
+
+## Desktop logs
+
+The packaged desktop backend does not open a command prompt. It writes rotating logs to the native app data folder instead:
+
+- Windows: `%LOCALAPPDATA%\Wattpad Crawler\logs\backend.log`
+- macOS: `~/Library/Application Support/Wattpad Crawler/logs/backend.log`
+- Linux: `$XDG_DATA_HOME/wattpad-crawler/logs/backend.log` or `~/.local/share/wattpad-crawler/logs/backend.log`
+
 ## Switching archive folders
 
 The desktop app can point at an existing archive without copying it:
@@ -100,6 +109,7 @@ This is now a functional packaging path, but a production-grade installer still 
 2. Installer icons and application metadata.
 3. Release upload automation so CI artifacts are attached to GitHub Releases.
 4. OS credential storage for the Wattpad cookie in a later security pass.
+
 
 
 

@@ -1,14 +1,13 @@
 use std::env;
-use std::io::{BufRead, BufReader};
+use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::Manager;
 
 const BACKEND_NAME: &str = "wattpad-crawler-desktop-backend";
-const BACKEND_URL_PREFIX: &str = "WATTPAD_CRAWLER_DESKTOP_URL=";
 
 struct BackendProcess(Arc<Mutex<Option<Child>>>);
 
@@ -66,33 +65,54 @@ fn backend_command() -> Command {
     Command::new(BACKEND_NAME)
 }
 
+fn startup_url_file() -> PathBuf {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    env::temp_dir().join(format!(
+        "wattpad-crawler-desktop-backend-{timestamp}.url"
+    ))
+}
+
+fn read_startup_url(path: &PathBuf, deadline: Instant) -> Result<String, String> {
+    while Instant::now() <= deadline {
+        if let Ok(url) = fs::read_to_string(path) {
+            let url = url.trim().to_string();
+            if !url.is_empty() {
+                let _ = fs::remove_file(path);
+                return Ok(url);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Err("backend did not report a startup URL".to_string())
+}
+
 fn start_backend() -> Result<(String, BackendProcess), String> {
-    let mut child = backend_command()
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
+    let startup_url_file = startup_url_file();
+    let mut command = backend_command();
+    let mut child = command
+        .arg("--startup-url-file")
+        .arg(&startup_url_file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .map_err(|err| format!("failed to start backend: {err}"))?;
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "backend stdout was not captured".to_string())?;
-    let reader = BufReader::new(stdout);
     let deadline = Instant::now() + Duration::from_secs(20);
-
-    for line in reader.lines() {
-        let line = line.map_err(|err| format!("failed to read backend startup: {err}"))?;
-        if let Some(url) = line.strip_prefix(BACKEND_URL_PREFIX) {
+    match read_startup_url(&startup_url_file, deadline) {
+        Ok(url) => {
             let process = BackendProcess(Arc::new(Mutex::new(Some(child))));
-            return Ok((url.to_string(), process));
+            Ok((url, process))
         }
-        if Instant::now() > deadline {
-            break;
+        Err(err) => {
+            let _ = child.kill();
+            let _ = fs::remove_file(startup_url_file);
+            Err(err)
         }
     }
-
-    let _ = child.kill();
-    Err("backend did not report a startup URL".to_string())
 }
 
 fn focus_main_window(app: &tauri::AppHandle) {
