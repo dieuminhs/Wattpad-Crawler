@@ -60,6 +60,18 @@ npm run desktop:build
 The current build command first rebuilds the Python backend executable and then runs `tauri build`. The Rust launcher looks for that executable when the app starts.
 
 
+
+## Switching archive folders
+
+The desktop app can point at an existing archive without copying it:
+
+1. Open Wattpad Crawler.
+2. Go to **Settings**.
+3. In **Archive location**, paste the full path to the existing `wattpad-archive` folder.
+4. Click **Use this archive folder**.
+
+Close other Wattpad Crawler windows before switching. The app writes this desktop-only pointer to the native app data folder and keeps story data in the selected archive folder.
+
 ## GitHub Actions builds
 
 The workflow at `.github/workflows/build-desktop.yml` builds installer artifacts for Windows and macOS without needing a local Mac.
@@ -88,4 +100,5 @@ This is now a functional packaging path, but a production-grade installer still 
 2. Installer icons and application metadata.
 3. Release upload automation so CI artifacts are attached to GitHub Releases.
 4. OS credential storage for the Wattpad cookie in a later security pass.
+
 

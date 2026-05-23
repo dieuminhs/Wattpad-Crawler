@@ -1,4 +1,4 @@
-import dataclasses
+﻿import dataclasses
 import json
 import os
 import shutil
@@ -34,7 +34,7 @@ _LIBRARY_FILTERS = {"all", "bookmarked", "has_cover", "no_cover"}
 
 
 def _search_text(value: str) -> str:
-    value = value.casefold().replace("đ", "d")
+    value = value.casefold().replace("Ã„â€˜", "d")
     decomposed = unicodedata.normalize("NFKD", value)
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
@@ -81,7 +81,7 @@ def _toml_string(value: str) -> str:
 def _save_cookie(output_dir: Path, cookie: str) -> None:
     """Write/update the cookie line in _config.toml atomically.
 
-    AUTH-05 / D-19: Process-kill safe — an interrupt during the write leaves
+    AUTH-05 / D-19: Process-kill safe Ã¢â‚¬â€ an interrupt during the write leaves
     either the old file or no change, never a half-written one. Mirrors
     archive/store.py:atomic_write_text + _tmp_path. Same-directory tmp file
     guarantees same-volume rename on Windows. PID/TID suffix avoids collision
@@ -153,7 +153,23 @@ def _save_runtime_config(
 def _mask(s: str) -> str:
     if not s:
         return ""
-    return s[:4] + "…" + s[-4:] if len(s) > 8 else "…"
+    return s[:4] + "Ã¢â‚¬Â¦" + s[-4:] if len(s) > 8 else "Ã¢â‚¬Â¦"
+
+def _save_desktop_archive_dir(settings_path: Path, archive_dir: Path) -> None:
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    text = f"archive_dir = {_toml_string(str(archive_dir))}\n"
+    suffix = f".{os.getpid()}.{threading.get_ident()}.tmp"
+    tmp = settings_path.with_suffix(settings_path.suffix + suffix)
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, settings_path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _desktop_settings_path(request: Request) -> Path | None:
+    return getattr(request.app.state, "desktop_settings_path", None)
 
 
 @router.get("/setup", response_class=HTMLResponse)
@@ -214,7 +230,7 @@ def setup_post(
             status_code=400,
         )
 
-    # Validation succeeded — persist atomically (D-19) and reload config.
+    # Validation succeeded Ã¢â‚¬â€ persist atomically (D-19) and reload config.
     _save_cookie(cfg.output_dir, submitted)
     from wattpad_crawler.config import load_config
     request.app.state.cfg = load_config(cfg.output_dir)
@@ -361,7 +377,7 @@ async def job_stream(request: Request, job_id: str, after_seq: int = 0):
         import time as _time
 
         last_seq = after_seq
-        # Per-stream eviction-warning latch (RESEARCH Open Question #2 — RESOLVED).
+        # Per-stream eviction-warning latch (RESEARCH Open Question #2 Ã¢â‚¬â€ RESOLVED).
         # Reconnection creates a fresh event_gen and re-evaluates the gap by
         # design; within one SSE connection we announce at most once.
         gap_announced = False
@@ -416,7 +432,7 @@ async def job_stream(request: Request, job_id: str, after_seq: int = 0):
                     )
                 }
                 return
-            # 250ms polling — fine for personal-use UI; threading.Event-to-asyncio
+            # 250ms polling Ã¢â‚¬â€ fine for personal-use UI; threading.Event-to-asyncio
             # bridge is fiddly and not worth the complexity for this scope.
             await asyncio.sleep(0.25)
 
@@ -507,7 +523,10 @@ def config_get(request: Request) -> HTMLResponse:
         context={
             "cfg": cfg,
             "saved": request.query_params.get("saved") == "1",
+            "archive_saved": request.query_params.get("archive_saved") == "1",
+            "archive_error_message": "",
             "error_message": "",
+            "is_desktop_app": _desktop_settings_path(request) is not None,
         },
     )
 
@@ -530,7 +549,14 @@ def config_post(
         return request.app.state.templates.TemplateResponse(
             request=request,
             name="config.html",
-            context={"cfg": cfg, "saved": False, "error_message": str(e)},
+            context={
+                "cfg": cfg,
+                "saved": False,
+                "archive_saved": False,
+                "archive_error_message": "",
+                "error_message": str(e),
+                "is_desktop_app": _desktop_settings_path(request) is not None,
+            },
             status_code=400,
         )
 
@@ -544,6 +570,60 @@ def config_post(
 
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/config?saved=1", status_code=303)
+
+@router.post("/config/archive-location", response_model=None)
+def config_archive_location_post(
+    request: Request,
+    archive_dir: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
+    cfg = request.app.state.cfg
+    settings_path = _desktop_settings_path(request)
+    if settings_path is None:
+        return request.app.state.templates.TemplateResponse(
+            request=request,
+            name="config.html",
+            context={
+                "cfg": cfg,
+                "saved": False,
+                "archive_saved": False,
+                "archive_error_message": "Archive location can only be changed in the desktop app.",
+                "error_message": "",
+                "is_desktop_app": False,
+            },
+            status_code=400,
+        )
+
+    raw_archive_dir = archive_dir.strip()
+    if not raw_archive_dir:
+        archive_error = "Archive location cannot be blank."
+    else:
+        try:
+            target_dir = Path(raw_archive_dir).expanduser().resolve()
+            if target_dir.exists() and not target_dir.is_dir():
+                archive_error = "Archive location must be a folder."
+            else:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                _save_desktop_archive_dir(settings_path, target_dir)
+                from wattpad_crawler.config import load_config
+
+                request.app.state.cfg = load_config(target_dir)
+                return RedirectResponse(url="/config?archive_saved=1", status_code=303)
+        except OSError as exc:
+            archive_error = f"Could not use archive location: {exc}"
+
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="config.html",
+        context={
+            "cfg": cfg,
+            "saved": False,
+            "archive_saved": False,
+            "archive_error_message": archive_error,
+            "error_message": "",
+            "is_desktop_app": True,
+        },
+        status_code=400,
+    )
 
 
 @router.post("/library/reset/{story_id}")
@@ -860,3 +940,6 @@ def library_output(request: Request, author: str, dir_name: str, fmt: str) -> Fi
         raise HTTPException(status_code=404, detail=f"no .{fmt} artifact")
     media = {"epub": "application/epub+zip", "html": "text/html", "txt": "text/plain"}[fmt]
     return FileResponse(candidates[0], media_type=media, filename=candidates[0].name)
+
+
+
