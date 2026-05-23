@@ -9,7 +9,27 @@ on:
       - "v*"
 
 jobs:
+  test:
+    name: Run Python tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: python -m pip install -e ".[dev,desktop]"
+
+      - name: Run unit tests
+        run: python -m pytest tests/unit
+
   build:
+    needs: test
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -107,4 +127,5 @@ jobs:
           path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
           retention-days: 14
+
 

@@ -34,7 +34,7 @@ _LIBRARY_FILTERS = {"all", "bookmarked", "has_cover", "no_cover"}
 
 
 def _search_text(value: str) -> str:
-    value = value.casefold().replace("Ã„â€˜", "d")
+    value = value.casefold().replace("\u0111", "d")
     decomposed = unicodedata.normalize("NFKD", value)
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
@@ -153,7 +153,7 @@ def _save_runtime_config(
 def _mask(s: str) -> str:
     if not s:
         return ""
-    return s[:4] + "Ã¢â‚¬Â¦" + s[-4:] if len(s) > 8 else "Ã¢â‚¬Â¦"
+    return s[:4] + "\u2026" + s[-4:] if len(s) > 8 else "\u2026"
 
 def _save_desktop_archive_dir(settings_path: Path, archive_dir: Path) -> None:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
