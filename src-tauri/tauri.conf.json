@@ -1,0 +1,25 @@
+{
+    "$schema":  "https://schema.tauri.app/config/2",
+    "productName":  "Wattpad Crawler",
+    "version":  "0.1.0",
+    "identifier":  "local.wattpad-crawler.app",
+    "build":  {
+                  "frontendDist":  "../desktop"
+              },
+    "app":  {
+                "withGlobalTauri":  false,
+                "windows":  [
+
+                            ]
+            },
+    "bundle":  {
+                   "active":  true,
+                   "targets":  "all",
+                   "resources":  [
+                                     "bin/*"
+                                 ],
+                   "icon":  [
+                                "icons/icon.ico"
+                            ]
+               }
+}

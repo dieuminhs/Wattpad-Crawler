@@ -1,10 +1,22 @@
-# Wattpad Crawler
+﻿# Wattpad Crawler
 
-Archive Wattpad stories — chapters, inline images, and all comments — to a local
+Archive Wattpad stories â€” chapters, inline images, and all comments â€” to a local
 append-only folder before they get removed.
 
-## Install
 
+## Desktop App Preview
+
+A Tauri desktop wrapper is available for turning Wattpad Crawler into a native local application instead of a command-line workflow. It keeps the existing Python/FastAPI crawler backend and opens it in a native desktop window.
+
+See `docs/desktop.md` for the current development workflow and packaging plan.
+
+```bash
+python -m pip install -e ".[dev]"
+npm install
+npm run desktop:dev
+```
+
+## Install
 ```bash
 git clone <this-repo>
 cd "Wattpad Crawler"
@@ -151,7 +163,7 @@ Back up the whole `wattpad-archive` folder. Do not copy only the EPUB files. The
 2. Open `./wattpad-archive/_config.toml` in a text editor.
 3. Get your Wattpad session cookie:
    - Log in to Wattpad in your browser.
-   - Open DevTools → Application/Storage → Cookies → `https://www.wattpad.com`.
+   - Open DevTools â†’ Application/Storage â†’ Cookies â†’ `https://www.wattpad.com`.
    - Copy the value of the `token` cookie.
 4. Paste it into `_config.toml` as `cookie = "..."`.
 5. (Optional) Adjust `rate_limit_per_sec` (default 2.0) if you want to be politer to Wattpad's servers.
@@ -162,7 +174,7 @@ Back up the whole `wattpad-archive` folder. Do not copy only the EPUB files. The
 # Archive everything in your library
 wattpad-crawler library --user yourusername
 
-# Archive a reading list (by ID — see lists in your Wattpad profile URL)
+# Archive a reading list (by ID â€” see lists in your Wattpad profile URL)
 wattpad-crawler list <list-id>
 
 # Archive a single story
@@ -176,7 +188,7 @@ wattpad-crawler status
 wattpad-crawler -v library --user yourusername
 ```
 
-Re-running is safe and incremental — already-downloaded chapters are skipped, only
+Re-running is safe and incremental â€” already-downloaded chapters are skipped, only
 new or failed parts are fetched. The local archive is **append-only**: the tool
 never deletes a file, even if the remote story is removed from Wattpad.
 
@@ -196,7 +208,7 @@ Then open <http://127.0.0.1:8000> in your browser. Features:
 - **Library:** browse archived stories by cover.
 - **Reader:** read chapters in a clean view directly from your local archive.
 
-The web UI calls the same code as the CLI — `_state.sqlite` is the single source of truth for both.
+The web UI calls the same code as the CLI â€” `_state.sqlite` is the single source of truth for both.
 
 To bind to all interfaces (e.g. for a homelab):
 
@@ -208,21 +220,21 @@ wattpad-crawler serve --host 127.0.0.1 --port 8081
 
 ```
 wattpad-archive/
-├── _state.sqlite           # manifest (cache; reconstructable from files)
-├── _config.toml            # your settings
-└── stories/<author>/<story_id>_<slug>/
-    ├── metadata.json
-    ├── cover.jpg
-    ├── parts/
-    │   ├── 01_<part_id>_<slug>.json    # canonical chapter data
-    │   ├── 01_<part_id>_<slug>.html    # original Wattpad HTML
-    │   ├── 01_<part_id>_<slug>.txt     # plain text
-    │   ├── 01_<part_id>_comments-inline.json
-    │   └── 01_<part_id>_comments-end.json
-    └── output/
-        ├── <slug>.epub
-        ├── <slug>.html
-        └── <slug>.txt
+â”œâ”€â”€ _state.sqlite           # manifest (cache; reconstructable from files)
+â”œâ”€â”€ _config.toml            # your settings
+â””â”€â”€ stories/<author>/<story_id>_<slug>/
+    â”œâ”€â”€ metadata.json
+    â”œâ”€â”€ cover.jpg
+    â”œâ”€â”€ parts/
+    â”‚   â”œâ”€â”€ 01_<part_id>_<slug>.json    # canonical chapter data
+    â”‚   â”œâ”€â”€ 01_<part_id>_<slug>.html    # original Wattpad HTML
+    â”‚   â”œâ”€â”€ 01_<part_id>_<slug>.txt     # plain text
+    â”‚   â”œâ”€â”€ 01_<part_id>_comments-inline.json
+    â”‚   â””â”€â”€ 01_<part_id>_comments-end.json
+    â””â”€â”€ output/
+        â”œâ”€â”€ <slug>.epub
+        â”œâ”€â”€ <slug>.html
+        â””â”€â”€ <slug>.txt
 ```
 
 ## What gets archived
@@ -237,7 +249,7 @@ wattpad-archive/
 
 - Wattpad's API is unofficial. The tool may break if Wattpad changes endpoints or HTML structure.
 - The session cookie expires periodically. Refresh it from your browser when login-required content stops working.
-- Comments fetching adds significant time — popular stories can have thousands. Be patient on the first run.
+- Comments fetching adds significant time â€” popular stories can have thousands. Be patient on the first run.
 - Atomic writes prevent corruption from process kill or Ctrl-C, but power loss may still leave the latest write incomplete.
 
 ## Development
@@ -250,3 +262,4 @@ ruff check wattpad_crawler tests
 ```
 
 The integration test is skipped by default and requires a vcrpy cassette to be recorded against a real Wattpad public story (instructions in `tests/integration/test_end_to_end.py`).
+

@@ -26,9 +26,13 @@ dev = [
   "vcrpy>=6.0",
   "ruff>=0.5",
 ]
+desktop = [
+  "pyinstaller>=6.0",
+]
 
 [project.scripts]
 wattpad-crawler = "wattpad_crawler.cli:main"
+wattpad-crawler-desktop-backend = "wattpad_crawler.desktop:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,3 +55,5 @@ packages = ["wattpad_crawler"]
 [tool.hatch.build.targets.wheel.force-include]
 "wattpad_crawler/web/templates" = "wattpad_crawler/web/templates"
 "wattpad_crawler/web/static" = "wattpad_crawler/web/static"
+
+
