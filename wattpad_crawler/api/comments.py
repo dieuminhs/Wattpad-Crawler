@@ -2,6 +2,7 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
+from wattpad_crawler.auth import AuthFailedError
 from wattpad_crawler.client import RateLimitedClient
 from wattpad_crawler.models import Comment
 
@@ -9,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 PART_COMMENTS_URL = "https://www.wattpad.com/v4/parts/{part_id}/comments?limit=100"
 COMMENT_REPLIES_URL = "https://www.wattpad.com/v4/comments/{comment_id}/replies?limit=100"
+PARAGRAPH_COMMENTS_URL = (
+    "https://www.wattpad.com/v5/comments/namespaces/paragraphs/"
+    "resources/{resource_id}/comments?"
+)
 _MAX_PAGES = 200
 # REL-01 / D-11: cap nested-reply recursion to avoid RecursionError on
 # malformed or adversarial Wattpad responses. Module constant rather than
@@ -202,7 +207,12 @@ def _nest_flat_replies(
     return roots
 
 
-def _fetch_all(client: RateLimitedClient, url: str) -> list[Comment]:
+def _fetch_all(
+    client: RateLimitedClient,
+    url: str,
+    *,
+    fetch_declared_replies: bool = True,
+) -> list[Comment]:
     out: list[Comment] = []
     seen: set[str] = set()
     pages = 0
@@ -211,7 +221,8 @@ def _fetch_all(client: RateLimitedClient, url: str) -> list[Comment]:
         pages += 1
         data = client.get(url).json()
         comments, next_url = parse_comments_page(data)
-        _fetch_declared_replies(client, comments, data)
+        if fetch_declared_replies:
+            _fetch_declared_replies(client, comments, data)
         out.extend(comments)
         url = next_url or ""
     return out
@@ -253,9 +264,69 @@ def _url_comment_id(comment_id: str) -> str:
     return quote(comment_id.replace("#", "_"), safe="")
 
 
+
+def _normalized_comment_id(comment_id: str) -> str:
+    return comment_id.replace("#", "_")
+
+
+def _merge_like_counts_from_v5(v4_comments: list[Comment], v5_comments: list[Comment]) -> None:
+    likes_by_id = {
+        _normalized_comment_id(comment.comment_id): comment.like_count
+        for comment in v5_comments
+        if comment.like_count > 0
+    }
+
+    def update(comment: Comment) -> None:
+        like_count = likes_by_id.get(_normalized_comment_id(comment.comment_id))
+        if like_count is not None:
+            comment.like_count = like_count
+        for reply in comment.replies:
+            update(reply)
+
+    for comment in v4_comments:
+        update(comment)
+
+
+def fetch_paragraph_comments(
+    client: RateLimitedClient,
+    part_id: str,
+    paragraph_id: str,
+) -> list[Comment]:
+    resource_id = f"{part_id}_{paragraph_id}"
+    comments = _fetch_all(
+        client,
+        PARAGRAPH_COMMENTS_URL.format(resource_id=quote(resource_id, safe="")),
+        fetch_declared_replies=False,
+    )
+    return [comment for comment in comments if comment.paragraph_id is not None]
+
+
+def _refresh_inline_like_counts(
+    client: RateLimitedClient,
+    part_id: str,
+    comments: list[Comment],
+) -> None:
+    paragraph_ids = sorted({comment.paragraph_id for comment in comments if comment.paragraph_id})
+    for paragraph_id in paragraph_ids:
+        try:
+            v5_comments = fetch_paragraph_comments(client, part_id, paragraph_id)
+        except AuthFailedError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "v5 paragraph comment likes failed for part %s paragraph %s: %s",
+                part_id,
+                paragraph_id,
+                exc,
+            )
+            continue
+        _merge_like_counts_from_v5(comments, v5_comments)
+
 def fetch_inline_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
     comments = _fetch_all(client, PART_COMMENTS_URL.format(part_id=quote(part_id, safe="")))
-    return [comment for comment in comments if comment.paragraph_id is not None]
+    inline_comments = [comment for comment in comments if comment.paragraph_id is not None]
+    _refresh_inline_like_counts(client, part_id, inline_comments)
+    return inline_comments
 
 
 def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:

@@ -115,6 +115,76 @@ def test_parse_comments_page_prefers_sentiment_like_count():
 
     assert parsed[0].like_count == 3
 
+
+class _FakeCommentsResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _FakeCommentsClient:
+    def __init__(self, responses):
+        self.responses = responses
+        self.urls = []
+
+    def get(self, url: str):
+        self.urls.append(url)
+        for marker, payload in self.responses:
+            if marker in url:
+                return _FakeCommentsResponse(payload)
+        raise AssertionError(f"unexpected URL: {url}")
+
+
+def test_fetch_inline_comments_refreshes_likes_from_v5_paragraph_endpoint():
+    v4_page = {
+        "comments": [
+            {
+                "id": "1346950910#ed07664520f26bb94b3cc8497e6812f8#1754215612#87f70d2ae0",
+                "author": {"name": "caubemattich"},
+                "body": "first",
+                "createDate": "2025-08-03T10:06:52Z",
+                "paragraphId": "ed07664520f26bb94b3cc8497e6812f8",
+                "voteCount": 0,
+            }
+        ],
+        "nextUrl": None,
+    }
+    v5_page = {
+        "comments": [
+            {
+                "commentId": {
+                    "namespace": "comments",
+                    "resourceId": "1346950910_ed07664520f26bb94b3cc8497e6812f8_1754215612_87f70d2ae0",
+                },
+                "created": "2025-08-03T10:06:52Z",
+                "resource": {
+                    "namespace": "paragraphs",
+                    "resourceId": "1346950910_ed07664520f26bb94b3cc8497e6812f8",
+                },
+                "sentiments": {":like:": {"count": 2}},
+                "text": "first",
+                "user": {"name": "caubemattich"},
+            }
+        ]
+    }
+    client = _FakeCommentsClient(
+        [
+            ("/v4/parts/1346950910/comments", v4_page),
+            ("/v5/comments/namespaces/paragraphs/resources/", v5_page),
+        ]
+    )
+
+    comments = comments_mod.fetch_inline_comments(client, "1346950910")
+
+    assert len(comments) == 1
+    assert comments[0].like_count == 2
+    assert any(
+        "resources/1346950910_ed07664520f26bb94b3cc8497e6812f8/comments" in url
+        for url in client.urls
+    )
+
 def test_parse_comments_page_accepts_nested_vote_count_shape():
     raw = {
         "comments": [
@@ -235,7 +305,11 @@ def test_fetch_inline_and_end_comments_use_v4_part_comments_and_filter_by_paragr
     inline = comments_mod.fetch_inline_comments(inline_client, "1493815966")
     end = comments_mod.fetch_end_comments(end_client, "1493815966")
 
-    assert inline_client.urls == ["https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"]
+    assert inline_client.urls[0] == "https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"
+    assert inline_client.urls[1] == (
+        "https://www.wattpad.com/v5/comments/namespaces/paragraphs/"
+        "resources/1493815966_para/comments?"
+    )
     assert end_client.urls == ["https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"]
     assert [c.comment_id for c in inline] == ["inline"]
     assert [c.comment_id for c in end] == ["end"]
