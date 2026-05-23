@@ -67,6 +67,10 @@ def main(argv: list[str] | None = None) -> int:
         "uvicorn",
         "--collect-submodules",
         "sse_starlette",
+        "--hidden-import",
+        "multipart",
+        "--hidden-import",
+        "python_multipart",
         str(entrypoint),
     ]
     if args.clean:
@@ -83,3 +87,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
