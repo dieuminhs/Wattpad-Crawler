@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import platform
@@ -73,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
         "python_multipart",
         str(entrypoint),
     ]
+    if platform.system() == "Windows":
+        command.insert(4, "--windowed")
     if args.clean:
         command.insert(4, "--clean")
 
@@ -87,4 +89,7 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
 
