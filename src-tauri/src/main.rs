@@ -5,6 +5,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use tauri::Manager;
+
 const BACKEND_NAME: &str = "wattpad-crawler-desktop-backend";
 const BACKEND_URL_PREFIX: &str = "WATTPAD_CRAWLER_DESKTOP_URL=";
 
@@ -93,11 +95,22 @@ fn start_backend() -> Result<(String, BackendProcess), String> {
     Err("backend did not report a startup URL".to_string())
 }
 
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn main() {
     let (backend_url, backend_process) =
         start_backend().expect("Wattpad Crawler backend failed to start");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            focus_main_window(app);
+        }))
         .manage(backend_process)
         .setup(move |app| {
             tauri::WebviewWindowBuilder::new(

@@ -57,7 +57,7 @@ This runs `scripts/build_desktop_backend.py`, which creates a PyInstaller one-fi
 npm run desktop:build
 ```
 
-The current build command first rebuilds the Python backend executable and then runs `tauri build`. The Rust launcher looks for that executable when the app starts.
+The current build command first rebuilds the Python backend executable and then runs `tauri build`. The Rust launcher looks for that executable when the app starts. The desktop shell is single-instance: launching it again focuses the already-open window instead of starting another backend.
 
 
 
@@ -100,5 +100,6 @@ This is now a functional packaging path, but a production-grade installer still 
 2. Installer icons and application metadata.
 3. Release upload automation so CI artifacts are attached to GitHub Releases.
 4. OS credential storage for the Wattpad cookie in a later security pass.
+
 
 
