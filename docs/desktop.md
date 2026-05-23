@@ -59,11 +59,33 @@ npm run desktop:build
 
 The current build command first rebuilds the Python backend executable and then runs `tauri build`. The Rust launcher looks for that executable when the app starts.
 
+
+## GitHub Actions builds
+
+The workflow at `.github/workflows/build-desktop.yml` builds installer artifacts for Windows and macOS without needing a local Mac.
+
+It runs automatically for pushed version tags like `v0.1.0`, and it can also be started manually from GitHub:
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Build Desktop Installers**.
+4. Click **Run workflow**.
+5. Download artifacts from the completed run.
+
+Artifacts currently produced:
+
+- Windows x64: `.msi` and NSIS `setup.exe`.
+- macOS Apple Silicon: `.dmg` and `.app`.
+- macOS Intel: `.dmg` and `.app`.
+
+Artifacts expire after 14 days. For permanent downloads, attach them to a GitHub Release.
+
 ## Installer hardening still needed
 
 This is now a functional packaging path, but a production-grade installer still needs:
 
 1. Tauri bundle resource configuration for placing the backend executable in the final installer layout on every OS.
 2. Installer icons and application metadata.
-3. CI builds on Windows, macOS, and Linux to catch platform-specific bundling differences.
+3. Release upload automation so CI artifacts are attached to GitHub Releases.
 4. OS credential storage for the Wattpad cookie in a later security pass.
+

@@ -1,0 +1,107 @@
+name: Build Desktop Installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            artifact_name: wattpad-crawler-windows
+            artifact_paths: |
+              src-tauri/target/release/bundle/msi/*.msi
+              src-tauri/target/release/bundle/nsis/*setup.exe
+          - name: macOS Apple Silicon
+            os: macos-14
+            artifact_name: wattpad-crawler-macos-aarch64
+            artifact_paths: |
+              src-tauri/target/release/bundle/dmg/*.dmg
+              src-tauri/target/release/bundle/macos/*.app
+          - name: macOS Intel
+            os: macos-13
+            artifact_name: wattpad-crawler-macos-x64
+            artifact_paths: |
+              src-tauri/target/release/bundle/dmg/*.dmg
+              src-tauri/target/release/bundle/macos/*.app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Install Python dependencies
+        run: python -m pip install -e ".[dev,desktop]"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Prepare macOS icon
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/icons/icon.iconset
+          sips -z 16 16 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_16x16.png
+          sips -z 32 32 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_16x16@2x.png
+          sips -z 32 32 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_32x32.png
+          sips -z 64 64 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_32x32@2x.png
+          sips -z 128 128 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_128x128.png
+          sips -z 256 256 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_128x128@2x.png
+          sips -z 256 256 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_256x256.png
+          sips -z 512 512 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_256x256@2x.png
+          sips -z 512 512 src-tauri/icons/icon.png --out src-tauri/icons/icon.iconset/icon_512x512.png
+          cp src-tauri/icons/icon.png src-tauri/icons/icon.iconset/icon_512x512@2x.png
+          iconutil -c icns src-tauri/icons/icon.iconset -o src-tauri/icons/icon.icns
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("src-tauri/tauri.conf.json")
+          data = json.loads(path.read_text())
+          data["bundle"]["icon"] = ["icons/icon.icns"]
+          path.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+
+      - name: Build desktop app
+        run: npm run desktop:build
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_paths }}
+          if-no-files-found: error
+          retention-days: 14
