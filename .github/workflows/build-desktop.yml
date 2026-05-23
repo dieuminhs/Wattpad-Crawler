@@ -118,7 +118,23 @@ jobs:
           PY
 
       - name: Build desktop app
-        run: npm run desktop:build
+        shell: bash
+        run: |
+          set +e
+          npm run desktop:build
+          status=$?
+          if [ "$status" -ne 0 ] && [ "${{ runner.os }}" = "macOS" ]; then
+            echo "::group::macOS DMG diagnostics"
+            find src-tauri/target/release/bundle -maxdepth 3 -print || true
+            if [ -f src-tauri/target/release/bundle/dmg/bundle_dmg.sh ]; then
+              echo "--- bundle_dmg.sh ---"
+              sed -n '1,240p' src-tauri/target/release/bundle/dmg/bundle_dmg.sh
+              echo "--- rerun bundle_dmg.sh with bash -x ---"
+              (cd src-tauri/target/release/bundle/dmg && bash -x ./bundle_dmg.sh) || true
+            fi
+            echo "::endgroup::"
+          fi
+          exit "$status"
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
@@ -127,5 +143,3 @@ jobs:
           path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
           retention-days: 14
-
-
