@@ -49,6 +49,72 @@ def test_parse_comments_page_accepts_v4_comment_shape():
     assert parsed[1].paragraph_id == "para"
     assert next_url == "https://api.wattpad.com/v4/parts/1493815966/comments?offsetId=next"
 
+
+def test_parse_comments_page_accepts_v5_sentiment_likes():
+    raw = {
+        "comments": [
+            {
+                "commentId": {
+                    "namespace": "comments",
+                    "resourceId": "1346950910_ed07664520f26bb94b3cc8497e6812f8_1754215612_87f70d2ae0",
+                },
+                "created": "2025-08-03T10:06:52Z",
+                "replyCount": 1,
+                "resource": {
+                    "namespace": "paragraphs",
+                    "resourceId": "1346950910_ed07664520f26bb94b3cc8497e6812f8",
+                },
+                "sentiments": {":like:": {"count": 2}},
+                "text": "??c h?t v? l?i l?i chap1",
+                "user": {"name": "caubemattich"},
+            },
+            {
+                "commentId": {
+                    "namespace": "comments",
+                    "resourceId": "1346950910_ed07664520f26bb94b3cc8497e6812f8_1726682766_8a666de929",
+                },
+                "created": "2024-09-18T18:06:06Z",
+                "resource": {
+                    "namespace": "paragraphs",
+                    "resourceId": "1346950910_ed07664520f26bb94b3cc8497e6812f8",
+                },
+                "sentiments": {},
+                "text": "Ch?a bi?t hay kh?ng nh?ng t?c gi? c? b? h?p gu n?n nh?y lu?n",
+                "user": {"name": "Meisuria"},
+            },
+        ]
+    }
+
+    parsed, next_url = parse_comments_page(raw)
+
+    assert next_url is None
+    assert parsed[0].comment_id == "1346950910_ed07664520f26bb94b3cc8497e6812f8_1754215612_87f70d2ae0"
+    assert parsed[0].user == "caubemattich"
+    assert parsed[0].body == "??c h?t v? l?i l?i chap1"
+    assert parsed[0].created_at == "2025-08-03T10:06:52Z"
+    assert parsed[0].paragraph_id == "ed07664520f26bb94b3cc8497e6812f8"
+    assert parsed[0].like_count == 2
+    assert parsed[1].like_count == 0
+
+
+def test_parse_comments_page_prefers_sentiment_like_count():
+    raw = {
+        "comments": [
+            {
+                "id": "c1",
+                "author": {"name": "bob"},
+                "body": "hello",
+                "createDate": "2026-04-30T17:30:46Z",
+                "sentiments": {":like:": {"count": 3}},
+                "voteCount": 1,
+            },
+        ]
+    }
+
+    parsed, _ = parse_comments_page(raw)
+
+    assert parsed[0].like_count == 3
+
 def test_parse_comments_page_accepts_nested_vote_count_shape():
     raw = {
         "comments": [

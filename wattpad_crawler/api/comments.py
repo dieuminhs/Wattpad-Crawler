@@ -31,7 +31,7 @@ def _parse_one(
       Comment at the cap level is preserved with `replies=[]` (D-17),
       not discarded — losing the parent would be silent data loss.
     """
-    cid = raw.get("id")
+    cid = _comment_id(raw)
     if cid is None:
         return None, False
 
@@ -62,29 +62,65 @@ def _parse_one(
         Comment(
             comment_id=str(cid),
             user=user,
-            body=raw.get("body") or "",
-            created_at=raw.get("createdAt") or raw.get("createDate") or "",
-            paragraph_id=raw.get("paragraphId"),
+            body=raw.get("body") or raw.get("text") or "",
+            created_at=raw.get("createdAt") or raw.get("createDate") or raw.get("created") or "",
+            paragraph_id=_paragraph_id(raw),
             like_count=_like_count(raw),
             replies=replies,
         ),
         truncated,
     )
 
+
+def _comment_id(raw: dict[str, Any]) -> str | None:
+    comment_id = raw.get("id")
+    if comment_id is None:
+        comment_id_obj = raw.get("commentId")
+        if isinstance(comment_id_obj, dict):
+            comment_id = comment_id_obj.get("resourceId")
+    return str(comment_id) if comment_id is not None else None
+
+
+def _paragraph_id(raw: dict[str, Any]) -> str | None:
+    paragraph_id = raw.get("paragraphId")
+    if paragraph_id is None:
+        resource = raw.get("resource")
+        if isinstance(resource, dict) and resource.get("namespace") == "paragraphs":
+            resource_id = resource.get("resourceId")
+            if isinstance(resource_id, str):
+                parts = resource_id.split("_", 1)
+                paragraph_id = parts[1] if len(parts) == 2 else resource_id
+    return str(paragraph_id) if paragraph_id is not None else None
+
 def _like_count(raw: dict[str, Any]) -> int:
     count = None
-    for key in ("voteCount", "votesCount", "likeCount", "likesCount", "numLikes", "numVotes", "likes", "votes"):
-        value = raw.get(key)
-        if isinstance(value, dict):
-            value = value.get("count") or value.get("total")
-        if value is not None:
-            count = value
-            break
+    sentiments = raw.get("sentiments")
+    if isinstance(sentiments, dict):
+        like_sentiment = sentiments.get(":like:")
+        if isinstance(like_sentiment, dict):
+            count = like_sentiment.get("count") or like_sentiment.get("total")
+
+    if count is None:
+        for key in (
+            "voteCount",
+            "votesCount",
+            "likeCount",
+            "likesCount",
+            "numLikes",
+            "numVotes",
+            "likes",
+            "votes",
+        ):
+            value = raw.get(key)
+            if isinstance(value, dict):
+                value = value.get("count") or value.get("total")
+            if value is not None:
+                count = value
+                break
     try:
         return int(count or 0)
     except (TypeError, ValueError):
         return 0
-
 
 def parse_comments_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]:
     raw_comments = raw.get("comments") or []
