@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 PART_COMMENTS_URL = "https://www.wattpad.com/v4/parts/{part_id}/comments?limit=100"
 COMMENT_REPLIES_URL = "https://www.wattpad.com/v4/comments/{comment_id}/replies?limit=100"
+PART_COMMENTS_V5_URL = (
+    "https://www.wattpad.com/v5/comments/namespaces/parts/"
+    "resources/{resource_id}/comments?limit=100"
+)
 PARAGRAPH_COMMENTS_URL = (
     "https://www.wattpad.com/v5/comments/namespaces/paragraphs/"
     "resources/{resource_id}/comments?"
@@ -150,6 +154,23 @@ def parse_comments_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]
             )
     return _nest_flat_replies(parsed, parent_by_id), raw.get("nextUrl")
 
+def _pagination_after(raw: dict[str, Any]) -> str | None:
+    pagination = raw.get("pagination")
+    if not isinstance(pagination, dict):
+        return None
+    after = pagination.get("after")
+    if not isinstance(after, dict):
+        return None
+    resource_id = after.get("resourceId")
+    return str(resource_id) if resource_id is not None else None
+
+def _v5_next_url(url: str, raw: dict[str, Any]) -> str | None:
+    after = _pagination_after(raw)
+    if after is None:
+        return None
+    base_url = url.split("?", 1)[0]
+    return f"{base_url}?limit=100&after={quote(after.replace('_', '#'), safe='')}"
+
 def parse_replies_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]:
     raw_replies = raw.get("replies") or []
     parsed: list[Comment] = []
@@ -224,7 +245,7 @@ def _fetch_all(
         if fetch_declared_replies:
             _fetch_declared_replies(client, comments, data)
         out.extend(comments)
-        url = next_url or ""
+        url = next_url or _v5_next_url(url, data) or ""
     return out
 
 def _fetch_declared_replies(
@@ -330,5 +351,9 @@ def fetch_inline_comments(client: RateLimitedClient, part_id: str) -> list[Comme
 
 
 def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
-    comments = _fetch_all(client, PART_COMMENTS_URL.format(part_id=quote(part_id, safe="")))
+    comments = _fetch_all(
+        client,
+        PART_COMMENTS_V5_URL.format(resource_id=quote(part_id, safe="")),
+        fetch_declared_replies=False,
+    )
     return [comment for comment in comments if comment.paragraph_id is None]

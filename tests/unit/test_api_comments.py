@@ -96,6 +96,37 @@ def test_parse_comments_page_accepts_v5_sentiment_likes():
     assert parsed[0].like_count == 2
     assert parsed[1].like_count == 0
 
+def test_parse_comments_page_accepts_v5_part_resource_comments():
+    raw = {
+        "comments": [
+            {
+                "commentId": {
+                    "namespace": "comments",
+                    "resourceId": "1346952590_1778432283_2a62aea0e2",
+                },
+                "created": "2026-05-10T16:58:03Z",
+                "resource": {"namespace": "parts", "resourceId": "1346952590"},
+                "sentiments": {":like:": {"count": 1}},
+                "text": "end comment",
+                "user": {"name": "Huuyyeenn1"},
+            }
+        ],
+        "pagination": {
+            "after": {
+                "namespace": "comments",
+                "resourceId": "1346952590_1778432283_2a62aea0e2",
+            }
+        },
+    }
+
+    parsed, next_url = parse_comments_page(raw)
+
+    assert next_url is None
+    assert parsed[0].comment_id == "1346952590_1778432283_2a62aea0e2"
+    assert parsed[0].paragraph_id is None
+    assert parsed[0].body == "end comment"
+    assert parsed[0].like_count == 1
+
 
 def test_parse_comments_page_prefers_sentiment_like_count():
     raw = {
@@ -185,6 +216,65 @@ def test_fetch_inline_comments_refreshes_likes_from_v5_paragraph_endpoint():
         for url in client.urls
     )
 
+def test_fetch_end_comments_uses_v5_part_endpoint_and_after_pagination():
+    first_page = {
+        "comments": [
+            {
+                "commentId": {"resourceId": "1346952590_1778432283_2a62aea0e2"},
+                "created": "2026-05-10T16:58:03Z",
+                "resource": {"namespace": "parts", "resourceId": "1346952590"},
+                "text": "first end comment",
+                "user": {"name": "one"},
+            },
+            {
+                "commentId": {
+                    "resourceId": "1346952590_abca6a598fc6944ab1b70d5b69d07e6e_1778431930_47b17f9aca"
+                },
+                "created": "2026-05-10T16:52:10Z",
+                "resource": {
+                    "namespace": "paragraphs",
+                    "resourceId": "1346952590_abca6a598fc6944ab1b70d5b69d07e6e",
+                },
+                "text": "inline comment",
+                "user": {"name": "inline"},
+            },
+        ],
+        "pagination": {
+            "after": {
+                "namespace": "comments",
+                "resourceId": "1346952590_1778432283_2a62aea0e2",
+            }
+        },
+    }
+    second_page = {
+        "comments": [
+            {
+                "commentId": {"resourceId": "1346952590_1778430000_deadbeef"},
+                "created": "2026-05-10T16:20:00Z",
+                "resource": {"namespace": "parts", "resourceId": "1346952590"},
+                "text": "second end comment",
+                "user": {"name": "two"},
+            }
+        ]
+    }
+
+    class SequentialClient:
+        def __init__(self):
+            self.urls = []
+            self.pages = [first_page, second_page]
+
+        def get(self, url: str):
+            self.urls.append(url)
+            return _FakeCommentsResponse(self.pages.pop(0))
+
+    client = SequentialClient()
+
+    comments = comments_mod.fetch_end_comments(client, "1346952590")
+
+    assert [comment.body for comment in comments] == ["first end comment", "second end comment"]
+    assert "/v5/comments/namespaces/parts/resources/1346952590/comments" in client.urls[0]
+    assert "after=1346952590%231778432283%232a62aea0e2" in client.urls[1]
+
 def test_parse_comments_page_accepts_nested_vote_count_shape():
     raw = {
         "comments": [
@@ -268,7 +358,7 @@ def test_parse_comments_page_accepts_latest_replies_shape():
     assert parsed[0].replies[0].comment_id == "reply"
 
 
-def test_fetch_inline_and_end_comments_use_v4_part_comments_and_filter_by_paragraph():
+def test_fetch_inline_uses_v4_and_end_uses_v5_part_comments():
     class FakeResponse:
         def json(self):
             return {
@@ -310,7 +400,10 @@ def test_fetch_inline_and_end_comments_use_v4_part_comments_and_filter_by_paragr
         "https://www.wattpad.com/v5/comments/namespaces/paragraphs/"
         "resources/1493815966_para/comments?"
     )
-    assert end_client.urls == ["https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"]
+    assert end_client.urls == [
+        "https://www.wattpad.com/v5/comments/namespaces/parts/"
+        "resources/1493815966/comments?limit=100"
+    ]
     assert [c.comment_id for c in inline] == ["inline"]
     assert [c.comment_id for c in end] == ["end"]
 
