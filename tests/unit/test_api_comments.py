@@ -168,20 +168,7 @@ class _FakeCommentsClient:
         raise AssertionError(f"unexpected URL: {url}")
 
 
-def test_fetch_inline_comments_refreshes_likes_from_v5_paragraph_endpoint():
-    v4_page = {
-        "comments": [
-            {
-                "id": "1346950910#ed07664520f26bb94b3cc8497e6812f8#1754215612#87f70d2ae0",
-                "author": {"name": "caubemattich"},
-                "body": "first",
-                "createDate": "2025-08-03T10:06:52Z",
-                "paragraphId": "ed07664520f26bb94b3cc8497e6812f8",
-                "voteCount": 0,
-            }
-        ],
-        "nextUrl": None,
-    }
+def test_fetch_inline_comments_uses_v5_part_endpoint_with_likes():
     v5_page = {
         "comments": [
             {
@@ -202,8 +189,7 @@ def test_fetch_inline_comments_refreshes_likes_from_v5_paragraph_endpoint():
     }
     client = _FakeCommentsClient(
         [
-            ("/v4/parts/1346950910/comments", v4_page),
-            ("/v5/comments/namespaces/paragraphs/resources/", v5_page),
+            ("/v5/comments/namespaces/parts/resources/1346950910/comments", v5_page),
         ]
     )
 
@@ -212,7 +198,7 @@ def test_fetch_inline_comments_refreshes_likes_from_v5_paragraph_endpoint():
     assert len(comments) == 1
     assert comments[0].like_count == 2
     assert any(
-        "resources/1346950910_ed07664520f26bb94b3cc8497e6812f8/comments" in url
+        "/v5/comments/namespaces/parts/resources/1346950910/comments" in url
         for url in client.urls
     )
 
@@ -358,27 +344,26 @@ def test_parse_comments_page_accepts_latest_replies_shape():
     assert parsed[0].replies[0].comment_id == "reply"
 
 
-def test_fetch_inline_uses_v4_and_end_uses_v5_part_comments():
+def test_fetch_inline_and_end_use_v5_part_comments_and_filter_by_resource():
     class FakeResponse:
         def json(self):
             return {
                 "comments": [
                     {
-                        "id": "end",
-                        "author": {"name": "end-user"},
-                        "body": "end",
-                        "createDate": "2026-04-30T17:30:46Z",
-                        "paragraphId": None,
+                        "commentId": {"resourceId": "1493815966_1777570246_134769c15e"},
+                        "user": {"name": "end-user"},
+                        "text": "end",
+                        "created": "2026-04-30T17:30:46Z",
+                        "resource": {"namespace": "parts", "resourceId": "1493815966"},
                     },
                     {
-                        "id": "inline",
-                        "author": {"name": "inline-user"},
-                        "body": "inline",
-                        "createDate": "2026-04-16T14:06:44Z",
-                        "paragraphId": "para",
+                        "commentId": {"resourceId": "1493815966_para_1776348404_e22792c88c"},
+                        "user": {"name": "inline-user"},
+                        "text": "inline",
+                        "created": "2026-04-16T14:06:44Z",
+                        "resource": {"namespace": "paragraphs", "resourceId": "1493815966_para"},
                     },
                 ],
-                "nextUrl": None,
             }
 
     class FakeClient:
@@ -395,17 +380,16 @@ def test_fetch_inline_uses_v4_and_end_uses_v5_part_comments():
     inline = comments_mod.fetch_inline_comments(inline_client, "1493815966")
     end = comments_mod.fetch_end_comments(end_client, "1493815966")
 
-    assert inline_client.urls[0] == "https://www.wattpad.com/v4/parts/1493815966/comments?limit=100"
-    assert inline_client.urls[1] == (
-        "https://www.wattpad.com/v5/comments/namespaces/paragraphs/"
-        "resources/1493815966_para/comments?"
-    )
+    assert inline_client.urls == [
+        "https://www.wattpad.com/v5/comments/namespaces/parts/"
+        "resources/1493815966/comments?limit=100"
+    ]
     assert end_client.urls == [
         "https://www.wattpad.com/v5/comments/namespaces/parts/"
         "resources/1493815966/comments?limit=100"
     ]
-    assert [c.comment_id for c in inline] == ["inline"]
-    assert [c.comment_id for c in end] == ["end"]
+    assert [c.comment_id for c in inline] == ["1493815966_para_1776348404_e22792c88c"]
+    assert [c.comment_id for c in end] == ["1493815966_1777570246_134769c15e"]
 
 def test_fetch_inline_comments_fetches_declared_reply_pages():
     class FakeResponse:
@@ -438,15 +422,14 @@ def test_fetch_inline_comments_fetches_declared_reply_pages():
             return FakeResponse({
                 "comments": [
                     {
-                        "id": "parent",
-                        "author": {"name": "parent-user"},
-                        "body": "parent body",
-                        "createDate": "2026-04-16T14:06:44Z",
-                        "paragraphId": "para",
+                        "commentId": {"resourceId": "parent"},
+                        "user": {"name": "parent-user"},
+                        "text": "parent body",
+                        "created": "2026-04-16T14:06:44Z",
+                        "resource": {"namespace": "paragraphs", "resourceId": "1493815966_para"},
                         "replyCount": 1,
                     }
                 ],
-                "nextUrl": None,
             })
 
     comments = comments_mod.fetch_inline_comments(FakeClient(), "1493815966")

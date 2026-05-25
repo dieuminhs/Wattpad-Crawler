@@ -254,9 +254,9 @@ def _fetch_declared_replies(
     raw_page: dict[str, Any],
 ) -> None:
     raw_by_id = {
-        str(raw["id"]): raw
+        str(comment_id): raw
         for raw in raw_page.get("comments") or []
-        if isinstance(raw, dict) and raw.get("id") is not None
+        if isinstance(raw, dict) and (comment_id := _comment_id(raw)) is not None
     }
     for comment in comments:
         raw = raw_by_id.get(comment.comment_id)
@@ -344,10 +344,11 @@ def _refresh_inline_like_counts(
         _merge_like_counts_from_v5(comments, v5_comments)
 
 def fetch_inline_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
-    comments = _fetch_all(client, PART_COMMENTS_URL.format(part_id=quote(part_id, safe="")))
-    inline_comments = [comment for comment in comments if comment.paragraph_id is not None]
-    _refresh_inline_like_counts(client, part_id, inline_comments)
-    return inline_comments
+    comments = _fetch_all(
+        client,
+        PART_COMMENTS_V5_URL.format(resource_id=quote(part_id, safe="")),
+    )
+    return [comment for comment in comments if comment.paragraph_id is not None]
 
 
 def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
