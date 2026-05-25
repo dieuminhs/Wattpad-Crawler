@@ -17,8 +17,7 @@ impl BackendProcess {
     fn shutdown(&self) {
         if let Ok(mut child) = self.0.lock() {
             if let Some(mut child) = child.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+                terminate_backend(&mut child);
             }
         }
     }
@@ -28,6 +27,20 @@ impl Drop for BackendProcess {
     fn drop(&mut self) {
         self.shutdown();
     }
+}
+
+fn terminate_backend(child: &mut Child) {
+    if cfg!(windows) {
+        let _ = Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    } else {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
 }
 
 fn backend_exe_name() -> &'static str {
@@ -117,7 +130,7 @@ fn start_backend() -> Result<(String, BackendProcess), String> {
             Ok((url, process))
         }
         Err(err) => {
-            let _ = child.kill();
+            terminate_backend(&mut child);
             let _ = fs::remove_file(startup_url_file);
             Err(err)
         }
