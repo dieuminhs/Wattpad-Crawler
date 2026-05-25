@@ -46,6 +46,17 @@ def test_reader_comment_button_hover_scales_without_dropping(output_dir: Path):
     assert "transform: translateY(-50%) scale(1.08);" in r.text
     assert "transition: transform 0.16s ease" in r.text
 
+def test_reader_chapter_body_uses_vietnamese_safe_font_stack(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/static/style.css")
+
+    assert r.status_code == 200
+    assert ".reader .chapter-body" in r.text
+    assert 'font-family: system-ui, -apple-system, "Segoe UI", sans-serif;' in r.text
+    assert "font-family: Georgia, serif" not in r.text
+
 
 def test_reader_comment_button_click_toggles_drawer_closed(output_dir: Path):
     template = (
@@ -72,6 +83,16 @@ def test_reader_story_info_has_library_button(output_dir: Path):
 
     assert 'class="reader-nav-actions"' in template
     assert 'class="btn btn-light" href="/library"' in template
+    assert "&larr; Library" in template
+
+def test_reader_chapter_back_to_story_uses_button_style(output_dir: Path):
+    template = (
+        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+    ).read_text(encoding="utf-8")
+
+    assert '<a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">' in template
+    assert "&larr; {{ meta.title }}" in template
+    assert "`r`n" not in template
 
 def test_reader_end_comments_show_more_reveals_ten_at_a_time(output_dir: Path):
     template = (

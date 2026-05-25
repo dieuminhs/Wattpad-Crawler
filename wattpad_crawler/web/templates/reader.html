@@ -9,7 +9,7 @@
       {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
       {% if first_ord %}
         <p class="reader-nav-actions">
-          <a class="btn btn-light" href="/library">â† Library</a>
+          <a class="btn btn-light" href="/library">&larr; Library</a>
           <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
@@ -24,14 +24,17 @@
         {% endfor %}
       </ol>
       <p>
-        <a href="/library">← Library</a> ·
+        <a class="btn btn-light" href="/library">&larr; Library</a>
+        <span class="muted">&middot;</span>
         Other formats:
         {% if has_epub %}<a href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
         {% if has_html %}<a href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
         {% if has_txt %}<a href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
       </p>
     {% else %}
-      <p class="muted"><a href="/read/{{ author }}/{{ dir_name }}">← {{ meta.title }}</a></p>
+      <p class="reader-nav-actions">
+        <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">&larr; {{ meta.title }}</a>
+      </p>
       <h1>{{ chapter.title }}</h1>
       <form method="post" action="/jobs" class="reader-action-form" data-stay-put-form>
         <input type="hidden" name="kind" value="comments">

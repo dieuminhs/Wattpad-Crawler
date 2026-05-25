@@ -565,7 +565,11 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   padding: clamp(1rem, 3vw, 2.5rem);
   box-shadow: var(--shadow-soft);
 }
-.reader .chapter-body { font-family: Georgia, serif; font-size: 1.16em; line-height: 1.82; }
+.reader .chapter-body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 1.16em;
+  line-height: 1.82;
+}
 .reader-action-form { margin: 0 0 1.25rem; }
 .reader .chapter-body pre { white-space: pre-wrap; font-family: inherit; margin: 1em 0; }
 .reader-floating-nav {
