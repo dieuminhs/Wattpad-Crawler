@@ -352,9 +352,8 @@ def fetch_inline_comments(client: RateLimitedClient, part_id: str) -> list[Comme
 
 
 def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]:
-    comments = _fetch_all(
+    return _fetch_all(
         client,
         PART_COMMENTS_V5_URL.format(resource_id=quote(part_id, safe="")),
         fetch_declared_replies=False,
     )
-    return [comment for comment in comments if comment.paragraph_id is None]

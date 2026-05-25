@@ -55,6 +55,24 @@ def test_reader_comment_button_click_toggles_drawer_closed(output_dir: Path):
     assert "if (drawer.classList.contains('is-open'))" in template
     assert "hideDrawer();" in template
 
+def test_reader_refresh_comments_stays_on_current_page(output_dir: Path):
+    template = (
+        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+    ).read_text(encoding="utf-8")
+
+    assert "data-stay-put-form" in template
+    assert "event.preventDefault();" in template
+    assert "await fetch(form.action" in template
+    assert "data-stay-put-status" in template
+
+def test_reader_story_info_has_library_button(output_dir: Path):
+    template = (
+        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'class="reader-nav-actions"' in template
+    assert 'class="btn btn-light" href="/library"' in template
+
 
 def test_reader_comment_drawer_has_visible_close_button(output_dir: Path):
     cfg = Config(output_dir=output_dir)

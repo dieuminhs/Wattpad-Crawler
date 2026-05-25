@@ -9,6 +9,7 @@
       {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
       {% if first_ord %}
         <p class="reader-nav-actions">
+          <a class="btn btn-light" href="/library">â† Library</a>
           <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
@@ -32,10 +33,11 @@
     {% else %}
       <p class="muted"><a href="/read/{{ author }}/{{ dir_name }}">← {{ meta.title }}</a></p>
       <h1>{{ chapter.title }}</h1>
-      <form method="post" action="/jobs" class="reader-action-form">
+      <form method="post" action="/jobs" class="reader-action-form" data-stay-put-form>
         <input type="hidden" name="kind" value="comments">
         <input type="hidden" name="story_id" value="{{ meta.story_id }}">
         <button type="submit">Refresh comments</button>
+        <span class="muted" data-stay-put-status aria-live="polite"></span>
       </form>
       <div class="chapter-body">
         {% if chapter.paragraphs %}
@@ -173,6 +175,28 @@
             button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
             replies.hidden = expanded;
             button.textContent = expanded ? hiddenLabel : shownLabel;
+          });
+        });
+        document.querySelectorAll('[data-stay-put-form]').forEach((form) => {
+          const button = form.querySelector('button[type="submit"]');
+          const status = form.querySelector('[data-stay-put-status]');
+          form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (button) button.disabled = true;
+            if (status) status.textContent = 'Refreshing commentsâ€¦';
+            try {
+              const response = await fetch(form.action, {
+                method: form.method || 'post',
+                body: new FormData(form),
+                credentials: 'same-origin',
+              });
+              if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+              if (status) status.textContent = 'Refresh started. Stay on this page; reload later to see updates.';
+            } catch (error) {
+              if (status) status.textContent = 'Could not start refresh comments.';
+            } finally {
+              if (button) button.disabled = false;
+            }
           });
         });
         (function () {

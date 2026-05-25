@@ -257,7 +257,11 @@ def test_fetch_end_comments_uses_v5_part_endpoint_and_after_pagination():
 
     comments = comments_mod.fetch_end_comments(client, "1346952590")
 
-    assert [comment.body for comment in comments] == ["first end comment", "second end comment"]
+    assert [comment.body for comment in comments] == [
+        "first end comment",
+        "inline comment",
+        "second end comment",
+    ]
     assert "/v5/comments/namespaces/parts/resources/1346952590/comments" in client.urls[0]
     assert "after=1346952590%231778432283%232a62aea0e2" in client.urls[1]
 
@@ -389,7 +393,10 @@ def test_fetch_inline_and_end_use_v5_part_comments_and_filter_by_resource():
         "resources/1493815966/comments?limit=100"
     ]
     assert [c.comment_id for c in inline] == ["1493815966_para_1776348404_e22792c88c"]
-    assert [c.comment_id for c in end] == ["1493815966_1777570246_134769c15e"]
+    assert [c.comment_id for c in end] == [
+        "1493815966_1777570246_134769c15e",
+        "1493815966_para_1776348404_e22792c88c",
+    ]
 
 def test_fetch_inline_comments_fetches_declared_reply_pages():
     class FakeResponse:
