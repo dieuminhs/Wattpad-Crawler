@@ -13,13 +13,20 @@ const BACKEND_NAME: &str = "wattpad-crawler-desktop-backend";
 
 struct BackendProcess(Arc<Mutex<Option<Child>>>);
 
-impl Drop for BackendProcess {
-    fn drop(&mut self) {
+impl BackendProcess {
+    fn shutdown(&self) {
         if let Ok(mut child) = self.0.lock() {
             if let Some(mut child) = child.take() {
                 let _ = child.kill();
+                let _ = child.wait();
             }
         }
+    }
+}
+
+impl Drop for BackendProcess {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
@@ -134,6 +141,11 @@ fn main() {
             focus_main_window(app);
         }))
         .manage(backend_process)
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                window.state::<BackendProcess>().shutdown();
+            }
+        })
         .setup(move |app| {
             tauri::WebviewWindowBuilder::new(
                 app,

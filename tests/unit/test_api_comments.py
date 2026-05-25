@@ -211,6 +211,7 @@ def test_fetch_end_comments_uses_v5_part_endpoint_and_after_pagination():
                 "resource": {"namespace": "parts", "resourceId": "1346952590"},
                 "text": "first end comment",
                 "user": {"name": "one"},
+                "replyCount": 1,
             },
             {
                 "commentId": {
@@ -243,6 +244,20 @@ def test_fetch_end_comments_uses_v5_part_endpoint_and_after_pagination():
             }
         ]
     }
+    replies_page = {
+        "comments": [
+            {
+                "commentId": {"resourceId": "1346952590_1778432283_replyhash"},
+                "created": "2026-05-10T17:00:00Z",
+                "resource": {
+                    "namespace": "comments",
+                    "resourceId": "1346952590_1778432283_2a62aea0e2",
+                },
+                "text": "reply to first end comment",
+                "user": {"name": "reply-user"},
+            }
+        ]
+    }
 
     class SequentialClient:
         def __init__(self):
@@ -251,6 +266,8 @@ def test_fetch_end_comments_uses_v5_part_endpoint_and_after_pagination():
 
         def get(self, url: str):
             self.urls.append(url)
+            if "/v5/comments/namespaces/comments/resources/" in url:
+                return _FakeCommentsResponse(replies_page)
             return _FakeCommentsResponse(self.pages.pop(0))
 
     client = SequentialClient()
@@ -262,8 +279,14 @@ def test_fetch_end_comments_uses_v5_part_endpoint_and_after_pagination():
         "inline comment",
         "second end comment",
     ]
+    assert [reply.body for reply in comments[0].replies] == ["reply to first end comment"]
     assert "/v5/comments/namespaces/parts/resources/1346952590/comments" in client.urls[0]
-    assert "after=1346952590%231778432283%232a62aea0e2" in client.urls[1]
+    assert any(
+        "/v5/comments/namespaces/comments/resources/1346952590_1778432283_2a62aea0e2/comments"
+        in url
+        for url in client.urls
+    )
+    assert any("after=1346952590%231778432283%232a62aea0e2" in url for url in client.urls)
 
 def test_parse_comments_page_accepts_nested_vote_count_shape():
     raw = {
@@ -412,19 +435,17 @@ def test_fetch_inline_comments_fetches_declared_reply_pages():
 
         def get(self, url: str):
             self.urls.append(url)
-            if "/comments/parent/replies" in url:
+            if "/v5/comments/namespaces/comments/resources/parent/comments" in url:
                 return FakeResponse({
-                    "replies": [
+                    "comments": [
                         {
-                            "id": "reply",
-                            "author": {"name": "reply-user"},
-                            "body": "reply body",
-                            "createDate": "2026-04-16T14:07:44Z",
-                            "paragraphId": None,
-                            "parentId": "parent",
+                            "commentId": {"resourceId": "reply"},
+                            "user": {"name": "reply-user"},
+                            "text": "reply body",
+                            "created": "2026-04-16T14:07:44Z",
+                            "resource": {"namespace": "comments", "resourceId": "parent"},
                         }
                     ],
-                    "nextUrl": None,
                 })
             return FakeResponse({
                 "comments": [
@@ -444,6 +465,56 @@ def test_fetch_inline_comments_fetches_declared_reply_pages():
     assert len(comments) == 1
     assert comments[0].comment_id == "parent"
     assert [reply.comment_id for reply in comments[0].replies] == ["reply"]
+
+def test_fetch_inline_comments_fetches_v5_declared_reply_pages():
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __init__(self):
+            self.urls: list[str] = []
+
+        def get(self, url: str):
+            self.urls.append(url)
+            if "/v5/comments/namespaces/comments/resources/" in url:
+                return FakeResponse({
+                    "comments": [
+                        {
+                            "commentId": {"resourceId": "1346952590_parent_reply"},
+                            "created": "2026-05-10T16:07:44Z",
+                            "resource": {"namespace": "comments", "resourceId": "1346952590_parent"},
+                            "text": "reply body",
+                            "user": {"name": "reply-user"},
+                        }
+                    ]
+                })
+            return FakeResponse({
+                "comments": [
+                    {
+                        "commentId": {"resourceId": "1346952590_parent"},
+                        "created": "2026-05-10T16:06:44Z",
+                        "resource": {"namespace": "paragraphs", "resourceId": "1346952590_para"},
+                        "replyCount": 1,
+                        "text": "parent body",
+                        "user": {"name": "parent-user"},
+                    }
+                ]
+            })
+
+    client = FakeClient()
+
+    comments = comments_mod.fetch_inline_comments(client, "1346952590")
+
+    assert len(comments) == 1
+    assert [reply.body for reply in comments[0].replies] == ["reply body"]
+    assert client.urls[1] == (
+        "https://www.wattpad.com/v5/comments/namespaces/comments/"
+        "resources/1346952590_parent/comments?limit=100"
+    )
 
 def test_fetch_inline_comments_uses_underscore_comment_id_for_replies():
     class FakeResponse:

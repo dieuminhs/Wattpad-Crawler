@@ -73,6 +73,17 @@ def test_reader_story_info_has_library_button(output_dir: Path):
     assert 'class="reader-nav-actions"' in template
     assert 'class="btn btn-light" href="/library"' in template
 
+def test_reader_end_comments_show_more_reveals_ten_at_a_time(output_dir: Path):
+    template = (
+        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+    ).read_text(encoding="utf-8")
+
+    assert "data-end-comments" in template
+    assert "loop.depth == 1 and loop.index > 2" in template
+    assert "data-end-comments-more" in template
+    assert "hiddenComments.slice(0, 10)" in template
+    assert "Show more" in template
+
 
 def test_reader_comment_drawer_has_visible_close_button(output_dir: Path):
     cfg = Config(output_dir=output_dir)

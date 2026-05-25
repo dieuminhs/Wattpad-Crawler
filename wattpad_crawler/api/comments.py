@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 PART_COMMENTS_URL = "https://www.wattpad.com/v4/parts/{part_id}/comments?limit=100"
 COMMENT_REPLIES_URL = "https://www.wattpad.com/v4/comments/{comment_id}/replies?limit=100"
+COMMENT_REPLIES_V5_URL = (
+    "https://www.wattpad.com/v5/comments/namespaces/comments/"
+    "resources/{resource_id}/comments?limit=100"
+)
 PART_COMMENTS_V5_URL = (
     "https://www.wattpad.com/v5/comments/namespaces/parts/"
     "resources/{resource_id}/comments?limit=100"
@@ -172,7 +176,7 @@ def _v5_next_url(url: str, raw: dict[str, Any]) -> str | None:
     return f"{base_url}?limit=100&after={quote(after.replace('_', '#'), safe='')}"
 
 def parse_replies_page(raw: dict[str, Any]) -> tuple[list[Comment], str | None]:
-    raw_replies = raw.get("replies") or []
+    raw_replies = raw.get("replies") or raw.get("comments") or []
     parsed: list[Comment] = []
     for r in raw_replies:
         if not isinstance(r, dict):
@@ -262,9 +266,10 @@ def _fetch_declared_replies(
         raw = raw_by_id.get(comment.comment_id)
         if raw is None or comment.replies or _reply_count(raw) <= 0:
             continue
+        replies_url = _reply_pages_url(comment.comment_id, raw)
         replies = _fetch_reply_pages(
             client,
-            COMMENT_REPLIES_URL.format(comment_id=_url_comment_id(comment.comment_id)),
+            replies_url,
         )
         comment.replies.extend(replies)
 
@@ -278,8 +283,13 @@ def _fetch_reply_pages(client: RateLimitedClient, url: str) -> list[Comment]:
         data = client.get(url).json()
         replies, next_url = parse_replies_page(data)
         out.extend(replies)
-        url = next_url or ""
+        url = next_url or _v5_next_url(url, data) or ""
     return out
+
+def _reply_pages_url(comment_id: str, raw: dict[str, Any]) -> str:
+    if isinstance(raw.get("commentId"), dict):
+        return COMMENT_REPLIES_V5_URL.format(resource_id=_url_comment_id(comment_id))
+    return COMMENT_REPLIES_URL.format(comment_id=_url_comment_id(comment_id))
 
 def _url_comment_id(comment_id: str) -> str:
     return quote(comment_id.replace("#", "_"), safe="")
@@ -355,5 +365,4 @@ def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]
     return _fetch_all(
         client,
         PART_COMMENTS_V5_URL.format(resource_id=quote(part_id, safe="")),
-        fetch_declared_replies=False,
     )

@@ -87,10 +87,10 @@
         {% endif %}
       </div>
       {% if chapter.end_comments %}
-        <section class="end-comments">
+        <section class="end-comments" data-end-comments>
           <h2>End comments</h2>
           {% for comment in chapter.end_comments recursive %}
-            <article class="comment">
+            <article class="comment" data-end-comment{% if loop.depth == 1 and loop.index > 2 %} hidden{% endif %}>
               <div class="comment-main">
                 <p><strong>{{ comment.user }}</strong>: {{ comment.body }}</p>
                 <span class="comment-like-count" aria-label="{{ comment.like_count | default(0) }} like{% if (comment.like_count | default(0)) != 1 %}s{% endif %}">
@@ -106,6 +106,9 @@
               {% endif %}
             </article>
           {% endfor %}
+          {% if chapter.end_comments | length > 2 %}
+            <button class="btn btn-light" type="button" data-end-comments-more>Show more</button>
+          {% endif %}
         </section>
       {% endif %}
       <p>
@@ -176,6 +179,24 @@
             replies.hidden = expanded;
             button.textContent = expanded ? hiddenLabel : shownLabel;
           });
+        });
+        document.querySelectorAll('[data-end-comments]').forEach((section) => {
+          const button = section.querySelector('[data-end-comments-more]');
+          if (!button) return;
+          const comments = Array.from(section.children).filter((child) => child.matches('[data-end-comment]'));
+          const revealNext = () => {
+            const hiddenComments = comments.filter((comment) => comment.hidden);
+            hiddenComments.slice(0, 10).forEach((comment) => { comment.hidden = false; });
+            const remaining = comments.filter((comment) => comment.hidden).length;
+            if (remaining === 0) {
+              button.hidden = true;
+              return;
+            }
+            button.textContent = `Show more (${remaining} remaining)`;
+          };
+          const remaining = comments.filter((comment) => comment.hidden).length;
+          button.textContent = remaining ? `Show more (${remaining} remaining)` : 'Show more';
+          button.addEventListener('click', revealNext);
         });
         document.querySelectorAll('[data-stay-put-form]').forEach((form) => {
           const button = form.querySelector('button[type="submit"]');
