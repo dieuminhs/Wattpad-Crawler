@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Self
 
+from wattpad_crawler.archive.health import check_story_archive
 from wattpad_crawler.archive.library import LibraryEntry
 from wattpad_crawler.archive.store import slugify, story_dir
 from wattpad_crawler.models import Comment, Part, Story
@@ -135,14 +136,10 @@ class ArchiveRepository:
         return self
 
     def _ensure_columns(self) -> None:
-        story_columns = {
-            row["name"] for row in self.db.execute("PRAGMA table_info(stories)")
-        }
+        story_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(stories)")}
         if "bookmarked" not in story_columns:
             self.db.execute("ALTER TABLE stories ADD COLUMN bookmarked INTEGER NOT NULL DEFAULT 0")
-        comment_columns = {
-            row["name"] for row in self.db.execute("PRAGMA table_info(comments)")
-        }
+        comment_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(comments)")}
         if "like_count" not in comment_columns:
             self.db.execute("ALTER TABLE comments ADD COLUMN like_count INTEGER NOT NULL DEFAULT 0")
 
@@ -461,6 +458,7 @@ class ArchiveRepository:
                     author_username=story["author_username"],
                 ),
             )
+            health = check_story_archive(story_path, story)
             entries.append(
                 LibraryEntry(
                     story_id=story["story_id"],
@@ -475,6 +473,9 @@ class ArchiveRepository:
                     bookmarked=story["bookmarked"],
                     first_ordinal=row["first_ordinal"],
                     last_ordinal=row["last_ordinal"],
+                    health_status=health.status,
+                    health_summary=health.summary,
+                    health_issues=health.issues,
                 )
             )
         return entries

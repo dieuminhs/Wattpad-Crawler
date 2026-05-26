@@ -151,6 +151,20 @@ def test_setup_page_renders(output_dir: Path):
     assert r.status_code == 200
     assert "cookie" in r.text.lower()
     assert "wattpad" in r.text.lower()
+    assert "Local personal archive" in r.text
+    assert "Use only content you own or have permission to archive" in r.text
+    assert "hosted scraping service" in r.text
+
+
+def test_acceptable_use_documented_for_distribution():
+    root = Path(__file__).parents[2]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    desktop = (root / "docs" / "desktop.md").read_text(encoding="utf-8")
+
+    assert "## Acceptable use" in readme
+    assert "Do not redistribute archived stories" in readme
+    assert "## Product positioning" in desktop
+    assert "local-first personal archive and offline reader" in desktop
 
 
 def test_config_page_renders_current_settings(output_dir: Path):
@@ -166,6 +180,9 @@ def test_config_page_renders_current_settings(output_dir: Path):
     assert 'value="1.5"' in r.text
     assert 'name="workers_per_story"' in r.text
     assert 'value="4"' in r.text
+    assert "Export style" in r.text
+    assert 'name="export_preset"' in r.text
+    assert 'value="classic"' in r.text
 
 
 def test_config_post_saves_rate_limit_and_workers(output_dir: Path):
@@ -175,7 +192,7 @@ def test_config_post_saves_rate_limit_and_workers(output_dir: Path):
 
     r = client.post(
         "/config",
-        data={"rate_limit_per_sec": "3.5", "workers_per_story": "6"},
+        data={"rate_limit_per_sec": "3.5", "workers_per_story": "6", "export_preset": "cozy"},
         follow_redirects=False,
     )
 
@@ -185,6 +202,7 @@ def test_config_post_saves_rate_limit_and_workers(output_dir: Path):
     assert saved.cookie == "tok"
     assert saved.rate_limit_per_sec == 3.5
     assert saved.workers_per_story == 6
+    assert saved.export_preset == "cozy"
 
 
 def test_pages_cache_bust_static_css(output_dir: Path):
@@ -344,6 +362,35 @@ def test_post_jobs_url_resolves(output_dir: Path, monkeypatch):
     assert captured["sid"] == "789"
 
 
+def test_post_jobs_repair_story_uses_existing_story_id(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+    captured = {}
+
+    def fake_archive_story(cfg_arg, _client, _manifest, sid, *, deps=None, progress=None):
+        captured["sid"] = sid
+        if progress:
+            progress("story.start", {"story_id": sid})
+
+    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+
+    r = client.post(
+        "/jobs",
+        data={"kind": "repair_story", "story_id": "42"},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/?job_id=")
+    job_id = r.headers["location"].split("=", 1)[1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
+        time.sleep(0.01)
+    assert captured["sid"] == "42"
 def test_post_jobs_invalid_kind_returns_400(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
@@ -483,6 +530,8 @@ def test_library_lists_stories(output_dir: Path):
     assert "Bookmark" in r.text
     assert 'name="story_ids" value="42"' in r.text
     assert 'name="bulk_action"' in r.text
+    assert "Repair archive" in r.text
+    assert 'value="repair_story"' in r.text
     assert "Refresh comments" in r.text
     assert 'id="library-select-all"' in r.text
     assert "Select all" in r.text
@@ -492,6 +541,50 @@ def test_library_lists_stories(output_dir: Path):
     assert 'class="library-cover-placeholder" aria-hidden="true"' in r.text
     assert "no cover" not in r.text
 
+
+def test_library_health_summary_counts_archives(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    complete = output_dir / "stories" / "alice" / "42_complete"
+    broken = output_dir / "stories" / "bob" / "77_broken"
+    complete_parts = complete / "parts"
+    complete_output = complete / "output"
+    complete_parts.mkdir(parents=True)
+    complete_output.mkdir()
+    (complete / "metadata.json").write_text(json.dumps({
+        "story_id": "42",
+        "title": "Complete",
+        "author_username": "alice",
+        "tags": [],
+        "description": "",
+        "parts": [{"part_id": "100", "ordinal": 1, "title": "One"}],
+    }))
+    for suffix in ("json", "html", "txt"):
+        (complete_parts / f"01_100_one.{suffix}").write_text("ok", encoding="utf-8")
+    (complete_parts / "01_100_comments-inline.json").write_text("[]", encoding="utf-8")
+    (complete_parts / "01_100_comments-end.json").write_text("[]", encoding="utf-8")
+    (complete_output / "Complete.epub").write_bytes(b"epub")
+    broken.mkdir(parents=True)
+    (broken / "metadata.json").write_text(json.dumps({
+        "story_id": "77",
+        "title": "Broken",
+        "author_username": "bob",
+        "tags": [],
+        "description": "",
+        "parts": [{"part_id": "200", "ordinal": 1, "title": "One"}],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library")
+
+    assert r.status_code == 200
+    assert "Archive health summary" in r.text
+    assert "Complete" in r.text
+    assert "Need repair" in r.text
+    assert ">1</strong>" in r.text
+    repair_page = client.get("/library?filter=needs_repair")
+    assert '<div class="title">Broken</div>' in repair_page.text
+    assert '<div class="title">Complete</div>' not in repair_page.text
 
 def test_library_story_cards_show_read_actions(output_dir: Path):
     cfg = Config(output_dir=output_dir)
@@ -551,6 +644,35 @@ def test_library_bulk_refresh_comments_starts_job(output_dir: Path, monkeypatch)
     assert captured == ["42", "77"]
 
 
+def test_library_bulk_repair_starts_archive_many_job(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+    captured: list[str] = []
+
+    def fake_archive_many(cfg_arg, _client, _manifest, story_ids, *, deps=None, progress=None):
+        captured.extend(story_ids)
+        if progress:
+            progress("batch.done", {"results": {story_id: "ok" for story_id in story_ids}})
+
+    monkeypatch.setattr("wattpad_crawler.web.routes.archive_many", fake_archive_many)
+
+    r = client.post(
+        "/library/bulk",
+        data={"bulk_action": "repair", "story_ids": ["42", "77"]},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/?job_id=")
+    job_id = r.headers["location"].split("=", 1)[1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
+        time.sleep(0.01)
+    assert captured == ["42", "77"]
 def test_library_bulk_remove_deletes_selected_stories(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     for story_id in ("42", "77"):

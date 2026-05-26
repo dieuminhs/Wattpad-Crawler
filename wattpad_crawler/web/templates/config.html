@@ -48,6 +48,40 @@
       <input type="text" id="workers_per_story" name="workers_per_story" value="{{ cfg.workers_per_story }}" required>
       <span class="muted">Fetches independent chapters concurrently.</span>
     </p>
+    <fieldset class="export-preset-fieldset">
+      <legend><strong>Export style</strong></legend>
+      <p class="muted">Used for future or regenerated EPUB and HTML output. TXT stays plain.</p>
+      {% for preset in export_presets %}
+        <label class="export-preset-option">
+          <input type="radio" name="export_preset" value="{{ preset }}" {% if cfg.export_preset == preset %}checked{% endif %}>
+          <span>{{ preset | title }}</span>
+        </label>
+      {% endfor %}
+    </fieldset>
     <p><button type="submit">Save settings</button></p>
   </form>
+
+  <section class="card backup-restore-card">
+    <h2>Backup &amp; restore</h2>
+    <p class="muted">Create a portable local backup of your archive, then restore it later on this machine or another one. Backups exclude <code>_config.toml</code>, including your Wattpad cookie, for safety.</p>
+    {% if request.query_params.get("backup_error") %}
+      <div class="status-failed" role="alert">Backup failed: {{ request.query_params.get("backup_error") }}</div>
+    {% endif %}
+    {% if request.query_params.get("restored") %}
+      <p class="status-done">Restored {{ request.query_params.get("restored") }} files.</p>
+    {% endif %}
+    {% if request.query_params.get("restore_error") %}
+      <div class="status-failed" role="alert">Restore failed: {{ request.query_params.get("restore_error") }}</div>
+    {% endif %}
+    <div class="backup-restore-actions">
+      <form method="post" action="/config/backup">
+        <button type="submit">Download backup zip</button>
+      </form>
+      <form method="post" action="/config/restore" enctype="multipart/form-data">
+        <label for="backup_file"><strong>Restore from backup</strong></label>
+        <input type="file" id="backup_file" name="backup_file" accept=".zip,application/zip" required>
+        <button type="submit">Restore backup</button>
+      </form>
+    </div>
+  </section>
 {% endblock %}

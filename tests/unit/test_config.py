@@ -12,6 +12,8 @@ def test_load_config_creates_default_when_missing(output_dir: Path):
     assert cfg.cookie == ""
     assert cfg.rate_limit_per_sec == 2.0
     assert cfg.workers_per_story == 3
+    assert cfg.compact_after_archive is True
+    assert cfg.export_preset == "classic"
     assert (output_dir / "_config.toml").exists()
 
 
@@ -20,11 +22,22 @@ def test_load_config_reads_existing(output_dir: Path):
         'cookie = "abc123"\n'
         "rate_limit_per_sec = 0.5\n"
         "workers_per_story = 5\n"
+        "compact_after_archive = false\n"
+        'export_preset = "cozy"\n'
     )
     cfg = load_config(output_dir)
     assert cfg.cookie == "abc123"
     assert cfg.rate_limit_per_sec == 0.5
     assert cfg.workers_per_story == 5
+    assert cfg.compact_after_archive is False
+    assert cfg.export_preset == "cozy"
+
+def test_load_config_defaults_compact_after_archive_when_missing(output_dir: Path):
+    (output_dir / "_config.toml").write_text('cookie = "abc123"\n')
+
+    cfg = load_config(output_dir)
+
+    assert cfg.compact_after_archive is True
 
 
 def test_load_config_rejects_bad_toml(output_dir: Path):
@@ -47,6 +60,18 @@ def test_load_config_rejects_non_positive_rate_limit(output_dir: Path):
 
 def test_load_config_rejects_zero_workers(output_dir: Path):
     (output_dir / "_config.toml").write_text("workers_per_story = 0\n")
+    with pytest.raises(ConfigError):
+        load_config(output_dir)
+
+def test_load_config_rejects_invalid_compact_flag(output_dir: Path):
+    (output_dir / "_config.toml").write_text('compact_after_archive = "yes"\n')
+
+    with pytest.raises(ConfigError):
+        load_config(output_dir)
+
+def test_load_config_rejects_invalid_export_preset(output_dir: Path):
+    (output_dir / "_config.toml").write_text('export_preset = "fancy"\n')
+
     with pytest.raises(ConfigError):
         load_config(output_dir)
 

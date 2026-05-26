@@ -2,6 +2,9 @@
 
 This directory contains the Tauri desktop wrapper for Wattpad Crawler. The desktop app keeps the existing Python/FastAPI crawler as the backend and opens it in a native desktop window.
 
+## Product positioning
+
+Ship the desktop app as a local-first personal archive and offline reader. The app should guide users to archive only content they own or have permission to preserve, keep all files on their machine, and avoid any hosted scraping, content resale, or redistribution workflows.
 ## Development prerequisites
 
 - Python 3.11+

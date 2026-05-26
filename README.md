@@ -1,9 +1,12 @@
-﻿# Wattpad Crawler
+# Wattpad Crawler
 
 Archive Wattpad stories â€” chapters, inline images, and all comments â€” to a local
 append-only folder before they get removed.
 
 
+## Acceptable use
+
+Wattpad Crawler is a local-first personal archive tool. Use it only for content you own or have permission to archive, and keep the resulting files for personal backup/offline reading. Do not redistribute archived stories, sell downloaded content, or run this project as a hosted scraping service.
 ## Desktop App Preview
 
 A Tauri desktop wrapper is available for turning Wattpad Crawler into a native local application instead of a command-line workflow. It keeps the existing Python/FastAPI crawler backend and opens it in a native desktop window.

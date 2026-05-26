@@ -52,6 +52,22 @@ def test_render_txt_writes_output_file(output_dir: Path):
     render_txt(sd)
     assert (sd / "output" / "hi.txt").exists()
 
+def test_render_txt_remains_plain_without_export_preset_css(output_dir: Path):
+    sd = output_dir / "stories" / "bob" / "42_hi"
+    parts = sd / "parts"
+    parts.mkdir(parents=True)
+    (parts / "01_100_one.txt").write_text("Body.")
+    (sd / "metadata.json").write_text(json.dumps({
+        "title": "Hi", "author_username": "bob",
+        "parts": [{"part_id": "100", "ordinal": 1, "title": "One"}],
+    }))
+
+    out = render_txt(sd)
+
+    assert "Body." in out
+    assert "export-preset" not in out
+    assert "line-height" not in out
+
 
 def test_render_txt_reads_archive_database(output_dir: Path):
     sd = output_dir / "stories" / "bob" / "42_hi"
@@ -77,3 +93,37 @@ def test_render_txt_reads_archive_database(output_dir: Path):
     out = render_txt(sd)
 
     assert "DB body." in out
+
+
+def test_render_txt_reads_compacted_archive_database(output_dir: Path):
+    sd = output_dir / "stories" / "bob" / "42_hi"
+    story = Story(
+        story_id="42",
+        title="Hi",
+        author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    repo = ArchiveRepository(output_dir).connect()
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(
+            "42",
+            story.parts[0],
+            ChapterContent(
+                text="First\n\nSecond",
+                paragraphs=[
+                    {"id": "p1", "text": "First", "html": "<p>First</p>"},
+                    {"id": "p2", "text": "Second", "html": "<p>Second</p>"},
+                ],
+                images=[],
+            ),
+            "<html/>",
+            [],
+            [],
+        )
+        repo.db.execute("UPDATE parts SET body_text = '', raw_html = '' WHERE part_id = '100'")
+    repo.close()
+
+    out = render_txt(sd)
+
+    assert "First\n\nSecond" in out

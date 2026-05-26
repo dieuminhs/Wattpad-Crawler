@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Welcome — Wattpad Crawler{% endblock %}
+{% block content %}
+  <section class="welcome-hero card">
+    <p class="eyebrow">First-run setup</p>
+    <h1>Welcome to your local story archive</h1>
+    <p class="muted">Follow these three quick steps to finish setup, keep your archive local, and start saving stories safely.</p>
+  </section>
+
+  <section class="wizard-steps" aria-label="Welcome setup steps">
+    <article class="wizard-card">
+      <div class="wizard-step-number" aria-hidden="true">1</div>
+      <p class="eyebrow">Local personal archive</p>
+      <h2>Archive only what you own or have permission to preserve</h2>
+      <p class="muted">Wattpad Crawler stores files on your machine for personal backup and offline reading. Do not redistribute archived stories, sell downloaded content, or run this as a hosted scraping service.</p>
+    </article>
+
+    <article class="wizard-card">
+      <div class="wizard-step-number" aria-hidden="true">2</div>
+      <p class="eyebrow">Archive folder</p>
+      <h2>Choose where your files live</h2>
+      <p class="muted">Current archive: <code>{{ output_dir }}</code></p>
+      <p><a class="btn btn-light" href="/config">Review archive settings</a></p>
+    </article>
+
+    <article class="wizard-card">
+      <div class="wizard-step-number" aria-hidden="true">3</div>
+      <p class="eyebrow">Wattpad access</p>
+      <h2>{% if has_cookie %}Cookie saved{% else %}Save your Wattpad cookie{% endif %}</h2>
+      <p class="muted">{% if has_cookie %}Your cookie is configured. Refresh it later from Setup if private or login-required stories stop working.{% else %}Paste your Wattpad <code>token</code> cookie on the Setup page so the app can access your library and login-required stories.{% endif %}</p>
+      <p><a class="btn btn-light" href="/setup">{% if has_cookie %}Review cookie setup{% else %}Open cookie setup{% endif %}</a></p>
+    </article>
+  </section>
+
+  <section class="welcome-next card">
+    <h2>Ready when you are</h2>
+    <p class="muted">The wizard does not lock you in. Existing setup, config, and archive forms still work exactly as before.</p>
+    <p><a class="btn" href="/">Archive your first story</a></p>
+  </section>
+{% endblock %}

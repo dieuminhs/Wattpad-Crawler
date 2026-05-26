@@ -41,6 +41,27 @@
     </div>
   </section>
 
+  {% if total_entries %}
+    <section class="library-health-summary" aria-label="Archive health summary">
+      <a class="health-summary-card health-summary-card--ok" href="/library">
+        <strong>{{ health_summary.ok }}</strong>
+        <span>Complete</span>
+      </a>
+      <a class="health-summary-card health-summary-card--warning" href="/library?filter=needs_repair">
+        <strong>{{ health_summary.warning }}</strong>
+        <span>Warnings</span>
+      </a>
+      <a class="health-summary-card health-summary-card--broken" href="/library?filter=needs_repair">
+        <strong>{{ health_summary.broken }}</strong>
+        <span>Need repair</span>
+      </a>
+      <a class="health-summary-card" href="/library?filter=needs_repair">
+        <strong>{{ health_summary.needs_repair }}</strong>
+        <span>Actionable</span>
+      </a>
+    </section>
+  {% endif %}
+
   {% if entries %}
     <div class="library-bulk-card">
       <label class="library-select-all">
@@ -49,6 +70,7 @@
       </label>
       <form class="library-bulk-actions" id="library-bulk-form" method="post" action="/library/bulk">
         <select name="bulk_action" aria-label="Bulk action">
+          <option value="repair">Repair archive</option>
           <option value="refresh_comments">Refresh comments</option>
           <option value="remove">Remove from archive</option>
         </select>
@@ -71,7 +93,19 @@
             {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
             <div class="title">{{ e.title }}</div>
             <div class="author">by {{ e.author }}</div>
+            <div class="library-health library-health--{{ e.health_status }}">
+              <span>{{ e.health_summary }}</span>
+            </div>
           </a>
+          {% if e.health_issues %}
+            <details class="library-health-details">
+              <summary>Health details</summary>
+              <ul>
+                {% for issue in e.health_issues[:4] %}<li>{{ issue }}</li>{% endfor %}
+                {% if e.health_issues|length > 4 %}<li>{{ e.health_issues|length - 4 }} more issues...</li>{% endif %}
+              </ul>
+            </details>
+          {% endif %}
           {% if e.first_ordinal %}
             <div class="library-read-actions">
               <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Read first</a>
@@ -87,6 +121,11 @@
               </form>
               <form method="post" action="/library/reset/{{ e.story_id }}">
                 <button type="submit">Reset for refetch</button>
+              </form>
+              <form method="post" action="/jobs">
+                <input type="hidden" name="kind" value="repair_story">
+                <input type="hidden" name="story_id" value="{{ e.story_id }}">
+                <button type="submit">Repair archive</button>
               </form>
               <form method="post" action="/jobs">
                 <input type="hidden" name="kind" value="comments">

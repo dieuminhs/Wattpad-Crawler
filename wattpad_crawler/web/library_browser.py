@@ -1,8 +1,17 @@
 import json
 from pathlib import Path
 
+from wattpad_crawler.archive.health import check_story_archive
 from wattpad_crawler.archive.library import LibraryEntry
 from wattpad_crawler.archive.repository import ArchiveRepository
+
+
+def _with_health(entry: LibraryEntry, metadata: dict) -> LibraryEntry:
+    health = check_story_archive(entry.storage_path, metadata)
+    entry.health_status = health.status
+    entry.health_summary = health.summary
+    entry.health_issues = health.issues
+    return entry
 
 
 def scan_library(output_dir: Path) -> list[LibraryEntry]:
@@ -41,18 +50,23 @@ def scan_library(output_dir: Path) -> list[LibraryEntry]:
                 for part in meta.get("parts", []) or []
                 if isinstance(part, dict) and part.get("ordinal") is not None
             ]
-            entries.append(LibraryEntry(
-                story_id=str(meta.get("story_id", "")),
-                title=meta.get("title", ""),
-                author=meta.get("author_username", author_dir.name),
-                description=meta.get("description", ""),
-                tags=list(meta.get("tags", []) or []),
-                parts_count=len(meta.get("parts", []) or []),
-                dir_name=story_dir.name,
-                has_cover=(story_dir / "cover.jpg").exists(),
-                storage_path=story_dir,
-                first_ordinal=min(ordinals) if ordinals else None,
-                last_ordinal=max(ordinals) if ordinals else None,
-            ))
+            entries.append(
+                _with_health(
+                    LibraryEntry(
+                        story_id=str(meta.get("story_id", "")),
+                        title=meta.get("title", ""),
+                        author=meta.get("author_username", author_dir.name),
+                        description=meta.get("description", ""),
+                        tags=list(meta.get("tags", []) or []),
+                        parts_count=len(meta.get("parts", []) or []),
+                        dir_name=story_dir.name,
+                        has_cover=(story_dir / "cover.jpg").exists(),
+                        storage_path=story_dir,
+                        first_ordinal=min(ordinals) if ordinals else None,
+                        last_ordinal=max(ordinals) if ordinals else None,
+                    ),
+                    meta,
+                )
+            )
     entries.sort(key=lambda e: (e.author.lower(), e.title.lower()))
     return entries

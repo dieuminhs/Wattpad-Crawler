@@ -10,6 +10,19 @@
     <a class="btn btn-light" href="/library">View library</a>
   </section>
 
+  {% if show_welcome_cta %}
+    <section class="card welcome-cta-card">
+      <div>
+        <p class="eyebrow">Finish setup</p>
+        <h2>Start with the guided welcome flow</h2>
+        <p class="muted">
+          Confirm acceptable use, review your archive folder, save your cookie, then come back here to archive your first story.
+        </p>
+      </div>
+      <a class="btn" href="/welcome">Open welcome wizard</a>
+    </section>
+  {% endif %}
+
   {% if not has_cookie %}
     <div class="card status-failed">
       <strong>No cookie configured.</strong> You need to <a href="/setup">paste your Wattpad cookie</a> first

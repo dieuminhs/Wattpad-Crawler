@@ -1,4 +1,5 @@
 import json
+import zipfile
 from pathlib import Path
 
 from wattpad_crawler.render.epub import render_epub
@@ -47,3 +48,18 @@ def test_render_epub_handles_missing_cover(output_dir: Path):
     # Should not raise even with no cover
     out_path = render_epub(sd)
     assert out_path.exists()
+
+def test_render_epub_includes_export_preset_css(output_dir: Path):
+    sd = output_dir / "stories" / "bob" / "42_hi"
+    (sd / "parts").mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "title": "Hi", "author_username": "bob", "story_id": "42",
+        "tags": [], "description": "", "parts": [],
+    }))
+
+    out_path = render_epub(sd, export_preset="compact")
+
+    with zipfile.ZipFile(out_path) as archive:
+        css = archive.read("EPUB/style/export.css").decode("utf-8")
+    assert "--export-preset:compact" in css
+    assert "line-height:1.45" in css

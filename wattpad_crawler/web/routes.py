@@ -1,7 +1,8 @@
-﻿import dataclasses
+import dataclasses
 import json
 import os
 import shutil
+import tempfile
 import threading
 import unicodedata
 from collections import defaultdict
@@ -9,16 +10,18 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
 from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
 from wattpad_crawler.archive import store
+from wattpad_crawler.archive.backup import BackupError, create_backup, restore_backup
 from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.client import RateLimitedClient
+from wattpad_crawler.config import EXPORT_PRESETS
 from wattpad_crawler.jobs import (
     ResolveError,
     archive_many,
@@ -30,7 +33,17 @@ from wattpad_crawler.web.library_browser import scan_library
 
 router = APIRouter()
 _LIBRARY_PAGE_SIZE = 25
-_LIBRARY_FILTERS = {"all", "bookmarked", "has_cover", "no_cover"}
+_LIBRARY_FILTERS = {"all", "bookmarked", "has_cover", "no_cover", "needs_repair"}
+
+
+def _library_health_summary(entries) -> dict[str, int]:
+    summary = {"ok": 0, "warning": 0, "broken": 0, "unknown": 0, "needs_repair": 0}
+    for entry in entries:
+        status = entry.health_status if entry.health_status in summary else "unknown"
+        summary[status] += 1
+        if status in {"warning", "broken"}:
+            summary["needs_repair"] += 1
+    return summary
 
 
 def _search_text(value: str) -> str:
@@ -59,6 +72,8 @@ def _entry_matches_filter(entry, filter_name: str) -> bool:
         return entry.has_cover
     if filter_name == "no_cover":
         return not entry.has_cover
+    if filter_name == "needs_repair":
+        return entry.health_status in {"broken", "warning"}
     return True
 
 
@@ -107,7 +122,7 @@ def _save_cookie(output_dir: Path, cookie: str) -> None:
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         new_text = (
-            f"cookie = {_toml_string(cookie)}\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n"
+            f"cookie = {_toml_string(cookie)}\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\nexport_preset = \"classic\"\n"
         )
     # Atomic write: same-directory tmp + os.replace. PID/TID suffix avoids
     # collision if two writers race on the same target. Cleanup on exception
@@ -141,11 +156,13 @@ def _save_runtime_config(
     cookie: str,
     rate_limit_per_sec: float,
     workers_per_story: int,
+    export_preset: str,
 ) -> None:
     text = (
         f"cookie = {_toml_string(cookie)}\n"
         f"rate_limit_per_sec = {rate_limit_per_sec}\n"
         f"workers_per_story = {workers_per_story}\n"
+        f"export_preset = {_toml_string(export_preset)}\n"
     )
     _atomic_write_config(output_dir, text)
 
@@ -154,6 +171,7 @@ def _mask(s: str) -> str:
     if not s:
         return ""
     return s[:4] + "\u2026" + s[-4:] if len(s) > 8 else "\u2026"
+
 
 def _save_desktop_archive_dir(settings_path: Path, archive_dir: Path) -> None:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +251,7 @@ def setup_post(
     # Validation succeeded Ã¢â‚¬â€ persist atomically (D-19) and reload config.
     _save_cookie(cfg.output_dir, submitted)
     from wattpad_crawler.config import load_config
+
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
 
@@ -241,12 +260,28 @@ def setup_post(
 def dashboard(request: Request) -> HTMLResponse:
     cfg = request.app.state.cfg
     mgr = request.app.state.job_manager
+    library_entries = scan_library(cfg.output_dir)
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="dashboard.html",
         context={
             "has_cookie": bool(cfg.cookie),
+            "has_archived_stories": bool(library_entries),
+            "show_welcome_cta": not cfg.cookie or not library_entries,
             "recent_jobs": mgr.list_jobs()[:10],
+        },
+    )
+
+
+@router.get("/welcome", response_class=HTMLResponse)
+def welcome(request: Request) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="welcome.html",
+        context={
+            "has_cookie": bool(cfg.cookie),
+            "output_dir": cfg.output_dir,
         },
     )
 
@@ -272,6 +307,8 @@ def _build_work(cfg, kind: str, args: dict):
             elif kind == "comments_many":
                 for story_id in args["story_ids"]:
                     refresh_story_comments(cfg, client, story_id, progress=emit)
+            elif kind == "stories_many":
+                archive_many(cfg, client, manifest, args["story_ids"], progress=emit)
         finally:
             manifest.close()
             client.close()
@@ -314,6 +351,12 @@ async def submit_job(request: Request) -> RedirectResponse:
             raise HTTPException(status_code=400, detail="story_id required")
         job = mgr.create("refresh_comments", {"story_id": story_id})
         runner.submit(job, _build_work(cfg, "comments", {"story_id": story_id}))
+    elif kind == "repair_story":
+        story_id = form.get("story_id", "").strip()
+        if not story_id:
+            raise HTTPException(status_code=400, detail="story_id required")
+        job = mgr.create("repair_story", {"story_id": story_id})
+        runner.submit(job, _build_work(cfg, "story", {"story_id": story_id}))
     else:
         raise HTTPException(status_code=400, detail=f"unknown kind: {kind}")
 
@@ -334,6 +377,14 @@ async def library_bulk(request: Request) -> RedirectResponse:
         request.app.state.job_runner.submit(
             job,
             _build_work(cfg, "comments_many", {"story_ids": story_ids}),
+        )
+        return RedirectResponse(url=f"/?job_id={job.job_id}", status_code=303)
+
+    if action == "repair":
+        job = request.app.state.job_manager.create("repair_stories", {"story_ids": story_ids})
+        request.app.state.job_runner.submit(
+            job,
+            _build_work(cfg, "stories_many", {"story_ids": story_ids}),
         )
         return RedirectResponse(url=f"/?job_id={job.job_id}", status_code=303)
 
@@ -471,6 +522,7 @@ def library(request: Request) -> HTMLResponse:
             "entries": entries,
             "total_entries": total_entries,
             "total_filtered": total_filtered,
+            "health_summary": _library_health_summary(all_entries),
             "query": query,
             "filter_name": filter_name,
             "page": page,
@@ -484,6 +536,7 @@ def library(request: Request) -> HTMLResponse:
                 ("bookmarked", "Bookmarked", _library_page_url(1, query, "bookmarked")),
                 ("has_cover", "Has cover", _library_page_url(1, query, "has_cover")),
                 ("no_cover", "No cover", _library_page_url(1, query, "no_cover")),
+                ("needs_repair", "Needs repair", _library_page_url(1, query, "needs_repair")),
             ],
             "reset_story_id": request.query_params.get("reset"),
             "removed_story_id": request.query_params.get("removed"),
@@ -507,8 +560,7 @@ def job_summary(request: Request, job_id: str) -> JSONResponse:
             "error": job.error,
             "next_seq": job.next_seq,
             "events": [
-                {"kind": ev.kind, "data": ev.data, "seq": ev.seq}
-                for ev in job.snapshot_events(0)
+                {"kind": ev.kind, "data": ev.data, "seq": ev.seq} for ev in job.snapshot_events(0)
             ],
         }
     )
@@ -517,6 +569,7 @@ def job_summary(request: Request, job_id: str) -> JSONResponse:
 @router.get("/config", response_class=HTMLResponse)
 def config_get(request: Request) -> HTMLResponse:
     cfg = request.app.state.cfg
+    restore_count = request.query_params.get("restored")
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="config.html",
@@ -526,6 +579,7 @@ def config_get(request: Request) -> HTMLResponse:
             "archive_saved": request.query_params.get("archive_saved") == "1",
             "archive_error_message": "",
             "error_message": "",
+            "export_presets": sorted(EXPORT_PRESETS),
             "is_desktop_app": _desktop_settings_path(request) is not None,
         },
     )
@@ -536,6 +590,7 @@ def config_post(
     request: Request,
     rate_limit_per_sec: str = Form(...),
     workers_per_story: str = Form(...),
+    export_preset: str = Form("classic"),
 ) -> RedirectResponse | HTMLResponse:
     cfg = request.app.state.cfg
     try:
@@ -545,6 +600,8 @@ def config_post(
             raise ValueError("Requests per second must be greater than 0.")
         if workers < 1:
             raise ValueError("Chapter workers must be at least 1.")
+        if export_preset not in EXPORT_PRESETS:
+            raise ValueError("Export style must be classic, cozy, or compact.")
     except ValueError as e:
         return request.app.state.templates.TemplateResponse(
             request=request,
@@ -555,6 +612,7 @@ def config_post(
                 "archive_saved": False,
                 "archive_error_message": "",
                 "error_message": str(e),
+                "export_presets": sorted(EXPORT_PRESETS),
                 "is_desktop_app": _desktop_settings_path(request) is not None,
             },
             status_code=400,
@@ -565,11 +623,13 @@ def config_post(
         cookie=cfg.cookie,
         rate_limit_per_sec=rate,
         workers_per_story=workers,
+        export_preset=export_preset,
     )
     from wattpad_crawler.config import load_config
 
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/config?saved=1", status_code=303)
+
 
 @router.post("/config/archive-location", response_model=None)
 def config_archive_location_post(
@@ -829,13 +889,15 @@ def _chapter_view_data(story_dir: Path, ordinal: int, part: dict) -> dict:
                 continue
             paragraph_id = str(paragraph.get("id") or "")
             comments = comments_by_paragraph.get(paragraph_id, [])
-            paragraphs.append({
-                "id": paragraph_id,
-                "text": paragraph.get("text", ""),
-                "html": paragraph.get("html", ""),
-                "comments": comments,
-                "comment_count": _comment_count(comments),
-            })
+            paragraphs.append(
+                {
+                    "id": paragraph_id,
+                    "text": paragraph.get("text", ""),
+                    "html": paragraph.get("html", ""),
+                    "comments": comments,
+                    "comment_count": _comment_count(comments),
+                }
+            )
 
     body = txt_files[0].read_text(encoding="utf-8") if txt_files else "(missing chapter body)"
     return {
@@ -857,13 +919,15 @@ def _chapter_view_data_from_db(cfg, part: dict) -> dict | None:
         comments_by_paragraph = repo.comments_by_paragraph(part_id)
         for paragraph in repo.list_paragraphs(part_id):
             comments = comments_by_paragraph.get(paragraph["paragraph_id"], [])
-            paragraphs.append({
-                "id": paragraph["paragraph_id"],
-                "text": paragraph["text"],
-                "html": paragraph["html"],
-                "comments": comments,
-                "comment_count": _comment_count(comments),
-            })
+            paragraphs.append(
+                {
+                    "id": paragraph["paragraph_id"],
+                    "text": paragraph["text"],
+                    "html": paragraph["html"],
+                    "comments": comments,
+                    "comment_count": _comment_count(comments),
+                }
+            )
         end_comments = repo.end_comments(part_id)
     finally:
         repo.close()
@@ -942,4 +1006,41 @@ def library_output(request: Request, author: str, dir_name: str, fmt: str) -> Fi
     return FileResponse(candidates[0], media_type=media, filename=candidates[0].name)
 
 
+@router.post("/config/backup")
+def config_backup(request: Request):
+    cfg = request.app.state.cfg
+    try:
+        backup_path = create_backup(cfg.output_dir)
+    except OSError as exc:
+        return RedirectResponse(
+            url="/config?" + urlencode({"backup_error": str(exc)}),
+            status_code=303,
+        )
+    return FileResponse(
+        backup_path,
+        media_type="application/zip",
+        filename=backup_path.name,
+    )
 
+
+@router.post("/config/restore")
+async def config_restore(
+    request: Request,
+    backup_file: UploadFile = File(...),
+) -> RedirectResponse:
+    cfg = request.app.state.cfg
+    suffix = Path(backup_file.filename or "backup.zip").suffix or ".zip"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path = Path(tmp.name)
+        tmp.write(await backup_file.read())
+    try:
+        summary = restore_backup(cfg.output_dir, tmp_path)
+    except (BackupError, OSError) as exc:
+        return RedirectResponse(
+            url="/config?" + urlencode({"restore_error": str(exc)}),
+            status_code=303,
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+        await backup_file.close()
+    return RedirectResponse(url=f"/config?restored={summary.files_restored}", status_code=303)

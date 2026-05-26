@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from wattpad_crawler.api import comments as api_comments
 from wattpad_crawler.api import story as api_story
 from wattpad_crawler.archive import store
+from wattpad_crawler.archive.compact import compact_archive
 from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthFailedError
@@ -309,7 +310,10 @@ def archive_story(
         ("epub", render_epub.render_epub),
     ):
         try:
-            fn(sd)
+            if name in {"html", "epub"}:
+                fn(sd, cfg.export_preset)
+            else:
+                fn(sd)
             render_status[name] = "ok"
         except Exception as e:
             logger.exception("render(%s) failed for %s: %s", name, story.story_id, e)
@@ -326,6 +330,17 @@ def archive_story(
 
     if all(v == "failed" for v in render_status.values()):
         raise RenderError(f"all renders failed: {render_status}")
+
+    if cfg.compact_after_archive:
+        compact_result = compact_archive(cfg.output_dir, dry_run=False)
+        emit(
+            "archive.compacted",
+            {
+                "story_id": story.story_id,
+                "files_removed": compact_result.files_removed,
+                "bytes_removed": compact_result.bytes_removed,
+            },
+        )
 
     repo.close()
 

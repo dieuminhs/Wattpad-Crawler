@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 import uvicorn
 
+from wattpad_crawler.archive.compact import compact_archive
 from wattpad_crawler.archive.state import Manifest
 from wattpad_crawler.auth import AuthError, validate_cookie
 from wattpad_crawler.client import RateLimitedClient
@@ -18,6 +19,7 @@ from wattpad_crawler.jobs import (
     resolve_url_story_id,
 )
 from wattpad_crawler.web.app import build_app
+
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,6 +48,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp_reset = sub.add_parser("reset", help="Reset a story so the next archive refetches it")
     sp_reset.add_argument("target", help="Numeric story ID")
+
+    sp_compact = sub.add_parser("compact", help="Remove regenerable duplicate archive files")
+    sp_compact.add_argument(
+        "--apply",
+        action="store_true",
+        help="Delete redundant files. Default is a dry run.",
+    )
+    sp_compact.add_argument(
+        "--show-files",
+        action="store_true",
+        help="Print every file that would be removed.",
+    )
 
     sub.add_parser("status", help="Show archive status")
     sp_serve = sub.add_parser("serve", help="Run the local web UI")
@@ -132,6 +146,19 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"Story not found: {sid}", file=sys.stderr)
                     return 2
                 print(f"Reset story {sid} for refetch")
+            elif args.cmd == "compact":
+                result = compact_archive(cfg.output_dir, dry_run=not args.apply)
+                action = "Would remove" if not args.apply else "Removed"
+                mb = result.bytes_removed / 1024 / 1024
+                db_mb = result.db_bytes_removed / 1024 / 1024
+                print(f"{action} {result.files_removed} files and {mb:.2f} MiB total")
+                if result.db_bytes_removed:
+                    print(f"Database compaction accounts for {db_mb:.2f} MiB")
+                if result.files_skipped:
+                    print(f"Skipped {result.files_skipped} story directories without database data")
+                if args.show_files:
+                    for path in result.planned_paths:
+                        print(path)
             elif args.cmd == "serve":
                 # D-06: web /setup handles auth interactively.
                 # serve owns its own client/manifest lifecycle inside JobRunner threads;

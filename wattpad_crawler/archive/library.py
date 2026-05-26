@@ -16,3 +16,6 @@ class LibraryEntry:
     bookmarked: bool = False
     first_ordinal: int | None = None
     last_ordinal: int | None = None
+    health_status: str = "unknown"
+    health_summary: str = "Not checked"
+    health_issues: list[str] | None = None

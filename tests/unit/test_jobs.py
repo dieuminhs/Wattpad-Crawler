@@ -41,7 +41,7 @@ def _make_deps(story: Story) -> JobDeps:
     )
 
 
-def test_archive_story_writes_all_artifacts(output_dir: Path):
+def test_archive_story_compacts_artifacts_by_default(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
     story = Story(
@@ -55,11 +55,19 @@ def test_archive_story_writes_all_artifacts(output_dir: Path):
 
     sd = output_dir / "stories" / "bob" / "42_hi"
     assert (sd / "metadata.json").exists()
-    assert (sd / "parts" / "01_100_one.json").exists()
-    assert (sd / "parts" / "01_100_one.txt").exists()
-    assert (sd / "output").exists()
+    assert not (sd / "parts" / "01_100_one.json").exists()
+    assert not (sd / "parts" / "01_100_one.txt").exists()
+    assert not any((sd / "output").glob("*"))
     row = manifest.get_part("42", "100")
     assert row["status"] == "done"
+    repo = ArchiveRepository(output_dir).connect()
+    [part] = repo.list_parts("42")
+    assert part["body_text"] == ""
+    assert part["raw_html"] == ""
+    [paragraph] = repo.list_paragraphs("100")
+    assert paragraph["text"] == "One body."
+    assert paragraph["html"] == "One body."
+    repo.close()
     manifest.close()
 
 
@@ -202,14 +210,15 @@ def test_archive_story_writes_primary_archive_database(output_dir: Path):
 
     assert saved_story is not None
     assert saved_story["title"] == "Hi"
-    assert saved_parts[0]["body_text"] == "One body."
+    assert saved_parts[0]["body_text"] == ""
+    assert saved_parts[0]["raw_html"] == ""
     assert saved_paragraphs[0]["text"] == "One body."
     repo.close()
     manifest.close()
 
 
 def test_archive_story_keeps_part_when_comment_fetch_fails(output_dir: Path):
-    cfg = Config(output_dir=output_dir)
+    cfg = Config(output_dir=output_dir, compact_after_archive=False)
     manifest = Manifest(output_dir).connect()
     story = Story(
         story_id="42", title="Hi", author_username="bob",

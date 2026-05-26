@@ -5,7 +5,7 @@ from wattpad_crawler.archive.repository import ArchiveRepository
 from wattpad_crawler.archive.store import atomic_write_text
 
 
-def _db_story(story_dir_path: Path) -> tuple[dict, list[dict]] | None:
+def _db_story(story_dir_path: Path) -> tuple[dict, list[dict], dict[str, list[dict]]] | None:
     output_dir = story_dir_path.parents[2]
     archive_db = output_dir / "archive.sqlite"
     if not archive_db.exists():
@@ -16,7 +16,9 @@ def _db_story(story_dir_path: Path) -> tuple[dict, list[dict]] | None:
         story = repo.get_story(story_id)
         if story is None:
             return None
-        return story, repo.list_parts(story_id)
+        parts = repo.list_parts(story_id)
+        paragraphs = {p["part_id"]: repo.list_paragraphs(p["part_id"]) for p in parts}
+        return story, parts, paragraphs
     finally:
         repo.close()
 
@@ -31,8 +33,9 @@ def render_txt(story_dir_path: Path) -> str:
     if db_story is None:
         meta = json.loads((story_dir_path / "metadata.json").read_text(encoding="utf-8"))
         parts = sorted(meta["parts"], key=lambda x: x["ordinal"])
+        paragraphs_by_part = {}
     else:
-        meta, parts = db_story
+        meta, parts, paragraphs_by_part = db_story
     parts_dir = story_dir_path / "parts"
     chunks = [f"{meta['title']}\nby {meta['author_username']}\n\n"]
     for p in parts:
@@ -45,6 +48,10 @@ def render_txt(story_dir_path: Path) -> str:
             body = candidates[0].read_text(encoding="utf-8")
         else:
             body = p["body_text"]
+            if not body:
+                body = "\n\n".join(
+                    paragraph["text"] for paragraph in paragraphs_by_part.get(p["part_id"], [])
+                )
             if not body:
                 continue
         chunks.append(f"\n\n========\n{p['title']}\n========\n\n{body}\n")

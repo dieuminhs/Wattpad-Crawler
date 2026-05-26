@@ -35,6 +35,27 @@
       <p class="reader-nav-actions">
         <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">&larr; {{ meta.title }}</a>
       </p>
+      <section class="reader-toolbar" aria-label="Reader settings">
+        <div class="reader-toolbar-group">
+          <span>Theme</span>
+          <button type="button" data-reader-theme="light">Light</button>
+          <button type="button" data-reader-theme="sepia">Sepia</button>
+          <button type="button" data-reader-theme="dark">Dark</button>
+        </div>
+        <div class="reader-toolbar-group">
+          <span>Font</span>
+          <button type="button" data-reader-font-scale="small">Smaller</button>
+          <button type="button" data-reader-font-scale="default">Default</button>
+          <button type="button" data-reader-font-scale="large">Larger</button>
+        </div>
+        <div class="reader-toolbar-group">
+          <span>Spacing</span>
+          <button type="button" data-reader-line-height="compact">Compact</button>
+          <button type="button" data-reader-line-height="default">Default</button>
+          <button type="button" data-reader-line-height="relaxed">Relaxed</button>
+        </div>
+        <button type="button" class="btn btn-light reader-reset-settings" data-reader-reset>Reset reading settings</button>
+      </section>
       <h1>{{ chapter.title }}</h1>
       <form method="post" action="/jobs" class="reader-action-form" data-stay-put-form>
         <input type="hidden" name="kind" value="comments">
@@ -138,6 +159,87 @@
           try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
           lastRead['{{ meta.story_id }}'] = '/read/{{ author }}/{{ dir_name }}/{{ chapter.ordinal }}';
           localStorage.setItem('lastReadByStory', JSON.stringify(lastRead));
+        })();
+        (function () {
+          const reader = document.querySelector('.reader');
+          if (!reader) return;
+          const storyId = {{ meta.story_id | tojson }};
+          const chapterOrdinal = {{ chapter.ordinal | tojson }};
+          const chapterUrl = window.location.pathname;
+          const settingKeys = {
+            theme: 'readerTheme',
+            fontScale: 'readerFontScale',
+            lineHeight: 'readerLineHeight',
+          };
+          const defaults = { theme: 'light', fontScale: 'default', lineHeight: 'default' };
+          const buttonSelector = {
+            theme: '[data-reader-theme]',
+            fontScale: '[data-reader-font-scale]',
+            lineHeight: '[data-reader-line-height]',
+          };
+          const buttonDataset = {
+            theme: 'readerTheme',
+            fontScale: 'readerFontScale',
+            lineHeight: 'readerLineHeight',
+          };
+          const applySetting = (kind, value) => {
+            reader.dataset[kind] = value;
+            document.querySelectorAll(buttonSelector[kind]).forEach((button) => {
+              const active = button.dataset[buttonDataset[kind]] === value;
+              button.classList.toggle('reader-setting-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          };
+          const loadSettings = () => {
+            applySetting('theme', localStorage.getItem(settingKeys.theme) || defaults.theme);
+            applySetting('fontScale', localStorage.getItem(settingKeys.fontScale) || defaults.fontScale);
+            applySetting('lineHeight', localStorage.getItem(settingKeys.lineHeight) || defaults.lineHeight);
+          };
+          loadSettings();
+          document.querySelectorAll('[data-reader-theme]').forEach((button) => {
+            button.addEventListener('click', () => {
+              localStorage.setItem(settingKeys.theme, button.dataset.readerTheme);
+              applySetting('theme', button.dataset.readerTheme);
+            });
+          });
+          document.querySelectorAll('[data-reader-font-scale]').forEach((button) => {
+            button.addEventListener('click', () => {
+              localStorage.setItem(settingKeys.fontScale, button.dataset.readerFontScale);
+              applySetting('fontScale', button.dataset.readerFontScale);
+            });
+          });
+          document.querySelectorAll('[data-reader-line-height]').forEach((button) => {
+            button.addEventListener('click', () => {
+              localStorage.setItem(settingKeys.lineHeight, button.dataset.readerLineHeight);
+              applySetting('lineHeight', button.dataset.readerLineHeight);
+            });
+          });
+          document.querySelector('[data-reader-reset]')?.addEventListener('click', () => {
+            Object.values(settingKeys).forEach((key) => localStorage.removeItem(key));
+            loadSettings();
+          });
+          try {
+            const lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}');
+            lastRead[storyId] = chapterUrl;
+            localStorage.setItem('lastReadByStory', JSON.stringify(lastRead));
+          } catch (_) {}
+          const scrollKey = `${storyId}:${chapterOrdinal}`;
+          try {
+            const scrollPositions = JSON.parse(localStorage.getItem('readerScrollByChapter') || '{}');
+            const savedY = Number(scrollPositions[scrollKey] || 0);
+            if (savedY > 0) window.requestAnimationFrame(() => window.scrollTo(0, savedY));
+          } catch (_) {}
+          let scrollTimer = null;
+          window.addEventListener('scroll', () => {
+            if (scrollTimer) window.clearTimeout(scrollTimer);
+            scrollTimer = window.setTimeout(() => {
+              try {
+                const scrollPositions = JSON.parse(localStorage.getItem('readerScrollByChapter') || '{}');
+                scrollPositions[scrollKey] = Math.round(window.scrollY);
+                localStorage.setItem('readerScrollByChapter', JSON.stringify(scrollPositions));
+              } catch (_) {}
+            }, 150);
+          }, { passive: true });
         })();
         document.querySelectorAll('.comment-count-button').forEach((button) => {
           const drawer = document.getElementById(button.dataset.commentsTarget);
