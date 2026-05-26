@@ -48,6 +48,13 @@
       <input type="text" id="workers_per_story" name="workers_per_story" value="{{ cfg.workers_per_story }}" required>
       <span class="muted">Fetches independent chapters concurrently.</span>
     </p>
+    <p>
+      <label>
+        <input type="checkbox" name="archive_comments" value="true" {% if cfg.archive_comments %}checked{% endif %}>
+        <strong>Archive comments during story archiving</strong>
+      </label><br>
+      <span class="muted">Leave off for much faster story archives. You can still refresh comments later from the Library story actions.</span>
+    </p>
     <fieldset class="export-preset-fieldset">
       <legend><strong>Export style</strong></legend>
       <p class="muted">Used for future or regenerated EPUB and HTML output. TXT stays plain.</p>

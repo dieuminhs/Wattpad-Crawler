@@ -85,11 +85,16 @@
             <span class="sr-only">Select {{ e.title }}</span>
           </label>
           <a class="library-item" href="/read/{{ e.author }}/{{ e.dir_name }}">
-            {% if e.has_cover %}
-              <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
-            {% else %}
-              <div class="library-cover-placeholder" aria-hidden="true"></div>
-            {% endif %}
+            <div class="library-cover-wrap">
+              {% if e.has_cover %}
+                <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
+              {% else %}
+                <div class="library-cover-placeholder" aria-hidden="true"></div>
+              {% endif %}
+              {% if e.first_ordinal %}
+                <span class="library-continue-button" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</span>
+              {% endif %}
+            </div>
             {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
             <div class="title">{{ e.title }}</div>
             <div class="author">by {{ e.author }}</div>
@@ -105,13 +110,6 @@
                 {% if e.health_issues|length > 4 %}<li>{{ e.health_issues|length - 4 }} more issues...</li>{% endif %}
               </ul>
             </details>
-          {% endif %}
-          {% if e.first_ordinal %}
-            <div class="library-read-actions">
-              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Read first</a>
-              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.last_ordinal }}">Read last</a>
-              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</a>
-            </div>
           {% endif %}
           <details class="library-menu">
             <summary aria-label="Story actions">⋯</summary>
@@ -166,9 +164,10 @@
       (function () {
         let lastRead = {};
         try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
-        document.querySelectorAll('[data-continue-story]').forEach((link) => {
-          const storyId = link.dataset.continueStory;
-          link.href = lastRead[storyId] || link.dataset.defaultContinue;
+        document.querySelectorAll('[data-continue-story]').forEach((button) => {
+          const storyId = button.dataset.continueStory;
+          const item = button.closest('.library-item');
+          if (item) item.href = lastRead[storyId] || button.dataset.defaultContinue;
         });
       })();
     </script>

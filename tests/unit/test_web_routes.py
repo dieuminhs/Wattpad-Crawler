@@ -180,6 +180,7 @@ def test_config_page_renders_current_settings(output_dir: Path):
     assert 'value="1.5"' in r.text
     assert 'name="workers_per_story"' in r.text
     assert 'value="4"' in r.text
+    assert 'name="archive_comments"' in r.text
     assert "Export style" in r.text
     assert 'name="export_preset"' in r.text
     assert 'value="classic"' in r.text
@@ -192,7 +193,12 @@ def test_config_post_saves_rate_limit_and_workers(output_dir: Path):
 
     r = client.post(
         "/config",
-        data={"rate_limit_per_sec": "3.5", "workers_per_story": "6", "export_preset": "cozy"},
+        data={
+            "rate_limit_per_sec": "3.5",
+            "workers_per_story": "6",
+            "archive_comments": "true",
+            "export_preset": "cozy",
+        },
         follow_redirects=False,
     )
 
@@ -202,6 +208,7 @@ def test_config_post_saves_rate_limit_and_workers(output_dir: Path):
     assert saved.cookie == "tok"
     assert saved.rate_limit_per_sec == 3.5
     assert saved.workers_per_story == 6
+    assert saved.archive_comments is True
     assert saved.export_preset == "cozy"
 
 
@@ -606,7 +613,7 @@ def test_library_health_summary_counts_archives(output_dir: Path):
     assert '<div class="title">Warning</div>' not in repair_page.text
     assert '<div class="title">Complete</div>' not in repair_page.text
 
-def test_library_story_cards_show_read_actions(output_dir: Path):
+def test_library_story_cards_show_continue_overlay(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     sd = output_dir / "stories" / "alice" / "42_my-tale"
     sd.mkdir(parents=True)
@@ -627,10 +634,11 @@ def test_library_story_cards_show_read_actions(output_dir: Path):
     r = client.get("/library")
 
     assert r.status_code == 200
-    assert 'href="/read/alice/42_my-tale/1"' in r.text
-    assert 'href="/read/alice/42_my-tale/3"' in r.text
+    assert 'class="library-continue-button"' in r.text
     assert 'data-continue-story="42"' in r.text
     assert 'data-default-continue="/read/alice/42_my-tale/1"' in r.text
+    assert "Read first" not in r.text
+    assert "Read last" not in r.text
 
 
 def test_library_bulk_refresh_comments_starts_job(output_dir: Path, monkeypatch):

@@ -1,6 +1,8 @@
 import sqlite3
+import re
 from collections import defaultdict
 from contextlib import contextmanager
+from html import unescape
 from pathlib import Path
 from typing import Any, Self
 
@@ -11,6 +13,12 @@ from local_story_archive.models import Comment, Part, Story
 from local_story_archive.scrape.chapter_html import ChapterContent
 
 SCHEMA_VERSION = 1
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _plain_text_from_html(value: str) -> str:
+    return unescape(_TAG_RE.sub("", value)).strip()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -274,7 +282,7 @@ class ArchiveRepository:
                     part.part_id,
                     str(paragraph.get("id") or index),
                     index,
-                    paragraph.get("text", ""),
+                    "" if paragraph.get("html") else paragraph.get("text", ""),
                     paragraph.get("html", ""),
                 )
                 for index, paragraph in enumerate(content.paragraphs)
@@ -361,13 +369,16 @@ class ArchiveRepository:
         ]
 
     def list_paragraphs(self, part_id: str) -> list[dict[str, Any]]:
-        return [
-            dict(row)
-            for row in self.db.execute(
-                "SELECT * FROM paragraphs WHERE part_id = ? ORDER BY ordinal",
-                (part_id,),
-            )
-        ]
+        paragraphs = []
+        for row in self.db.execute(
+            "SELECT * FROM paragraphs WHERE part_id = ? ORDER BY ordinal",
+            (part_id,),
+        ):
+            paragraph = dict(row)
+            if not paragraph.get("text") and paragraph.get("html"):
+                paragraph["text"] = _plain_text_from_html(paragraph["html"])
+            paragraphs.append(paragraph)
+        return paragraphs
 
     def comments_by_paragraph(self, part_id: str) -> dict[str, list[dict[str, Any]]]:
         comments = self._comments_for(part_id, "inline")

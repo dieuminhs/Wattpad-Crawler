@@ -65,10 +65,6 @@ def check_story_archive(
     if metadata.get("cover_url") and not (story_dir / "cover.jpg").exists():
         warnings.append("cover image missing")
 
-    output_dir = story_dir / "output"
-    if not output_dir.exists() or not any(output_dir.glob("*.epub")):
-        warnings.append("EPUB output missing")
-
     if issues:
         return ArchiveHealth("broken", f"{len(issues)} repair needed", issues + warnings)
     if warnings:

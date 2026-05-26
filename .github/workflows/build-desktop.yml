@@ -119,8 +119,34 @@ jobs:
 
       - name: Build desktop app
         shell: bash
+        env:
+          MACOS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          MACOS_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          MACOS_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          MACOS_APPLE_ID: ${{ secrets.APPLE_ID }}
+          MACOS_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          MACOS_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set +e
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            if [ -n "$MACOS_APPLE_CERTIFICATE" ] && [ -n "$MACOS_APPLE_CERTIFICATE_PASSWORD" ] && [ -n "$MACOS_APPLE_SIGNING_IDENTITY" ]; then
+              export APPLE_CERTIFICATE="$MACOS_APPLE_CERTIFICATE"
+              export APPLE_CERTIFICATE_PASSWORD="$MACOS_APPLE_CERTIFICATE_PASSWORD"
+              export APPLE_SIGNING_IDENTITY="$MACOS_APPLE_SIGNING_IDENTITY"
+              echo "macOS code signing is configured."
+            else
+              echo "::warning::macOS signing secrets are incomplete; building an unsigned app."
+            fi
+
+            if [ -n "$MACOS_APPLE_ID" ] && [ -n "$MACOS_APPLE_PASSWORD" ] && [ -n "$MACOS_APPLE_TEAM_ID" ]; then
+              export APPLE_ID="$MACOS_APPLE_ID"
+              export APPLE_PASSWORD="$MACOS_APPLE_PASSWORD"
+              export APPLE_TEAM_ID="$MACOS_APPLE_TEAM_ID"
+              echo "macOS notarization is configured."
+            else
+              echo "::warning::macOS notarization secrets are incomplete; downloaded DMGs may be blocked by Gatekeeper."
+            fi
+          fi
           npm run desktop:build
           status=$?
           if [ "$status" -ne 0 ] && [ "${{ runner.os }}" = "macOS" ]; then

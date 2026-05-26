@@ -71,8 +71,8 @@ def test_compact_archive_dry_run_keeps_files(output_dir: Path):
     result = compact_archive(output_dir)
 
     assert result.files_removed == 6
-    assert result.db_bytes_removed == 26
-    assert result.bytes_removed == 32
+    assert result.db_bytes_removed == 38
+    assert result.bytes_removed == 44
     assert all(path.exists() for path in paths.values())
 
 
@@ -83,17 +83,24 @@ def test_compact_archive_apply_removes_only_redundant_files(output_dir: Path):
     result = compact_archive(output_dir, dry_run=False)
 
     assert result.files_removed == 6
-    assert result.db_bytes_removed == 26
+    assert result.db_bytes_removed == 38
     for key in ("html", "txt", "json", "inline_comments", "end_comments", "epub"):
         assert not paths[key].exists()
     assert paths["metadata"].exists()
     assert paths["cover"].exists()
     conn = sqlite3.connect(output_dir / "archive.sqlite")
     try:
-        row = conn.execute("SELECT body_text, raw_html FROM parts WHERE part_id = '100'").fetchone()
+        row = conn.execute(
+            """
+            SELECT parts.body_text, parts.raw_html, paragraphs.text
+            FROM parts
+            JOIN paragraphs ON paragraphs.part_id = parts.part_id
+            WHERE parts.part_id = '100'
+            """
+        ).fetchone()
     finally:
         conn.close()
-    assert row == ("", "")
+    assert row == ("", "", "")
 
 
 def test_compact_archive_skips_file_only_archives(output_dir: Path):

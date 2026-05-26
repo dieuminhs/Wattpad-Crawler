@@ -39,6 +39,22 @@ def test_check_story_archive_reports_complete_archive(output_dir: Path):
     assert health.summary == "Archive complete"
     assert health.issues == []
 
+def test_check_story_archive_does_not_require_epub_output(output_dir: Path):
+    story_dir = output_dir / "stories" / "alice" / "42_my-tale"
+    metadata = _write_metadata(story_dir)
+    parts_dir = story_dir / "parts"
+    parts_dir.mkdir()
+    for suffix in ("json", "html", "txt"):
+        (parts_dir / f"01_100_one.{suffix}").write_text("ok", encoding="utf-8")
+    (parts_dir / "01_100_comments-inline.json").write_text("[]", encoding="utf-8")
+    (parts_dir / "01_100_comments-end.json").write_text("[]", encoding="utf-8")
+
+    health = check_story_archive(story_dir, metadata)
+
+    assert health.status == "ok"
+    assert health.summary == "Archive complete"
+    assert health.issues == []
+
 
 def test_scan_library_attaches_broken_archive_health(output_dir: Path):
     story_dir = output_dir / "stories" / "alice" / "42_my-tale"

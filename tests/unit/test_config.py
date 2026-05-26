@@ -69,6 +69,12 @@ def test_load_config_rejects_invalid_compact_flag(output_dir: Path):
     with pytest.raises(ConfigError):
         load_config(output_dir)
 
+def test_load_config_rejects_invalid_archive_comments_flag(output_dir: Path):
+    (output_dir / "_config.toml").write_text('archive_comments = "yes"\n')
+
+    with pytest.raises(ConfigError):
+        load_config(output_dir)
+
 def test_load_config_rejects_invalid_export_preset(output_dir: Path):
     (output_dir / "_config.toml").write_text('export_preset = "fancy"\n')
 

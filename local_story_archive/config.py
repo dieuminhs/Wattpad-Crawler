@@ -17,6 +17,7 @@ class Config:
     rate_limit_per_sec: float = 2.0
     workers_per_story: int = 3
     compact_after_archive: bool = True
+    archive_comments: bool = False
     export_preset: str = "classic"
     user_agent: str = "local-story-archive/0.1 (+local archive tool)"
 
@@ -27,6 +28,7 @@ _DEFAULT_TOML = (
     "rate_limit_per_sec = 2.0\n"
     "workers_per_story = 3\n"
     "compact_after_archive = true\n"
+    "archive_comments = false\n"
     'export_preset = "classic"\n'
 )
 
@@ -53,6 +55,9 @@ def load_config(output_dir: Path) -> Config:
         raise ConfigError(
             f"compact_after_archive must be true or false in {config_path}"
         )
+    archive_comments = data.get("archive_comments", False)
+    if not isinstance(archive_comments, bool):
+        raise ConfigError(f"archive_comments must be true or false in {config_path}")
     export_preset = str(data.get("export_preset", "classic"))
     if export_preset not in EXPORT_PRESETS:
         allowed = ", ".join(sorted(EXPORT_PRESETS))
@@ -69,5 +74,6 @@ def load_config(output_dir: Path) -> Config:
         rate_limit_per_sec=rate,
         workers_per_story=workers,
         compact_after_archive=compact_after_archive,
+        archive_comments=archive_comments,
         export_preset=export_preset,
     )

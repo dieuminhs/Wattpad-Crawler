@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import re
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -26,6 +27,13 @@ from local_story_archive.scrape.chapter_html import ChapterContent, extract_chap
 logger = logging.getLogger(__name__)
 
 _HTML_BODY_CLOSE_RE = re.compile(r"</body>\s*</html>\s*$", re.IGNORECASE)
+
+
+def _path_size(path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
 
 
 def _part_id_from_url(url: str) -> str:
@@ -146,23 +154,28 @@ def _fetch_part_payload(
     client: RateLimitedClient,
     part,
     emit: ProgressCallback,
+    *,
+    archive_comments: bool,
 ) -> PartArchiveResult:
     raw_html = deps.fetch_chapter_html(client, part.url)
     content: ChapterContent = deps.parse_chapter(raw_html)
-    inline = _fetch_comments_or_empty(
-        deps.fetch_inline_comments,
-        client,
-        part.part_id,
-        "inline",
-        emit,
-    )
-    end = _fetch_comments_or_empty(
-        deps.fetch_end_comments,
-        client,
-        part.part_id,
-        "end",
-        emit,
-    )
+    inline = []
+    end = []
+    if archive_comments:
+        inline = _fetch_comments_or_empty(
+            deps.fetch_inline_comments,
+            client,
+            part.part_id,
+            "inline",
+            emit,
+        )
+        end = _fetch_comments_or_empty(
+            deps.fetch_end_comments,
+            client,
+            part.part_id,
+            "end",
+            emit,
+        )
     body_hash = hashlib.sha256(content.text.encode("utf-8")).hexdigest()
     return PartArchiveResult(part, raw_html, content, inline, end, body_hash)
 
@@ -178,6 +191,9 @@ def archive_story(
 ) -> None:
     deps = deps or _default_deps()
     emit = progress or _noop_progress
+    started_at = time.monotonic()
+    archive_db_path = cfg.output_dir / "archive.sqlite"
+    archive_db_size_before = _path_size(archive_db_path)
     logger.info("Archiving story %s", story_id)
     emit("story.fetch", {"story_id": story_id})
     story: Story = deps.fetch_story(client, story_id)
@@ -262,7 +278,14 @@ def archive_story(
     if pending_parts:
         with ThreadPoolExecutor(max_workers=cfg.workers_per_story) as executor:
             future_to_part = {
-                executor.submit(_fetch_part_payload, deps, client, part, emit): part
+                executor.submit(
+                    _fetch_part_payload,
+                    deps,
+                    client,
+                    part,
+                    emit,
+                    archive_comments=cfg.archive_comments,
+                ): part
                 for part in pending_parts
             }
             for future in as_completed(future_to_part):
@@ -325,6 +348,9 @@ def archive_story(
         {
             "story_id": story.story_id,
             "render_status": render_status,
+            "duration_seconds": round(time.monotonic() - started_at, 2),
+            "archive_db_bytes_before": archive_db_size_before,
+            "archive_db_bytes_after": _path_size(archive_db_path),
         },
     )
 
@@ -337,10 +363,22 @@ def archive_story(
             "archive.compacted",
             {
                 "story_id": story.story_id,
-                "files_removed": compact_result.files_removed,
-                "bytes_removed": compact_result.bytes_removed,
-            },
-        )
+                  "files_removed": compact_result.files_removed,
+                  "bytes_removed": compact_result.bytes_removed,
+                  "db_bytes_removed": compact_result.db_bytes_removed,
+                  "archive_db_bytes_after": _path_size(archive_db_path),
+              },
+          )
+
+    logger.info(
+        "Archived story %s in %.2fs; parts=%s pending=%s; archive.sqlite %s -> %s bytes",
+        story.story_id,
+        time.monotonic() - started_at,
+        len(story.parts),
+        len(pending_parts),
+        archive_db_size_before,
+        _path_size(archive_db_path),
+    )
 
     repo.close()
 

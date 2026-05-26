@@ -1,0 +1,47 @@
+# Release Notes
+
+## 0.2.1 - Speed, Storage, And Desktop Release Fixes
+
+This patch release improves long-story archive performance, reduces local SQLite storage growth, and improves desktop distribution readiness.
+
+### Highlights
+
+- Made comment fetching opt-in during normal story archiving to avoid hundreds of empty comment API requests on long stories.
+- Added archive duration and SQLite size reporting to story completion progress/logs.
+- Reduced duplicate SQLite paragraph storage and expanded archive compaction to reclaim existing duplicate paragraph text.
+- Made EPUB output optional for archive health, so missing EPUB files no longer mark stories as warnings or repair-needed.
+- Simplified Library story cards to a single cover overlay Continue button.
+- Added macOS signing/notarization support in the desktop build workflow when Apple Developer secrets are configured.
+
+### Validation
+
+- Full unit suite passed: `371 passed`.
+
+## 0.2.0 - Local Story Archive
+
+This release focuses on making the app feel safer, more polished, and more dependable as a local-first desktop archive tool.
+
+### Highlights
+
+- Renamed the app to **Local Story Archive** for a clearer, safer user-facing identity.
+- Added a first-run welcome wizard that explains acceptable use, archive location, and cookie setup.
+- Added local backup and restore so archives can be exported to a portable `.zip` and safely restored later.
+- Improved the offline reader with browser-local theme, typography, resume, and scroll-position preferences.
+- Added global export style presets for future EPUB and standalone HTML output.
+- Improved archive health and repair behavior so warning-only items are no longer incorrectly shown as needing repair.
+- Fixed a macOS desktop startup race that could leave the app on a blank white window before the local backend was ready.
+- Added GitHub Actions support for signing and notarizing macOS desktop builds when Apple Developer secrets are configured.
+
+### Safety And Privacy
+
+- Backups intentionally exclude `_config.toml` and the Wattpad cookie.
+- Restore uses safe merge behavior and does not delete existing local stories.
+- Reader preferences and resume state stay local to the browser/device.
+- The desktop app continues to run against a local backend only; no cloud sync or credential export was added.
+- macOS public release builds should be signed and notarized to avoid Gatekeeper warnings on downloaded `.dmg` files.
+
+### Validation
+
+- Full unit suite passed: `368 passed`.
+- Desktop wrapper check passed: `cargo check --manifest-path src-tauri\Cargo.toml`.
+- Desktop unit tests passed: `5 passed`.

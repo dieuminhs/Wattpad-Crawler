@@ -156,12 +156,16 @@ def _save_runtime_config(
     cookie: str,
     rate_limit_per_sec: float,
     workers_per_story: int,
+    compact_after_archive: bool,
+    archive_comments: bool,
     export_preset: str,
 ) -> None:
     text = (
         f"cookie = {_toml_string(cookie)}\n"
         f"rate_limit_per_sec = {rate_limit_per_sec}\n"
         f"workers_per_story = {workers_per_story}\n"
+        f"compact_after_archive = {str(compact_after_archive).lower()}\n"
+        f"archive_comments = {str(archive_comments).lower()}\n"
         f"export_preset = {_toml_string(export_preset)}\n"
     )
     _atomic_write_config(output_dir, text)
@@ -590,6 +594,7 @@ def config_post(
     request: Request,
     rate_limit_per_sec: str = Form(...),
     workers_per_story: str = Form(...),
+    archive_comments: bool = Form(False),
     export_preset: str = Form("classic"),
 ) -> RedirectResponse | HTMLResponse:
     cfg = request.app.state.cfg
@@ -620,11 +625,13 @@ def config_post(
 
     _save_runtime_config(
         cfg.output_dir,
-        cookie=cfg.cookie,
-        rate_limit_per_sec=rate,
-        workers_per_story=workers,
-        export_preset=export_preset,
-    )
+          cookie=cfg.cookie,
+          rate_limit_per_sec=rate,
+          workers_per_story=workers,
+          compact_after_archive=cfg.compact_after_archive,
+          archive_comments=archive_comments,
+          export_preset=export_preset,
+      )
     from local_story_archive.config import load_config
 
     request.app.state.cfg = load_config(cfg.output_dir)

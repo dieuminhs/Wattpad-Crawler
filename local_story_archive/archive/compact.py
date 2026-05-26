@@ -109,9 +109,17 @@ def _compact_database(conn: sqlite3.Connection, *, dry_run: bool) -> int:
               )
             """
         ).fetchone()
+        bytes_removed = int(row["bytes_removed"] or 0)
+        row = conn.execute(
+            """
+            SELECT COALESCE(SUM(LENGTH(text)), 0) AS bytes_removed
+            FROM paragraphs
+            WHERE text != '' AND html != ''
+            """
+        ).fetchone()
+        bytes_removed += int(row["bytes_removed"] or 0)
     except sqlite3.OperationalError:
         return 0
-    bytes_removed = int(row["bytes_removed"] or 0)
     if not dry_run and bytes_removed:
         conn.execute(
             """
@@ -123,6 +131,13 @@ def _compact_database(conn: sqlite3.Connection, *, dry_run: bool) -> int:
                   FROM paragraphs
                   WHERE paragraphs.part_id = parts.part_id
               )
+            """
+        )
+        conn.execute(
+            """
+            UPDATE paragraphs
+            SET text = ''
+            WHERE text != '' AND html != ''
             """
         )
         conn.commit()

@@ -76,6 +76,10 @@ def test_repository_round_trips_story_parts_paragraphs_and_comments(output_dir: 
     assert saved_story["title"] == "Hi There"
     assert saved_story["tags"] == ["tag-a", "tag-b"]
     assert saved_parts[0]["body_text"] == "First\n\nSecond"
+    assert repo.db.execute("SELECT text FROM paragraphs WHERE paragraph_id = 'p1'").fetchone()[
+        "text"
+    ] == ""
+    assert saved_paragraphs[0]["text"] == "First"
     assert saved_paragraphs[0]["html"] == "<b>First</b>"
     assert inline_by_paragraph["p1"][0]["body"] == "Nice"
     assert inline_by_paragraph["p1"][0]["replies"][0]["body"] == "Thanks"

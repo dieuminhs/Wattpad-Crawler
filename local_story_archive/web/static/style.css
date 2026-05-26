@@ -1070,3 +1070,29 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   .reader { padding-right: 2.5rem; }
   .comment-count-button { right: -2.35rem; }
 }
+.library-cover-wrap {
+  position: relative;
+}
+
+.library-cover-wrap img,
+.library-cover-wrap .library-cover-placeholder {
+  display: block;
+}
+
+.library-continue-button {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 0.5rem 1rem rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(8px);
+}

@@ -218,7 +218,7 @@ def test_archive_story_writes_primary_archive_database(output_dir: Path):
 
 
 def test_archive_story_keeps_part_when_comment_fetch_fails(output_dir: Path):
-    cfg = Config(output_dir=output_dir, compact_after_archive=False)
+    cfg = Config(output_dir=output_dir, compact_after_archive=False, archive_comments=True)
     manifest = Manifest(output_dir).connect()
     story = Story(
         story_id="42", title="Hi", author_username="bob",
@@ -249,6 +249,21 @@ def test_archive_story_keeps_part_when_comment_fetch_fails(output_dir: Path):
     sd = output_dir / "stories" / "bob" / "42_hi" / "parts"
     assert json.loads((sd / "01_100_comments-inline.json").read_text()) == []
     assert "comments.failed" in [kind for kind, _ in events]
+    manifest.close()
+
+def test_archive_story_skips_comment_fetch_by_default(output_dir: Path):
+    cfg = Config(output_dir=output_dir, compact_after_archive=False)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    deps = _make_deps(story)
+
+    archive_story(cfg, MagicMock(), manifest, "42", deps=deps)
+
+    deps.fetch_inline_comments.assert_not_called()
+    deps.fetch_end_comments.assert_not_called()
     manifest.close()
 
 
