@@ -71,7 +71,7 @@ created: 2026-05-05
 | 404 counter assertion only checks part status, not breaker `_count` | Assert `breaker._count == 0` after 404, OR test 4×4xx + 1×404 + 1×4xx still does NOT trip (5 4xx total, 1 of which was a 404) |
 | `breaker.opened` not emitted for http_wall (D-14 pitfall — sibling `except` does not catch raises from inside `except Exception`) | Test asserts `breaker.opened` event present in events list AND `breaker == "http_wall"`. Implementation must use nested-try pattern from RESEARCH.md Pattern 2. |
 | Threading race test passes by GIL luck without actually racing | Use `threading.Barrier(2)` to synchronize thread entry into `record_failure` |
-| Monkeypatch on wrong name (`from circuit_breakers import _CONST` vs module attribute) | Plan instructs `jobs.py` to import the module (`import wattpad_crawler.circuit_breakers as cb`) and read `cb._EXTRACTION_EMPTY_CONSECUTIVE` at Breaker-instantiation time |
+| Monkeypatch on wrong name (`from circuit_breakers import _CONST` vs module attribute) | Plan instructs `jobs.py` to import the module (`import local_story_archive.circuit_breakers as cb`) and read `cb._EXTRACTION_EMPTY_CONSECUTIVE` at Breaker-instantiation time |
 
 ---
 
@@ -79,7 +79,7 @@ created: 2026-05-05
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| `breaker.opened` event renders in `job.html` SSE stream | RES-03 (success criterion #3) | Visual check that the existing `<code>{kind}</code> {JSON.stringify(data)}` template handles the new event payload without UI breakage | 1. Start `wattpad-crawler serve`. 2. Open job detail page in browser. 3. Trigger archive of a story whose part fixtures cause extraction-empty trip (or run a unit-test-style fixture story). 4. Confirm `breaker.opened` line appears alongside other `part.failed` lines and the JSON payload renders without overflowing or breaking the layout. |
+| `breaker.opened` event renders in `job.html` SSE stream | RES-03 (success criterion #3) | Visual check that the existing `<code>{kind}</code> {JSON.stringify(data)}` template handles the new event payload without UI breakage | 1. Start `local-story-archive serve`. 2. Open job detail page in browser. 3. Trigger archive of a story whose part fixtures cause extraction-empty trip (or run a unit-test-style fixture story). 4. Confirm `breaker.opened` line appears alongside other `part.failed` lines and the JSON payload renders without overflowing or breaking the layout. |
 
 ---
 

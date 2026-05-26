@@ -3,8 +3,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wattpad_crawler.config import Config
-from wattpad_crawler.web.app import build_app
+from local_story_archive.config import Config
+from local_story_archive.web.app import build_app
 
 
 def test_welcome_page_renders_guided_steps(output_dir: Path):

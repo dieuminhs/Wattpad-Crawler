@@ -7,14 +7,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from wattpad_crawler.archive.repository import ArchiveRepository
-from wattpad_crawler.auth import AuthError
-from wattpad_crawler.config import Config, load_config
-from wattpad_crawler.models import Part, Story
-from wattpad_crawler.scrape.chapter_html import ChapterContent
-from wattpad_crawler.web import runner
-from wattpad_crawler.web.app import build_app
-from wattpad_crawler.web.routes import _save_cookie
+from local_story_archive.archive.repository import ArchiveRepository
+from local_story_archive.auth import AuthError
+from local_story_archive.config import Config, load_config
+from local_story_archive.models import Part, Story
+from local_story_archive.scrape.chapter_html import ChapterContent
+from local_story_archive.web import runner
+from local_story_archive.web.app import build_app
+from local_story_archive.web.routes import _save_cookie
 
 
 def test_app_health_endpoint(output_dir: Path):
@@ -60,7 +60,7 @@ def test_reader_chapter_body_uses_vietnamese_safe_font_stack(output_dir: Path):
 
 def test_reader_comment_button_click_toggles_drawer_closed(output_dir: Path):
     template = (
-        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+        Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / "reader.html"
     ).read_text(encoding="utf-8")
 
     assert "if (drawer.classList.contains('is-open'))" in template
@@ -68,7 +68,7 @@ def test_reader_comment_button_click_toggles_drawer_closed(output_dir: Path):
 
 def test_reader_refresh_comments_stays_on_current_page(output_dir: Path):
     template = (
-        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+        Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / "reader.html"
     ).read_text(encoding="utf-8")
 
     assert "data-stay-put-form" in template
@@ -78,7 +78,7 @@ def test_reader_refresh_comments_stays_on_current_page(output_dir: Path):
 
 def test_reader_story_info_has_library_button(output_dir: Path):
     template = (
-        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+        Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / "reader.html"
     ).read_text(encoding="utf-8")
 
     assert 'class="reader-nav-actions"' in template
@@ -87,7 +87,7 @@ def test_reader_story_info_has_library_button(output_dir: Path):
 
 def test_reader_chapter_back_to_story_uses_button_style(output_dir: Path):
     template = (
-        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+        Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / "reader.html"
     ).read_text(encoding="utf-8")
 
     assert '<a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">' in template
@@ -96,7 +96,7 @@ def test_reader_chapter_back_to_story_uses_button_style(output_dir: Path):
 
 def test_reader_end_comments_show_more_reveals_ten_at_a_time(output_dir: Path):
     template = (
-        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+        Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / "reader.html"
     ).read_text(encoding="utf-8")
 
     assert "data-end-comments" in template
@@ -112,7 +112,7 @@ def test_reader_comment_drawer_has_visible_close_button(output_dir: Path):
     client = TestClient(app)
 
     template = (
-        Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / "reader.html"
+        Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / "reader.html"
     ).read_text(encoding="utf-8")
     css = client.get("/static/style.css")
 
@@ -219,7 +219,7 @@ def test_setup_post_saves_cookie(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
     client = TestClient(app)
-    monkeypatch.setattr("wattpad_crawler.web.routes.validate_cookie", lambda c: None)
+    monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda c: None)
     r = client.post("/setup", data={"cookie": "tok-abc-123"}, follow_redirects=False)
     assert r.status_code in (200, 303)
     text = (output_dir / "_config.toml").read_text()
@@ -230,7 +230,7 @@ def test_setup_post_strips_whitespace(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
     client = TestClient(app)
-    monkeypatch.setattr("wattpad_crawler.web.routes.validate_cookie", lambda c: None)
+    monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda c: None)
     client.post("/setup", data={"cookie": "  tok-abc-123  \n"}, follow_redirects=False)
     text = (output_dir / "_config.toml").read_text()
     assert 'cookie = "tok-abc-123"' in text
@@ -321,7 +321,7 @@ def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
         if progress:
             progress("story.start", {"story_id": sid})
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
     r = client.post("/jobs", data={"kind": "story", "target": "12345"}, follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"].startswith("/?job_id=")
@@ -345,7 +345,7 @@ def test_post_jobs_url_resolves(output_dir: Path, monkeypatch):
     def fake_archive_story(cfg_arg, _client, _manifest, sid, *, deps=None, progress=None):
         captured["sid"] = sid
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
     r = client.post("/jobs", data={
         "kind": "story",
         "target": "https://www.wattpad.com/story/789-foo-bar",
@@ -373,7 +373,7 @@ def test_post_jobs_repair_story_uses_existing_story_id(output_dir: Path, monkeyp
         if progress:
             progress("story.start", {"story_id": sid})
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
 
     r = client.post(
         "/jobs",
@@ -624,7 +624,7 @@ def test_library_bulk_refresh_comments_starts_job(output_dir: Path, monkeypatch)
         if progress:
             progress("comments.refresh.story_done", {"story_id": story_id})
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.refresh_story_comments", fake_refresh_comments)
+    monkeypatch.setattr("local_story_archive.web.routes.refresh_story_comments", fake_refresh_comments)
 
     r = client.post(
         "/library/bulk",
@@ -655,7 +655,7 @@ def test_library_bulk_repair_starts_archive_many_job(output_dir: Path, monkeypat
         if progress:
             progress("batch.done", {"results": {story_id: "ok" for story_id in story_ids}})
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_many", fake_archive_many)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_many", fake_archive_many)
 
     r = client.post(
         "/library/bulk",
@@ -900,8 +900,8 @@ def test_library_remove_story_deletes_file_only_story_folder(output_dir: Path):
 
 
 def test_library_reset_story_marks_parts_pending(output_dir: Path):
-    from wattpad_crawler.archive.state import Manifest
-    from wattpad_crawler.models import Part, Story
+    from local_story_archive.archive.state import Manifest
+    from local_story_archive.models import Part, Story
 
     cfg = Config(output_dir=output_dir)
     story = Story(
@@ -1423,7 +1423,7 @@ def test_save_cookie_uses_atomic_pattern(output_dir: Path, monkeypatch):
         # Do the real replace so the file ends up at config_path for any downstream check.
         real_replace(src, dst)
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.os.replace", fake_replace)
+    monkeypatch.setattr("local_story_archive.web.routes.os.replace", fake_replace)
 
     _save_cookie(output_dir, "abc12345")
 
@@ -1447,7 +1447,7 @@ def test_save_cookie_crash_safe(output_dir: Path, monkeypatch):
 
     # Simulate a crash exactly between tmp.write_text() and os.replace().
     monkeypatch.setattr(
-        "wattpad_crawler.web.routes.os.replace",
+        "local_story_archive.web.routes.os.replace",
         lambda src, dst: (_ for _ in ()).throw(RuntimeError("simulated crash")),
     )
 
@@ -1470,7 +1470,7 @@ def test_save_cookie_cleans_up_tmp_on_failure(output_dir: Path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "wattpad_crawler.web.routes.os.replace",
+        "local_story_archive.web.routes.os.replace",
         lambda src, dst: (_ for _ in ()).throw(RuntimeError("simulated crash")),
     )
 
@@ -1497,7 +1497,7 @@ def test_setup_post_invalid_cookie_rerenders(output_dir: Path, monkeypatch):
     config_path.write_text(original, encoding="utf-8")
 
     monkeypatch.setattr(
-        "wattpad_crawler.web.routes.validate_cookie",
+        "local_story_archive.web.routes.validate_cookie",
         lambda c: (_ for _ in ()).throw(AuthError("cookie rejected")),
     )
 
@@ -1523,7 +1523,7 @@ def test_setup_post_valid_cookie_saves(output_dir: Path, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "wattpad_crawler.web.routes.validate_cookie",
+        "local_story_archive.web.routes.validate_cookie",
         lambda c: None,  # success
     )
 
@@ -1542,7 +1542,7 @@ def test_setup_post_network_error(output_dir: Path, monkeypatch):
     client = TestClient(app)
 
     monkeypatch.setattr(
-        "wattpad_crawler.web.routes.validate_cookie",
+        "local_story_archive.web.routes.validate_cookie",
         lambda c: (_ for _ in ()).throw(httpx.ConnectError("simulated DNS failure")),
     )
 
@@ -1560,7 +1560,7 @@ def test_setup_post_shows_masked_attempted(output_dir: Path, monkeypatch):
     client = TestClient(app)
 
     monkeypatch.setattr(
-        "wattpad_crawler.web.routes.validate_cookie",
+        "local_story_archive.web.routes.validate_cookie",
         lambda c: (_ for _ in ()).throw(AuthError("rejected")),
     )
 

@@ -12,7 +12,7 @@
 **Probe & Error Taxonomy (AUTH-01)**
 - **D-01:** `validate_cookie(client: RateLimitedClient) -> None` probes a single canonical endpoint (default candidate `GET https://www.wattpad.com/api/v3/users/me` — researcher to verify).
 - **D-02:** Auth failure signals are strict: HTTP 401, HTTP 403, and 3xx redirects whose `Location` header points at `/login`. Network errors / timeouts / 5xx propagate as their own type.
-- **D-03:** Two error classes in `wattpad_crawler/auth.py`:
+- **D-03:** Two error classes in `local_story_archive/auth.py`:
   - `class AuthError(Exception)` — raised by `validate_cookie()` at startup / `/setup` POST. Base class.
   - `class AuthFailedError(AuthError)` — raised by `RateLimitedClient.get()` mid-job on 401/403.
 - **D-04:** `validate_cookie()` makes the probe via the existing `RateLimitedClient` with `max_attempts=1`.
@@ -89,7 +89,7 @@ These directives have the same authority as locked CONTEXT.md decisions. Plans M
 
 ## Summary
 
-Phase 2 introduces a new `wattpad_crawler/auth.py` module and threads three small additions through existing files: a 401/403 fast-fail in `RateLimitedClient.get()`, a per-CLI-branch auth gate in `cli.py`, and a validate-before-save rewrite of `setup_post` with atomic cookie persistence. CONTEXT.md locks every architectural decision; this research resolves the six open questions flagged for Claude's Discretion.
+Phase 2 introduces a new `local_story_archive/auth.py` module and threads three small additions through existing files: a 401/403 fast-fail in `RateLimitedClient.get()`, a per-CLI-branch auth gate in `cli.py`, and a validate-before-save rewrite of `setup_post` with atomic cookie persistence. CONTEXT.md locks every architectural decision; this research resolves the six open questions flagged for Claude's Discretion.
 
 **Key findings:**
 - **Probe URL:** No publicly-documented `/api/v3/users/me` endpoint exists in any of the surveyed unofficial Wattpad API docs. Recommend `GET https://www.wattpad.com/api/v3/internal/auth/check` as the **default** with a runtime fallback to `GET /api/v3/users/wattpad?fields=username` (a public endpoint that requires auth via cookie when one is present and which we already know works through `fetch_library`'s sibling shape). See Probe Endpoint Decision below — this needs the manual verification STATE.md flagged.
@@ -118,7 +118,7 @@ Phase 2 introduces a new `wattpad_crawler/auth.py` module and threads three smal
 **Final recommendation — two-layer fallback:**
 
 ```python
-# wattpad_crawler/auth.py
+# local_story_archive/auth.py
 
 # Primary: probe an auth-required endpoint with a known-good username.
 # We use "wattpad" (Wattpad's official account) so we never need to know
@@ -157,7 +157,7 @@ If manual verification reveals the library probe also returns 200 with an invali
 
 **Constant placement:** `_PROBE_URL` lives at module scope in `auth.py` per Phase 1 naming convention (`_lowercase_with_underscores` for private module constants — see Phase 1 D-11 / `_MAX_EVENTS_PER_JOB`). One-line update if Wattpad changes the endpoint.
 
-`[VERIFIED: codebase grep — no other `/users/me` or `/auth/check` reference exists in wattpad_crawler/]`
+`[VERIFIED: codebase grep — no other `/users/me` or `/auth/check` reference exists in local_story_archive/]`
 `[CITED: github.com/Archive-WP/WattpadAPIDocumentation/blob/master/API_Endpoints/Library.md]`
 
 ## httpx Redirect & Probe Mechanics
@@ -180,7 +180,7 @@ Client.get(self, url, *, params=None, headers=None, cookies=None,
 The pattern:
 
 ```python
-# wattpad_crawler/auth.py
+# local_story_archive/auth.py
 
 _AUTH_FAILURE_STATUSES = (401, 403)
 
@@ -239,7 +239,7 @@ def validate_cookie(client: RateLimitedClient) -> None:
 
 **Decision:** Mirror `archive/store.py:atomic_write_text` (lines 54-62) exactly. Use `os.replace()` with a same-directory tmp file suffixed with PID + thread ID. The existing pattern is portable as-is; document the Windows caveats in a code comment so future readers understand the guarantee.
 
-**The existing pattern (verbatim from `wattpad_crawler/archive/store.py:54-62`):**
+**The existing pattern (verbatim from `local_story_archive/archive/store.py:54-62`):**
 
 ```python
 def _tmp_path(path: Path) -> Path:
@@ -286,11 +286,11 @@ So success criterion #4 is satisfied even with the CopyFile-fallback caveat. The
 
 **Practical recommendation for the planner:**
 
-1. The new `_save_cookie()` body uses `atomic_write_text(config_path, new_text)` — but `atomic_write_text` lives in `wattpad_crawler/archive/store.py`. Importing from `archive/store` into `web/routes` is a layer crossing (web → archive). Two acceptable shapes:
+1. The new `_save_cookie()` body uses `atomic_write_text(config_path, new_text)` — but `atomic_write_text` lives in `local_story_archive/archive/store.py`. Importing from `archive/store` into `web/routes` is a layer crossing (web → archive). Two acceptable shapes:
 
    **Shape A (preferred):** Inline the same `tmp + write + os.replace + try-cleanup` pattern in `_save_cookie()`. ~10 lines. Avoids the import. Matches D-19's "minimum disruption" goal exactly.
 
-   **Shape B:** Import `atomic_write_text` from `wattpad_crawler.archive.store`. Cleaner DRY, but introduces a web-layer dependency on archive-layer utility. Defer the proper extraction (to e.g. `wattpad_crawler/io.py`) to a future refactor.
+   **Shape B:** Import `atomic_write_text` from `local_story_archive.archive.store`. Cleaner DRY, but introduces a web-layer dependency on archive-layer utility. Defer the proper extraction (to e.g. `local_story_archive/io.py`) to a future refactor.
 
    CONTEXT.md D-20 explicitly says "Helper does NOT move into `config.py` or `auth.py` in this phase — minimum disruption." Shape A respects this — copy the ~10 lines. Future phase can de-dupe.
 
@@ -312,7 +312,7 @@ So success criterion #4 is satisfied even with the CopyFile-fallback caveat. The
 
 ## RateLimitedClient.get() Insertion Point
 
-**Exact line numbers from current `wattpad_crawler/client.py`:**
+**Exact line numbers from current `local_story_archive/client.py`:**
 
 | Line | Content | Role |
 |------|---------|------|
@@ -356,18 +356,18 @@ So success criterion #4 is satisfied even with the CopyFile-fallback caveat. The
 **Required import at top of `client.py`:**
 
 ```python
-from wattpad_crawler.auth import AuthFailedError
+from local_story_archive.auth import AuthFailedError
 ```
 
 **Cycle check:** `auth.py` imports `RateLimitedClient` from `client.py` (it needs the type for `validate_cookie(client: RateLimitedClient)`). `client.py` imports `AuthFailedError` from `auth.py`. This is a circular import.
 
 **Resolution options:**
 
-1. **Define `AuthFailedError` in `client.py`** and re-export from `auth.py`. Cleanest — the exception is "raised by client" and conceptually belongs there. `auth.py` does `from wattpad_crawler.client import AuthFailedError` and re-exports for users who do `from wattpad_crawler.auth import AuthFailedError`.
+1. **Define `AuthFailedError` in `client.py`** and re-export from `auth.py`. Cleanest — the exception is "raised by client" and conceptually belongs there. `auth.py` does `from local_story_archive.client import AuthFailedError` and re-exports for users who do `from local_story_archive.auth import AuthFailedError`.
 
-2. **Use `TYPE_CHECKING` guard in `auth.py`** for the `RateLimitedClient` annotation, and have `client.py` do `from wattpad_crawler.auth import AuthFailedError` at function scope inside `get()` (deferred import). Works but messy.
+2. **Use `TYPE_CHECKING` guard in `auth.py`** for the `RateLimitedClient` annotation, and have `client.py` do `from local_story_archive.auth import AuthFailedError` at function scope inside `get()` (deferred import). Works but messy.
 
-3. **Define both `AuthError` and `AuthFailedError` in a third small module** (`wattpad_crawler/_auth_errors.py`) that both `client.py` and `auth.py` import. Avoids the cycle cleanly. But adds a file for two classes — overkill for this scale.
+3. **Define both `AuthError` and `AuthFailedError` in a third small module** (`local_story_archive/_auth_errors.py`) that both `client.py` and `auth.py` import. Avoids the cycle cleanly. But adds a file for two classes — overkill for this scale.
 
 **Recommendation:** Option 1. `AuthFailedError` is RAISED by `client.py:get()`. It belongs in `client.py` next to the code that raises it. `auth.py` defines `AuthError` (the base) and re-exports `AuthFailedError` so callers have one consistent import surface:
 
@@ -381,7 +381,7 @@ class AuthFailedError(Exception):
         self.url = url
 
 # auth.py (top)
-from wattpad_crawler.client import AuthFailedError  # re-export
+from local_story_archive.client import AuthFailedError  # re-export
 
 class AuthError(Exception):
     """Raised by validate_cookie() at startup / setup POST."""
@@ -395,11 +395,11 @@ But CONTEXT.md D-03 specifies `AuthFailedError(AuthError)` — `AuthFailedError`
 ```python
 # client.py:get() — inside the method body, before raising:
 def get(self, url, *, max_attempts: int = 5, **kwargs) -> httpx.Response:
-    from wattpad_crawler.auth import AuthFailedError  # deferred to break cycle
+    from local_story_archive.auth import AuthFailedError  # deferred to break cycle
     ...
 ```
 
-This is allowed by ruff/PEP 8 (function-scope imports are an established pattern for breaking cycles). Phase 1 already accepts function-scope imports — see `cli.py:86,90` (`from wattpad_crawler.api.user import fetch_library`). The deferred import has zero runtime cost beyond the first call. `[VERIFIED: cli.py:86 already uses function-scope imports]`
+This is allowed by ruff/PEP 8 (function-scope imports are an established pattern for breaking cycles). Phase 1 already accepts function-scope imports — see `cli.py:86,90` (`from local_story_archive.api.user import fetch_library`). The deferred import has zero runtime cost beyond the first call. `[VERIFIED: cli.py:86 already uses function-scope imports]`
 
 Alternative: keep the import at module-top and structure `auth.py` so it doesn't import `RateLimitedClient` at module scope — use `TYPE_CHECKING`:
 
@@ -407,7 +407,7 @@ Alternative: keep the import at module-top and structure `auth.py` so it doesn't
 # auth.py
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from wattpad_crawler.client import RateLimitedClient
+    from local_story_archive.client import RateLimitedClient
 
 def validate_cookie(client: "RateLimitedClient") -> None: ...
 ```
@@ -429,7 +429,7 @@ This breaks the cycle cleanly because `TYPE_CHECKING` is False at runtime — Py
 def setup_post(request: Request, cookie: str = Form(...)) -> RedirectResponse:
     cfg = request.app.state.cfg
     _save_cookie(cfg.output_dir, cookie)
-    from wattpad_crawler.config import load_config
+    from local_story_archive.config import load_config
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
 ```
@@ -482,7 +482,7 @@ def setup_post(
 
     # Validation succeeded — persist atomically (D-19) and reload config
     _save_cookie(cfg.output_dir, submitted)
-    from wattpad_crawler.config import load_config
+    from local_story_archive.config import load_config
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
 ```
@@ -492,7 +492,7 @@ def setup_post(
 ```python
 import dataclasses
 import httpx
-from wattpad_crawler.auth import AuthError, validate_cookie
+from local_story_archive.auth import AuthError, validate_cookie
 ```
 
 **Template additions (`setup.html`):**
@@ -587,7 +587,7 @@ def test_main_archive_blank_cookie_exits_2(output_dir, monkeypatch, capsys):
     # Mock RateLimitedClient.get to return 401 for the probe (or have validate_cookie
     # do a pre-check on empty string and raise AuthError directly without HTTP call)
     monkeypatch.setattr(
-        "wattpad_crawler.cli.archive_story",
+        "local_story_archive.cli.archive_story",
         lambda *a, **kw: pytest.fail("archive_story must not be called"),
     )
     rc = main(["--output", str(output_dir), "story", "12345"])
@@ -683,14 +683,14 @@ def test_main_archive_blank_cookie_exits_2(output_dir, monkeypatch, capsys):
 ### Example 1: Probe with explicit redirect detection
 
 ```python
-# wattpad_crawler/auth.py — full module sketch (Plan 1 implementation)
+# local_story_archive/auth.py — full module sketch (Plan 1 implementation)
 import logging
 from typing import TYPE_CHECKING
 
 import httpx
 
 if TYPE_CHECKING:
-    from wattpad_crawler.client import RateLimitedClient
+    from local_story_archive.client import RateLimitedClient
 
 logger = logging.getLogger(__name__)
 
@@ -753,11 +753,11 @@ def validate_cookie(client: "RateLimitedClient") -> None:
 ### Example 2: 401/403 fast-fail in client.py
 
 ```python
-# Insert in wattpad_crawler/client.py, between line 72 and line 73:
+# Insert in local_story_archive/client.py, between line 72 and line 73:
             # AUTH-04 / D-13: 401/403 detection BEFORE 429/5xx retry branches.
             # AuthFailedError is loud and immediate — D-14 says do not retry.
             if resp.status_code in (401, 403):
-                from wattpad_crawler.auth import AuthFailedError  # deferred — break cycle
+                from local_story_archive.auth import AuthFailedError  # deferred — break cycle
                 logger.warning(
                     "Auth failure on %s — HTTP %d", url, resp.status_code,
                 )
@@ -772,7 +772,7 @@ def validate_cookie(client: "RateLimitedClient") -> None:
 ### Example 3: archive_story per-part except re-raise + auth.failed event
 
 ```python
-# wattpad_crawler/jobs.py — modify the per-part except block at lines 144-152:
+# local_story_archive/jobs.py — modify the per-part except block at lines 144-152:
         try:
             raw_html = deps.fetch_chapter_html(client, part.url)
             content: ChapterContent = deps.parse_chapter(raw_html)
@@ -793,12 +793,12 @@ def validate_cookie(client: "RateLimitedClient") -> None:
             # ... existing failure handling ...
 ```
 
-Required new import: `from wattpad_crawler.auth import AuthFailedError` at the top of `jobs.py`.
+Required new import: `from local_story_archive.auth import AuthFailedError` at the top of `jobs.py`.
 
 ### Example 4: Atomic cookie write
 
 ```python
-# wattpad_crawler/web/routes.py — replace _save_cookie body:
+# local_story_archive/web/routes.py — replace _save_cookie body:
 def _save_cookie(output_dir: Path, cookie: str) -> None:
     """Write/update the cookie line in _config.toml atomically.
 
@@ -901,7 +901,7 @@ Required new imports at top of `web/routes.py`: `import os`, `import threading`.
    - **RESOLVED:** Plan 05 Task 2 setup_post signature widens the return to RedirectResponse | HTMLResponse.
 
 6. **Probe rate-limit budget impact.**
-   - What we know: every `wattpad-crawler archive ...` invocation now consumes one extra token from the bucket (the probe). Default rate is 2.0 req/sec; one probe = 0.5s of budget.
+   - What we know: every `local-story-archive archive ...` invocation now consumes one extra token from the bucket (the probe). Default rate is 2.0 req/sec; one probe = 0.5s of budget.
    - Impact: negligible. CLI archive runs already issue dozens of requests; one extra at startup is invisible.
    - **DOES the probe also count against the bucket from the `/setup` POST path?** Yes — the transient `RateLimitedClient(transient_cfg)` has its own bucket, separate from the long-lived app client. Each `/setup` validation is one bucket-of-2 fully fresh. Effectively no rate impact.
    - **RESOLVED:** No code change required -- impact analysis confirms the extra probe consumption is negligible (CLI: ~0.5s of a 2 req/s bucket; /setup: each validation gets a fresh transient bucket).
@@ -909,18 +909,18 @@ Required new imports at top of `web/routes.py`: `import os`, `import threading`.
 ## Sources
 
 ### Primary (HIGH confidence)
-- `wattpad_crawler/client.py` (lines 56-89) — current `get()` method, exact insertion point verified
-- `wattpad_crawler/cli.py` (lines 72-106) — current `main()` with dispatch block; auth gate insertion sites identified
-- `wattpad_crawler/web/routes.py` (lines 22-77) — current `_save_cookie` and `setup_post`; TemplateResponse signature pattern verified across all routes
-- `wattpad_crawler/jobs.py` (lines 100-152) — current per-part try/except; AuthFailedError re-raise insertion site identified
-- `wattpad_crawler/archive/store.py` (lines 47-71) — atomic write pattern to mirror verbatim
-- `wattpad_crawler/config.py` (lines 10-16) — Config is `frozen=True`; `dataclasses.replace` is the clone idiom
+- `local_story_archive/client.py` (lines 56-89) — current `get()` method, exact insertion point verified
+- `local_story_archive/cli.py` (lines 72-106) — current `main()` with dispatch block; auth gate insertion sites identified
+- `local_story_archive/web/routes.py` (lines 22-77) — current `_save_cookie` and `setup_post`; TemplateResponse signature pattern verified across all routes
+- `local_story_archive/jobs.py` (lines 100-152) — current per-part try/except; AuthFailedError re-raise insertion site identified
+- `local_story_archive/archive/store.py` (lines 47-71) — atomic write pattern to mirror verbatim
+- `local_story_archive/config.py` (lines 10-16) — Config is `frozen=True`; `dataclasses.replace` is the clone idiom
 - `tests/unit/test_client.py` (lines 94-99) — `make_client(tmp_path, transport)` mock pattern reused for AUTH-04 tests
 - `tests/unit/test_web_routes.py` (lines 5-30) — `TestClient(app)` pattern reused for AUTH-03 tests
 - `tests/conftest.py` (lines 11-15) — `output_dir` fixture reused for `_save_cookie` tests
 - [Python httpx Client.get signature](https://www.python-httpx.org/api/) — `follow_redirects` is a per-call kwarg
 - [Python httpx Quickstart — Redirects](https://www.python-httpx.org/quickstart/) — `response.history`, `response.next_request` semantics
-- [pyproject.toml](D:\Dev\Wattpad Crawler\pyproject.toml) lines 10-28 — confirms httpx>=0.27, pytest>=8.0, pytest-vcr/vcrpy in dev deps
+- [pyproject.toml](D:\Dev\Local Story Archive\pyproject.toml) lines 10-28 — confirms httpx>=0.27, pytest>=8.0, pytest-vcr/vcrpy in dev deps
 
 ### Secondary (MEDIUM confidence)
 - [GitHub: Archive-WP/WattpadAPIDocumentation — User_Info.md](https://github.com/Archive-WP/WattpadAPIDocumentation/blob/master/API_Endpoints/User_Info.md) — `/api/v3/users/{username}` documented, auth not required for reads

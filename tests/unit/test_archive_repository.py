@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from wattpad_crawler.archive.repository import ArchiveRepository
-from wattpad_crawler.models import Comment, Part, Story
-from wattpad_crawler.scrape.chapter_html import ChapterContent
+from local_story_archive.archive.repository import ArchiveRepository
+from local_story_archive.models import Comment, Part, Story
+from local_story_archive.scrape.chapter_html import ChapterContent
 
 
 def test_repository_initializes_versioned_schema(output_dir: Path):

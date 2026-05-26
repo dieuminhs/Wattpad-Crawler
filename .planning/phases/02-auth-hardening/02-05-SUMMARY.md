@@ -6,7 +6,7 @@ tags: [auth, cookie-validation, atomic-write, xss-mitigation, setup-ux]
 dependency_graph:
   requires: ["02-01"]
   provides: ["validate-before-save-setup", "atomic-cookie-persistence"]
-  affects: ["wattpad_crawler/web/routes.py", "wattpad_crawler/web/templates/setup.html"]
+  affects: ["local_story_archive/web/routes.py", "local_story_archive/web/templates/setup.html"]
 tech_stack:
   added: []
   patterns:
@@ -16,8 +16,8 @@ tech_stack:
 key_files:
   created: []
   modified:
-    - wattpad_crawler/web/routes.py
-    - wattpad_crawler/web/templates/setup.html
+    - local_story_archive/web/routes.py
+    - local_story_archive/web/templates/setup.html
     - tests/unit/test_web_routes.py
 decisions:
   - "response_model=None added to @router.post('/setup') because FastAPI cannot generate a Pydantic schema for RedirectResponse | HTMLResponse union — this is the documented FastAPI pattern for handlers that return multiple response types"
@@ -70,7 +70,7 @@ metrics:
   - `test_setup_post_shows_masked_attempted` — `AbCd…5678` mask visible in response body
 - **Full quick suite:** 128 passed (test_auth + test_client + test_cli + test_jobs + test_web_routes + test_runner)
 - **Fixture audit:** `grep -c "def client(" tests/unit/test_web_routes.py` → 0 (no shared client fixture)
-- **Ruff:** `ruff check wattpad_crawler/web/routes.py tests/unit/test_web_routes.py` → no errors
+- **Ruff:** `ruff check local_story_archive/web/routes.py tests/unit/test_web_routes.py` → no errors
 
 ## Key Implementation Notes
 
@@ -87,21 +87,21 @@ metrics:
 - **Found during:** Task 2 (first pytest run after adding `setup_post` rewrite)
 - **Issue:** `fastapi.exceptions.FastAPIError: Invalid args for response field! ... starlette.responses.RedirectResponse | starlette.responses.HTMLResponse is a valid Pydantic field type`
 - **Fix:** Added `response_model=None` to `@router.post("/setup", response_model=None)` — the documented FastAPI pattern for handlers returning multiple response types
-- **Files modified:** `wattpad_crawler/web/routes.py`
+- **Files modified:** `local_story_archive/web/routes.py`
 - **Commit:** 724b4ca (included in Task 2 commit)
 
 **2. [Rule 1 - Bug] Existing setup tests broken by validate-before-save**
 - **Found during:** Task 2 (first pytest run)
 - **Issue:** `test_setup_post_saves_cookie` and `test_setup_post_strips_whitespace` POSTed without monkeypatching `validate_cookie` — now returns 400 because no real Wattpad connection available in tests
-- **Fix:** Added `monkeypatch.setattr("wattpad_crawler.web.routes.validate_cookie", lambda c: None)` to both tests — same pattern used by all 4 new AUTH-03 tests
+- **Fix:** Added `monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda c: None)` to both tests — same pattern used by all 4 new AUTH-03 tests
 - **Files modified:** `tests/unit/test_web_routes.py`
 - **Commit:** 724b4ca (included in Task 2 commit)
 
 **3. [Rule 1 - Bug] Ruff I001 import ordering violation**
 - **Found during:** Task 2 ruff check
-- **Issue:** `from wattpad_crawler.auth import AuthError, validate_cookie` was appended after the existing first-party imports block instead of sorted alphabetically within it
-- **Fix:** Moved the auth import between `from wattpad_crawler.archive.state import Manifest` and `from wattpad_crawler.client import RateLimitedClient`
-- **Files modified:** `wattpad_crawler/web/routes.py`
+- **Issue:** `from local_story_archive.auth import AuthError, validate_cookie` was appended after the existing first-party imports block instead of sorted alphabetically within it
+- **Fix:** Moved the auth import between `from local_story_archive.archive.state import Manifest` and `from local_story_archive.client import RateLimitedClient`
+- **Files modified:** `local_story_archive/web/routes.py`
 - **Commit:** 724b4ca (included in Task 2 commit)
 
 ## Known Stubs
@@ -114,8 +114,8 @@ No new threat surface introduced beyond what the plan's `<threat_model>` already
 
 ## Self-Check: PASSED
 
-- FOUND: wattpad_crawler/web/routes.py
-- FOUND: wattpad_crawler/web/templates/setup.html
+- FOUND: local_story_archive/web/routes.py
+- FOUND: local_story_archive/web/templates/setup.html
 - FOUND: tests/unit/test_web_routes.py
 - FOUND: .planning/phases/02-auth-hardening/02-05-SUMMARY.md
 - FOUND commit: c65cbef (Task 1)

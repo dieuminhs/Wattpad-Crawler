@@ -8,7 +8,7 @@
 - Wattpad API - Unofficial, undocumented Wattpad API for fetching story metadata, chapters, comments, and user library
   - SDK/Client: httpx (async-capable HTTP client)
   - Auth: Cookie-based (session token stored in `_config.toml`)
-  - Endpoints implemented in: `wattpad_crawler/api/story.py`, `wattpad_crawler/api/user.py`, `wattpad_crawler/api/comments.py`
+  - Endpoints implemented in: `local_story_archive/api/story.py`, `local_story_archive/api/user.py`, `local_story_archive/api/comments.py`
 
 ## Data Storage
 
@@ -18,7 +18,7 @@
   - Connection: Direct via Python `sqlite3` stdlib module
   - Purpose: Manifest database tracking story/chapter download status, metadata, and job run history
   - Client: None (raw SQL via `sqlite3.Connection`)
-  - Schema initialization: `wattpad_crawler/archive/state.py:_SCHEMA`
+  - Schema initialization: `local_story_archive/archive/state.py:_SCHEMA`
   - Configuration:
     - Foreign key enforcement: `PRAGMA foreign_keys = ON`
     - Write-Ahead Logging (WAL) mode for concurrent read/write: `PRAGMA journal_mode = WAL`
@@ -28,7 +28,7 @@
 - Local filesystem only
   - Archive path: `wattpad-archive/stories/` (configurable via `--output` CLI argument)
   - No cloud storage integration
-  - Atomic write implementation in `wattpad_crawler/archive/store.py` prevents corruption from process interruption
+  - Atomic write implementation in `local_story_archive/archive/store.py` prevents corruption from process interruption
 
 **Caching:**
 - None (SQLite state database serves as cache/manifest)
@@ -40,7 +40,7 @@
 - Custom (Cookie-based session auth with Wattpad)
   - Implementation: User manually obtains session token from browser and stores in `_config.toml`
   - Token name: `cookie` field in `_config.toml`
-  - Passed as: HTTP cookie with domain `wattpad.com` (set in `wattpad_crawler/client.py:line 15`)
+  - Passed as: HTTP cookie with domain `wattpad.com` (set in `local_story_archive/client.py:line 15`)
   - Setup: See `README.md` lines 26-32 (DevTools → Cookies → copy `token` value)
   - No OAuth, API key, or service account mechanisms
 
@@ -53,7 +53,7 @@
 **Logs:**
 - Logging approach: Python `logging` module with handlers to stdout
   - Format: `"%(asctime)s %(levelname)s %(name)s: %(message)s"`
-  - Set via `_setup_logging()` in `wattpad_crawler/cli.py:line 46`
+  - Set via `_setup_logging()` in `local_story_archive/cli.py:line 46`
   - Verbosity: Controlled by `-v` / `--verbose` CLI flag (DEBUG level if set, INFO by default)
   - Key loggers: Various modules log at appropriate levels (httpx, RateLimitedClient, API fetchers)
 
@@ -77,9 +77,9 @@
   - Optional fields:
     - `rate_limit_per_sec` (float, default 2.0)
     - `workers_per_story` (int, default 3)
-    - `user_agent` (str, default `"wattpad-crawler/0.1 (+local archive tool)"`)
-  - Parser: `tomllib.loads()` in `wattpad_crawler/config.py`
-  - Default template: `_DEFAULT_TOML` in `wattpad_crawler/config.py:line 19`
+    - `user_agent` (str, default `"local-story-archive/0.1 (+local archive tool)"`)
+  - Parser: `tomllib.loads()` in `local_story_archive/config.py`
+  - Default template: `_DEFAULT_TOML` in `local_story_archive/config.py:line 19`
 
 **No Environment Variables:**
 - No `.env` file support
@@ -94,18 +94,18 @@
 
 **Server-Sent Events (SSE):**
 - sse-starlette 2.0+ for real-time progress updates
-  - Used in: `wattpad_crawler/web/routes.py` (job progress streaming)
+  - Used in: `local_story_archive/web/routes.py` (job progress streaming)
   - Response type: `EventSourceResponse` from `sse_starlette.sse`
   - Purpose: Stream chapter/comment fetch progress to browser in real-time
 
 **Templating:**
 - Jinja2 3.1+ for HTML templates
-  - Template directory: `wattpad_crawler/web/templates/`
+  - Template directory: `local_story_archive/web/templates/`
   - Files included in wheel: `[tool.hatch.build.targets.wheel.force-include]` in `pyproject.toml`
   - Used for: Setup page, dashboard, library view, chapter reader
 
 **Static Assets:**
-- CSS/JavaScript in `wattpad_crawler/web/static/`
+- CSS/JavaScript in `local_story_archive/web/static/`
   - Served via `StaticFiles` (FastAPI middleware)
   - Mounted at: `/static`
   - Files included in wheel: Configured in `pyproject.toml`
@@ -125,7 +125,7 @@
 - URL source: Story metadata API response (`cover_url` field from `api/v3/stories/{story_id}`)
 - Storage: `wattpad-archive/stories/{author}/{story_id}_{slug}/cover.jpg`
 - Format: JPEG
-- Used in: EPUB generation (`wattpad_crawler/render/epub.py:line 22`), library browser UI
+- Used in: EPUB generation (`local_story_archive/render/epub.py:line 22`), library browser UI
 
 ## Chapter HTML Parsing
 
@@ -134,7 +134,7 @@
 - JSON: Contains chapter metadata + paragraph structure
 - HTML: Original Wattpad chapter page HTML for reference
 - Plain text: Extracted from HTML for reading/searching
-- Parsing: BeautifulSoup4 with lxml backend (`wattpad_crawler/scrape/chapter_html.py`)
+- Parsing: BeautifulSoup4 with lxml backend (`local_story_archive/scrape/chapter_html.py`)
 
 ## Comment Fetching
 
@@ -143,15 +143,15 @@
 - Two types:
   - Inline comments: `?limit=100` (default, attached to paragraphs)
   - End-of-chapter comments: `?limit=100&forms=root`
-- Implementation: `wattpad_crawler/api/comments.py`
+- Implementation: `local_story_archive/api/comments.py`
 - Pagination: Follows `nextUrl` chain with cycle detection and max page limit (200)
 
 ## Rendering Formats
 
 **Output Formats:**
-1. EPUB (e-book) - `ebooklib` library (`wattpad_crawler/render/epub.py`)
-2. HTML - Custom renderer (`wattpad_crawler/render/html.py`)
-3. Plain text - Custom renderer (`wattpad_crawler/render/txt.py`)
+1. EPUB (e-book) - `ebooklib` library (`local_story_archive/render/epub.py`)
+2. HTML - Custom renderer (`local_story_archive/render/html.py`)
+3. Plain text - Custom renderer (`local_story_archive/render/txt.py`)
 
 **Triggers:**
 - Rendered on each archive run (incremental chapters, full story outputs)
@@ -160,7 +160,7 @@
 ## Rate Limiting & Retry Logic
 
 **Rate Limiting:**
-- Implementation: Token bucket algorithm in `RateLimitedClient` class (`wattpad_crawler/client.py:lines 24-47`)
+- Implementation: Token bucket algorithm in `RateLimitedClient` class (`local_story_archive/client.py:lines 24-47`)
 - Default: 2.0 requests/sec (configurable via `rate_limit_per_sec` in `_config.toml`)
 - Thread-safe: Uses `threading.Lock()`
 

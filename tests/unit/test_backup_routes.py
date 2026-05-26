@@ -4,9 +4,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wattpad_crawler.archive.backup import create_backup
-from wattpad_crawler.config import Config
-from wattpad_crawler.web.app import build_app
+from local_story_archive.archive.backup import create_backup
+from local_story_archive.config import Config
+from local_story_archive.web.app import build_app
 
 
 def test_config_page_renders_backup_restore_controls(output_dir: Path):
@@ -33,7 +33,7 @@ def test_config_backup_returns_zip_download(output_dir: Path):
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
-    assert "wattpad-crawler-backup" in response.headers["content-disposition"]
+    assert "local-story-archive-backup" in response.headers["content-disposition"]
     backup_path = output_dir.parent / "download.zip"
     backup_path.write_bytes(response.content)
     with zipfile.ZipFile(backup_path) as archive:

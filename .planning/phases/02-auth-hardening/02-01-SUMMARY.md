@@ -5,14 +5,14 @@ subsystem: auth
 tags: [auth, cookie-validation, exception-hierarchy, unit-tests]
 dependency_graph:
   requires: []
-  provides: [wattpad_crawler.auth.AuthError, wattpad_crawler.auth.AuthFailedError, wattpad_crawler.auth.validate_cookie, wattpad_crawler.auth._PROBE_URL]
+  provides: [local_story_archive.auth.AuthError, local_story_archive.auth.AuthFailedError, local_story_archive.auth.validate_cookie, local_story_archive.auth._PROBE_URL]
   affects: [02-02, 02-03, 02-04, 02-05]
 tech_stack:
   added: []
   patterns: [TYPE_CHECKING-import-cycle-break, httpx-MockTransport-unit-tests, cookie-jar-reach-in]
 key_files:
   created:
-    - wattpad_crawler/auth.py
+    - local_story_archive/auth.py
     - tests/unit/test_auth.py
   modified: []
 decisions:
@@ -37,7 +37,7 @@ Single canonical module for cookie validation — `validate_cookie()` probing `u
 | Task | Name | Commit | Files |
 |------|------|--------|-------|
 | 1 | Manual probe-URL verification | 40721e5 (orchestrator) | (none — verification only) |
-| 2 | Create auth.py + test_auth.py | 282406b | wattpad_crawler/auth.py, tests/unit/test_auth.py |
+| 2 | Create auth.py + test_auth.py | 282406b | local_story_archive/auth.py, tests/unit/test_auth.py |
 
 ## Task 1 Outcome (from orchestrator resolution)
 
@@ -70,7 +70,7 @@ Single canonical module for cookie validation — `validate_cookie()` probing `u
 - **Found during:** Task 2 — test run after initial file creation
 - **Issue:** The plan's `validate_cookie` code assumed `client.get()` would return a `Response` object for 401/403/302/400 responses, reaching the `if resp.status_code` branches. In practice, `RateLimitedClient.get()` calls `resp.raise_for_status()` before returning, which raises `httpx.HTTPStatusError` for ALL non-2xx responses (including 3xx and 4xx). The plan's `except AuthFailedError` branch would never trigger, and the redirect/400-PermissionDenied detection blocks after the try/except were dead code.
 - **Fix:** Added `except httpx.HTTPStatusError as e:` handler that performs all non-2xx detection from `e.response`: redirect-to-login check (from `e.response.headers["Location"]`), HTTP 400 + PermissionDenied check (from `e.response.json()`), and generic AuthError fallback. The dead `if resp.status_code` blocks after the try/except were collapsed to a single `if 200 <= resp.status_code < 300: return` guard (the only reachable path since raise_for_status already handled non-2xx).
-- **Files modified:** `wattpad_crawler/auth.py`
+- **Files modified:** `local_story_archive/auth.py`
 - **Commit:** 282406b
 
 **2. [Rule 1 - Bug] Unused AuthFailedError import in test_auth.py**
@@ -91,7 +91,7 @@ pytest tests/unit/test_client.py tests/unit/test_cli.py tests/unit/test_jobs.py 
        tests/unit/test_web_routes.py tests/unit/test_runner.py -x -q
 114 passed, 6 warnings in 28.42s
 
-ruff check wattpad_crawler/auth.py tests/unit/test_auth.py
+ruff check local_story_archive/auth.py tests/unit/test_auth.py
 All checks passed!
 ```
 
@@ -107,7 +107,7 @@ None. `auth.py` is fully implemented with no placeholder logic.
 
 ## Self-Check: PASSED
 
-- `wattpad_crawler/auth.py` exists: FOUND
+- `local_story_archive/auth.py` exists: FOUND
 - `tests/unit/test_auth.py` exists: FOUND
 - Commit 282406b exists: FOUND (`git log --oneline | grep 282406b`)
 - 7 tests passing: VERIFIED (pytest output above)

@@ -1,6 +1,6 @@
 # Project Research Summary
 
-**Project:** Wattpad Crawler — Harden v1
+**Project:** Local Story Archive — Harden v1
 **Domain:** Python web-scraper hardening — parallelism, sanitization, circuit-breaking, integration testing
 **Researched:** 2026-05-03
 **Confidence:** HIGH
@@ -129,7 +129,7 @@ Five phases are suggested. Ordering is driven by hard dependency constraints fro
 **Delivers:** Cookie validation on startup (CLI + /setup); auth-failure detection mid-run; atomic config write.
 
 **Implements:**
-- New wattpad_crawler/auth.py: validate_cookie() + AuthError
+- New local_story_archive/auth.py: validate_cookie() + AuthError
 - cli.py: validate before archive_story()
 - web/routes.py: validate at /setup POST and job submit
 - routes.py:_save_cookie(): atomic temp-path + os.replace()
@@ -233,7 +233,7 @@ All phases have standard patterns; no phase requires a dedicated research-phase 
 - PyPI pytest-recording 0.13.4: https://pypi.org/project/pytest-recording/
 - vcrpy changelog (httpcore rewrite): https://vcrpy.readthedocs.io/en/latest/changelog.html
 - nh3 API docs: https://nh3.readthedocs.io/en/latest/
-- Codebase: wattpad_crawler/client.py, archive/state.py, jobs.py, web/runner.py, api/comments.py, render/epub.py, scrape/chapter_html.py
+- Codebase: local_story_archive/client.py, archive/state.py, jobs.py, web/runner.py, api/comments.py, render/epub.py, scrape/chapter_html.py
 - Python stdlib sqlite3 docs — check_same_thread, busy_timeout
 - Python stdlib concurrent.futures docs — future.result() exception behavior
 

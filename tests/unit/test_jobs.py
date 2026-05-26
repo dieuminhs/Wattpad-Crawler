@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from wattpad_crawler.archive.repository import ArchiveRepository
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.auth import AuthFailedError
-from wattpad_crawler.config import Config
-from wattpad_crawler.jobs import (
+from local_story_archive.archive.repository import ArchiveRepository
+from local_story_archive.archive.state import Manifest
+from local_story_archive.auth import AuthFailedError
+from local_story_archive.config import Config
+from local_story_archive.jobs import (
     JobDeps,
     RenderError,
     ResolveError,
@@ -22,8 +22,8 @@ from wattpad_crawler.jobs import (
     resolve_story_id,
     resolve_url_story_id,
 )
-from wattpad_crawler.models import Comment, Part, Story
-from wattpad_crawler.scrape.chapter_html import ChapterContent
+from local_story_archive.models import Comment, Part, Story
+from local_story_archive.scrape.chapter_html import ChapterContent
 
 
 def _make_deps(story: Story) -> JobDeps:
@@ -180,9 +180,9 @@ def test_archive_story_fetches_parts_concurrently(output_dir: Path, monkeypatch)
         return f"<pre>{url}</pre>"
 
     deps.fetch_chapter_html = MagicMock(side_effect=fetch_chapter_html)
-    monkeypatch.setattr("wattpad_crawler.render.txt.render_txt", MagicMock())
-    monkeypatch.setattr("wattpad_crawler.render.html.render_html", MagicMock())
-    monkeypatch.setattr("wattpad_crawler.render.epub.render_epub", MagicMock())
+    monkeypatch.setattr("local_story_archive.render.txt.render_txt", MagicMock())
+    monkeypatch.setattr("local_story_archive.render.html.render_html", MagicMock())
+    monkeypatch.setattr("local_story_archive.render.epub.render_epub", MagicMock())
 
     archive_story(cfg, MagicMock(), manifest, "42", deps=deps)
 
@@ -309,7 +309,7 @@ def test_fetch_full_chapter_html_fetches_past_old_page_limit():
 
 
 def test_fetch_full_chapter_html_returns_parseable_combined_fragments():
-    from wattpad_crawler.scrape.chapter_html import extract_chapter
+    from local_story_archive.scrape.chapter_html import extract_chapter
 
     client = MagicMock()
     client.get.side_effect = [
@@ -363,9 +363,9 @@ def test_archive_story_renderers_are_independent(output_dir: Path, monkeypatch):
     deps = _make_deps(story)
 
     # Patch render_txt to raise; render_html and render_epub still need to be called.
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     txt_mock = MagicMock(side_effect=RuntimeError("txt rendering broke"))
     html_mock = MagicMock()
@@ -410,7 +410,7 @@ def test_resolve_url_story_id_fetches_parent_story_for_part_url(monkeypatch):
         return "123456789"
 
     monkeypatch.setattr(
-        "wattpad_crawler.jobs.api_story.fetch_part_story_id",
+        "local_story_archive.jobs.api_story.fetch_part_story_id",
         fake_fetch_part_story_id,
     )
 
@@ -525,9 +525,9 @@ def test_render_error_is_exception_subclass():
 def test_archive_story_raises_render_error_when_all_renderers_fail(
     output_dir, monkeypatch,
 ):
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
@@ -589,9 +589,9 @@ def test_archive_story_partial_render_failure_does_not_raise(
     output_dir, monkeypatch,
 ):
     """Two failed + one ok = partial. story.done emits the breakdown, no RenderError."""
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
@@ -641,9 +641,9 @@ def test_archive_story_all_ok_emits_render_status_all_ok(
     output_dir, monkeypatch,
 ):
     """Sanity: all renderers succeed -> render_status all 'ok', no RenderError."""
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
@@ -687,9 +687,9 @@ def test_archive_story_renderers_run_independently_when_one_fails(
     Verifies D-15: all three renderers run unconditionally — txt's failure
     does not prevent html.render_html or epub.render_epub from being called.
     """
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
@@ -722,9 +722,9 @@ def test_archive_many_records_render_error_in_results(
 ):
     """archive_many's existing per-story exception handler catches RenderError
     and records 'failed: all renders failed: ...' in the results dict."""
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()

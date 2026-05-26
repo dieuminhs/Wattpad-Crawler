@@ -1,4 +1,4 @@
-# Roadmap: Wattpad Crawler — Harden v1
+# Roadmap: Local Story Archive — Harden v1
 
 ## Overview
 
@@ -38,7 +38,7 @@ The five phases follow a strict dependency chain driven by the audit. Isolated l
 **Depends on**: Nothing (Phase 2 is independent — new module, no pipeline changes)
 **Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05
 **Success Criteria** (what must be TRUE):
-  1. Running `wattpad-crawler archive <story_id>` with a blank or obviously-invalid cookie prints an `AuthError` message and exits before making any archive API calls
+  1. Running `local-story-archive archive <story_id>` with a blank or obviously-invalid cookie prints an `AuthError` message and exits before making any archive API calls
   2. A `/setup` POST with an invalid cookie re-renders the setup form with an error message; `_config.toml` is not modified
   3. A mid-job 401/403 response from `RateLimitedClient.get()` causes the job to end `failed` with a clear "authentication failed" message rather than marking chapters as empty-done
   4. A crash simulated between the start and end of a `_save_cookie()` write leaves `_config.toml` either fully written or fully unchanged — never zero bytes or partial

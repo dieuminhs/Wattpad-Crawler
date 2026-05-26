@@ -58,7 +58,7 @@ tests/
 **Test File Naming:**
 - Pattern: `test_<module>.py`
 - Examples: `test_client.py`, `test_config.py`, `test_api_story.py`
-- One test file per source module (mirrors `wattpad_crawler/` structure)
+- One test file per source module (mirrors `local_story_archive/` structure)
 
 ## Test Structure
 
@@ -156,7 +156,7 @@ def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
         if progress:
             progress("story.start", {"story_id": sid})
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
 ```
 
 **What to Mock:**
@@ -324,7 +324,7 @@ def test_job_emit_is_thread_safe():
 **Testing Web Routes (FastAPI + TestClient):**
 ```python
 from fastapi.testclient import TestClient
-from wattpad_crawler.web.app import build_app
+from local_story_archive.web.app import build_app
 
 def test_setup_page_renders(output_dir: Path):
     cfg = Config(output_dir=output_dir)

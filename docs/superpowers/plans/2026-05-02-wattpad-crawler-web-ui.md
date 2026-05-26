@@ -1,12 +1,12 @@
-# Wattpad Crawler — Web UI Implementation Plan (Plan 2 of 2)
+# Local Story Archive — Web UI Implementation Plan (Plan 2 of 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a local web UI on top of the existing Plan 1 core/CLI so a non-technical user can paste their cookie, click a button, watch live progress, browse downloaded stories, and read them in a browser — without ever touching a terminal beyond `wattpad-crawler serve`.
+**Goal:** Add a local web UI on top of the existing Plan 1 core/CLI so a non-technical user can paste their cookie, click a button, watch live progress, browse downloaded stories, and read them in a browser — without ever touching a terminal beyond `local-story-archive serve`.
 
-**Architecture:** A small FastAPI app sits inside `wattpad_crawler/web/`, sharing the same `jobs.py` orchestrator with the CLI. A new `JobRunner` runs `archive_story` / `archive_many` in a background thread and emits progress events through an in-memory event bus. The web UI subscribes via Server-Sent Events. Jinja2 templates + HTMX + a single CSS file — no build step, no React.
+**Architecture:** A small FastAPI app sits inside `local_story_archive/web/`, sharing the same `jobs.py` orchestrator with the CLI. A new `JobRunner` runs `archive_story` / `archive_many` in a background thread and emits progress events through an in-memory event bus. The web UI subscribes via Server-Sent Events. Jinja2 templates + HTMX + a single CSS file — no build step, no React.
 
-**Tech Stack:** FastAPI, uvicorn, Jinja2, HTMX (loaded from CDN), Starlette SSE, anyio (already a FastAPI dep). All Plan 1 modules consumed unchanged via `wattpad_crawler.jobs`.
+**Tech Stack:** FastAPI, uvicorn, Jinja2, HTMX (loaded from CDN), Starlette SSE, anyio (already a FastAPI dep). All Plan 1 modules consumed unchanged via `local_story_archive.jobs`.
 
 **Scope of this plan:** Only the web layer + the small `jobs.py` extension to emit progress events. No changes to api/, archive/, render/, scrape/. Full backwards compatibility — the CLI continues to work identically.
 
@@ -15,7 +15,7 @@
 ## File Structure
 
 ```
-wattpad_crawler/
+local_story_archive/
 ├── jobs.py                         # MODIFIED: optional progress callback
 ├── web/
 │   ├── __init__.py
@@ -70,7 +70,7 @@ dependencies = [
 - [ ] **Step 2: Reinstall**
 
 ```bash
-cd "D:/Dev/Wattpad Crawler"
+cd "D:/Dev/Local Story Archive"
 pip install -e ".[dev]"
 ```
 
@@ -96,15 +96,15 @@ git commit -m "chore: add fastapi/uvicorn/jinja2/sse-starlette for web UI"
 ### Task 2: Web package skeleton
 
 **Files:**
-- Create: `wattpad_crawler/web/__init__.py` (empty)
-- Create: `wattpad_crawler/web/templates/.gitkeep` (placeholder so git tracks the dir)
-- Create: `wattpad_crawler/web/static/.gitkeep`
+- Create: `local_story_archive/web/__init__.py` (empty)
+- Create: `local_story_archive/web/templates/.gitkeep` (placeholder so git tracks the dir)
+- Create: `local_story_archive/web/static/.gitkeep`
 
-- [ ] **Step 1: Create `wattpad_crawler/web/__init__.py`** — empty file.
+- [ ] **Step 1: Create `local_story_archive/web/__init__.py`** — empty file.
 
-- [ ] **Step 2: Create `wattpad_crawler/web/templates/.gitkeep`** — empty file.
+- [ ] **Step 2: Create `local_story_archive/web/templates/.gitkeep`** — empty file.
 
-- [ ] **Step 3: Create `wattpad_crawler/web/static/.gitkeep`** — empty file.
+- [ ] **Step 3: Create `local_story_archive/web/static/.gitkeep`** — empty file.
 
 - [ ] **Step 4: Update `pyproject.toml`** to ensure templates and static files are packaged:
 
@@ -112,26 +112,26 @@ Add at the end of the `[project]` table area (or in a new section):
 
 ```toml
 [tool.hatch.build.targets.wheel]
-packages = ["wattpad_crawler"]
+packages = ["local_story_archive"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"wattpad_crawler/web/templates" = "wattpad_crawler/web/templates"
-"wattpad_crawler/web/static" = "wattpad_crawler/web/static"
+"local_story_archive/web/templates" = "local_story_archive/web/templates"
+"local_story_archive/web/static" = "local_story_archive/web/static"
 ```
 
 - [ ] **Step 5: Reinstall and verify the package layout**
 
 ```bash
 pip install -e .
-python -c "from wattpad_crawler import web; print(web.__file__)"
+python -c "from local_story_archive import web; print(web.__file__)"
 ```
 
-Expected: prints the path to `wattpad_crawler/web/__init__.py`.
+Expected: prints the path to `local_story_archive/web/__init__.py`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/web/__init__.py wattpad_crawler/web/templates/.gitkeep wattpad_crawler/web/static/.gitkeep pyproject.toml
+git add local_story_archive/web/__init__.py local_story_archive/web/templates/.gitkeep local_story_archive/web/static/.gitkeep pyproject.toml
 git commit -m "chore: web package skeleton"
 ```
 
@@ -142,7 +142,7 @@ git commit -m "chore: web package skeleton"
 ### Task 3: ProgressEvent + thread-safe Job event log
 
 **Files:**
-- Create: `wattpad_crawler/web/runner.py`
+- Create: `local_story_archive/web/runner.py`
 - Create: `tests/unit/test_runner.py`
 
 - [ ] **Step 1: Write failing tests** — `tests/unit/test_runner.py`
@@ -153,7 +153,7 @@ import time
 
 import pytest
 
-from wattpad_crawler.web.runner import Job, JobStatus, ProgressEvent
+from local_story_archive.web.runner import Job, JobStatus, ProgressEvent
 
 
 def test_progress_event_holds_fields():
@@ -220,7 +220,7 @@ pytest tests/unit/test_runner.py -v
 
 Expected: FAIL with `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement `wattpad_crawler/web/runner.py`**
+- [ ] **Step 3: Implement `local_story_archive/web/runner.py`**
 
 ```python
 import enum
@@ -303,7 +303,7 @@ Expected: 6 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/web/runner.py tests/unit/test_runner.py
+git add local_story_archive/web/runner.py tests/unit/test_runner.py
 git commit -m "feat(web): Job + ProgressEvent + thread-safe event log"
 ```
 
@@ -312,13 +312,13 @@ git commit -m "feat(web): Job + ProgressEvent + thread-safe event log"
 ### Task 4: JobManager registry
 
 **Files:**
-- Modify: `wattpad_crawler/web/runner.py` (append)
+- Modify: `local_story_archive/web/runner.py` (append)
 - Modify: `tests/unit/test_runner.py` (append)
 
 - [ ] **Step 1: Add failing tests**
 
 ```python
-from wattpad_crawler.web.runner import JobManager
+from local_story_archive.web.runner import JobManager
 
 
 def test_jobmanager_create_returns_job_with_unique_id():
@@ -345,7 +345,7 @@ def test_jobmanager_list_returns_recent_first():
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append to `wattpad_crawler/web/runner.py`**
+- [ ] **Step 3: Append to `local_story_archive/web/runner.py`**
 
 ```python
 class JobManager:
@@ -378,7 +378,7 @@ class JobManager:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/web/runner.py tests/unit/test_runner.py
+git add local_story_archive/web/runner.py tests/unit/test_runner.py
 git commit -m "feat(web): JobManager registry"
 ```
 
@@ -387,7 +387,7 @@ git commit -m "feat(web): JobManager registry"
 ### Task 5: Add progress callback to `jobs.archive_story`
 
 **Files:**
-- Modify: `wattpad_crawler/jobs.py`
+- Modify: `local_story_archive/jobs.py`
 - Modify: `tests/unit/test_jobs.py`
 
 - [ ] **Step 1: Add failing tests** to `tests/unit/test_jobs.py`
@@ -461,7 +461,7 @@ def test_archive_story_progress_default_is_noop(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Update `wattpad_crawler/jobs.py`**
+- [ ] **Step 3: Update `local_story_archive/jobs.py`**
 
 Modify `archive_story` to accept and call `progress`. Replace its body with:
 
@@ -604,7 +604,7 @@ Expected: 121 passed (118 + 3 new).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wattpad_crawler/jobs.py tests/unit/test_jobs.py
+git add local_story_archive/jobs.py tests/unit/test_jobs.py
 git commit -m "feat(jobs): optional progress callback, default no-op for CLI"
 ```
 
@@ -613,7 +613,7 @@ git commit -m "feat(jobs): optional progress callback, default no-op for CLI"
 ### Task 6: JobRunner — runs jobs in background thread
 
 **Files:**
-- Modify: `wattpad_crawler/web/runner.py`
+- Modify: `local_story_archive/web/runner.py`
 - Modify: `tests/unit/test_runner.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -623,7 +623,7 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from wattpad_crawler.web.runner import JobManager, JobRunner, JobStatus
+from local_story_archive.web.runner import JobManager, JobRunner, JobStatus
 
 
 def test_jobrunner_runs_callable_in_thread_and_marks_done():
@@ -690,7 +690,7 @@ def test_jobrunner_running_jobs_count():
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append to `wattpad_crawler/web/runner.py`**
+- [ ] **Step 3: Append to `local_story_archive/web/runner.py`**
 
 ```python
 import logging
@@ -741,7 +741,7 @@ class JobRunner:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/web/runner.py tests/unit/test_runner.py
+git add local_story_archive/web/runner.py tests/unit/test_runner.py
 git commit -m "feat(web): JobRunner runs work in background threads"
 ```
 
@@ -752,9 +752,9 @@ git commit -m "feat(web): JobRunner runs work in background threads"
 ### Task 7: FastAPI app factory + base template + style.css
 
 **Files:**
-- Create: `wattpad_crawler/web/app.py`
-- Create: `wattpad_crawler/web/templates/base.html`
-- Create: `wattpad_crawler/web/static/style.css`
+- Create: `local_story_archive/web/app.py`
+- Create: `local_story_archive/web/templates/base.html`
+- Create: `local_story_archive/web/static/style.css`
 - Create: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Write failing test** — `tests/unit/test_web_routes.py`
@@ -764,8 +764,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wattpad_crawler.config import Config
-from wattpad_crawler.web.app import build_app
+from local_story_archive.config import Config
+from local_story_archive.web.app import build_app
 
 
 def test_app_health_endpoint(output_dir: Path):
@@ -788,7 +788,7 @@ def test_static_css_served(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Create `wattpad_crawler/web/static/style.css`**
+- [ ] **Step 3: Create `local_story_archive/web/static/style.css`**
 
 ```css
 :root {
@@ -904,7 +904,7 @@ input[type=text], input[type=password], textarea {
 .reader .chapter-body pre { white-space: pre-wrap; font-family: inherit; margin: 1em 0; }
 ```
 
-- [ ] **Step 4: Create `wattpad_crawler/web/templates/base.html`**
+- [ ] **Step 4: Create `local_story_archive/web/templates/base.html`**
 
 ```html
 <!doctype html>
@@ -912,7 +912,7 @@ input[type=text], input[type=password], textarea {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Wattpad Crawler{% endblock %}</title>
+  <title>{% block title %}Local Story Archive{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 </head>
@@ -929,7 +929,7 @@ input[type=text], input[type=password], textarea {
 </html>
 ```
 
-- [ ] **Step 5: Create `wattpad_crawler/web/app.py`**
+- [ ] **Step 5: Create `local_story_archive/web/app.py`**
 
 ```python
 from pathlib import Path
@@ -938,7 +938,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from wattpad_crawler.config import Config
+from local_story_archive.config import Config
 
 _PKG_DIR = Path(__file__).resolve().parent
 _TEMPLATES_DIR = _PKG_DIR / "templates"
@@ -947,7 +947,7 @@ _STATIC_DIR = _PKG_DIR / "static"
 
 def build_app(cfg: Config) -> FastAPI:
     """Construct the FastAPI app. cfg is stashed on app.state for routes to use."""
-    app = FastAPI(title="Wattpad Crawler", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Local Story Archive", docs_url=None, redoc_url=None)
     app.state.cfg = cfg
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -970,7 +970,7 @@ Expected: 2 passed.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wattpad_crawler/web/app.py wattpad_crawler/web/templates/base.html wattpad_crawler/web/static/style.css tests/unit/test_web_routes.py
+git add local_story_archive/web/app.py local_story_archive/web/templates/base.html local_story_archive/web/static/style.css tests/unit/test_web_routes.py
 git commit -m "feat(web): FastAPI app factory + base template + stylesheet"
 ```
 
@@ -981,9 +981,9 @@ git commit -m "feat(web): FastAPI app factory + base template + stylesheet"
 ### Task 8: Setup form (GET + POST)
 
 **Files:**
-- Create: `wattpad_crawler/web/routes.py`
-- Modify: `wattpad_crawler/web/app.py`
-- Create: `wattpad_crawler/web/templates/setup.html`
+- Create: `local_story_archive/web/routes.py`
+- Modify: `local_story_archive/web/app.py`
+- Create: `local_story_archive/web/templates/setup.html`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing tests** to `tests/unit/test_web_routes.py`
@@ -1021,11 +1021,11 @@ def test_setup_post_strips_whitespace(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Create `wattpad_crawler/web/templates/setup.html`**
+- [ ] **Step 3: Create `local_story_archive/web/templates/setup.html`**
 
 ```html
 {% extends "base.html" %}
-{% block title %}Setup — Wattpad Crawler{% endblock %}
+{% block title %}Setup — Local Story Archive{% endblock %}
 {% block content %}
   <h1>Setup</h1>
   <p>Paste your Wattpad session cookie here. The tool uses it to access your library and any login-required stories.</p>
@@ -1054,7 +1054,7 @@ def test_setup_post_strips_whitespace(output_dir: Path):
 {% endblock %}
 ```
 
-- [ ] **Step 4: Create `wattpad_crawler/web/routes.py`**
+- [ ] **Step 4: Create `local_story_archive/web/routes.py`**
 
 ```python
 from pathlib import Path
@@ -1117,18 +1117,18 @@ def setup_post(request: Request, cookie: str = Form(...)) -> RedirectResponse:
     cfg = request.app.state.cfg
     _save_cookie(cfg.output_dir, cookie)
     # Reload Config so subsequent requests see the new cookie
-    from wattpad_crawler.config import load_config
+    from local_story_archive.config import load_config
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
 ```
 
-- [ ] **Step 5: Wire the router into the app** — modify `wattpad_crawler/web/app.py`'s `build_app`:
+- [ ] **Step 5: Wire the router into the app** — modify `local_story_archive/web/app.py`'s `build_app`:
 
 Replace `build_app` body to include the router:
 
 ```python
 def build_app(cfg: Config) -> FastAPI:
-    app = FastAPI(title="Wattpad Crawler", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Local Story Archive", docs_url=None, redoc_url=None)
     app.state.cfg = cfg
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -1137,7 +1137,7 @@ def build_app(cfg: Config) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    from wattpad_crawler.web.routes import router as main_router
+    from local_story_archive.web.routes import router as main_router
     app.include_router(main_router)
 
     return app
@@ -1148,7 +1148,7 @@ def build_app(cfg: Config) -> FastAPI:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wattpad_crawler/web/routes.py wattpad_crawler/web/app.py wattpad_crawler/web/templates/setup.html tests/unit/test_web_routes.py
+git add local_story_archive/web/routes.py local_story_archive/web/app.py local_story_archive/web/templates/setup.html tests/unit/test_web_routes.py
 git commit -m "feat(web): /setup page — paste cookie, save to _config.toml"
 ```
 
@@ -1159,9 +1159,9 @@ git commit -m "feat(web): /setup page — paste cookie, save to _config.toml"
 ### Task 9: Dashboard page
 
 **Files:**
-- Modify: `wattpad_crawler/web/routes.py`
-- Modify: `wattpad_crawler/web/app.py` (instantiate JobManager + JobRunner; share via app.state)
-- Create: `wattpad_crawler/web/templates/dashboard.html`
+- Modify: `local_story_archive/web/routes.py`
+- Modify: `local_story_archive/web/app.py` (instantiate JobManager + JobRunner; share via app.state)
+- Create: `local_story_archive/web/templates/dashboard.html`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing test**
@@ -1179,18 +1179,18 @@ def test_dashboard_renders(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Update `wattpad_crawler/web/app.py` — add JobManager + JobRunner to app.state**
+- [ ] **Step 3: Update `local_story_archive/web/app.py` — add JobManager + JobRunner to app.state**
 
 Replace `build_app`:
 
 ```python
 def build_app(cfg: Config) -> FastAPI:
-    app = FastAPI(title="Wattpad Crawler", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Local Story Archive", docs_url=None, redoc_url=None)
     app.state.cfg = cfg
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-    from wattpad_crawler.web.runner import JobManager, JobRunner
+    from local_story_archive.web.runner import JobManager, JobRunner
     app.state.job_manager = JobManager()
     app.state.job_runner = JobRunner(app.state.job_manager)
 
@@ -1198,17 +1198,17 @@ def build_app(cfg: Config) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    from wattpad_crawler.web.routes import router as main_router
+    from local_story_archive.web.routes import router as main_router
     app.include_router(main_router)
 
     return app
 ```
 
-- [ ] **Step 4: Create `wattpad_crawler/web/templates/dashboard.html`**
+- [ ] **Step 4: Create `local_story_archive/web/templates/dashboard.html`**
 
 ```html
 {% extends "base.html" %}
-{% block title %}Dashboard — Wattpad Crawler{% endblock %}
+{% block title %}Dashboard — Local Story Archive{% endblock %}
 {% block content %}
   <h1>What do you want to archive?</h1>
 
@@ -1270,7 +1270,7 @@ def build_app(cfg: Config) -> FastAPI:
 {% endblock %}
 ```
 
-- [ ] **Step 5: Add the route to `wattpad_crawler/web/routes.py`**
+- [ ] **Step 5: Add the route to `local_story_archive/web/routes.py`**
 
 Append:
 
@@ -1294,7 +1294,7 @@ def dashboard(request: Request) -> HTMLResponse:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wattpad_crawler/web/app.py wattpad_crawler/web/routes.py wattpad_crawler/web/templates/dashboard.html tests/unit/test_web_routes.py
+git add local_story_archive/web/app.py local_story_archive/web/routes.py local_story_archive/web/templates/dashboard.html tests/unit/test_web_routes.py
 git commit -m "feat(web): dashboard with three job-launch forms"
 ```
 
@@ -1303,7 +1303,7 @@ git commit -m "feat(web): dashboard with three job-launch forms"
 ### Task 10: POST /jobs — submit a new archive job
 
 **Files:**
-- Modify: `wattpad_crawler/web/routes.py`
+- Modify: `local_story_archive/web/routes.py`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -1324,7 +1324,7 @@ def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
         if progress:
             progress("story.start", {"story_id": sid})
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
     r = client.post("/jobs", data={"kind": "story", "target": "12345"})
     assert r.status_code == 303  # redirect to job page
     job_id = r.headers["location"].rsplit("/", 1)[-1]
@@ -1348,7 +1348,7 @@ def test_post_jobs_url_resolves(output_dir: Path, monkeypatch):
     def fake_archive_story(cfg_arg, _client, _manifest, sid, *, deps=None, progress=None):
         captured["sid"] = sid
 
-    monkeypatch.setattr("wattpad_crawler.web.routes.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
     r = client.post("/jobs", data={
         "kind": "story",
         "target": "https://www.wattpad.com/story/789-foo-bar",
@@ -1374,7 +1374,7 @@ def test_post_jobs_invalid_kind_returns_400(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append to `wattpad_crawler/web/routes.py`**
+- [ ] **Step 3: Append to `local_story_archive/web/routes.py`**
 
 Add at the top of the file (with other imports):
 
@@ -1382,15 +1382,15 @@ Add at the top of the file (with other imports):
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
 
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.jobs import (
+from local_story_archive.archive.state import Manifest
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.jobs import (
     archive_many,
     archive_story,
     resolve_story_id,
     ResolveError,
 )
-from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
+from local_story_archive.api.user import fetch_library, fetch_list_story_ids
 ```
 
 Add the route:
@@ -1456,7 +1456,7 @@ async def submit_job(request: Request) -> RedirectResponse:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/web/routes.py tests/unit/test_web_routes.py
+git add local_story_archive/web/routes.py tests/unit/test_web_routes.py
 git commit -m "feat(web): POST /jobs — create + start an archive job"
 ```
 
@@ -1467,8 +1467,8 @@ git commit -m "feat(web): POST /jobs — create + start an archive job"
 ### Task 11: GET /jobs/{id} — job detail page
 
 **Files:**
-- Modify: `wattpad_crawler/web/routes.py`
-- Create: `wattpad_crawler/web/templates/job.html`
+- Modify: `local_story_archive/web/routes.py`
+- Create: `local_story_archive/web/templates/job.html`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing test**
@@ -1496,11 +1496,11 @@ def test_job_detail_unknown_returns_404(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Create `wattpad_crawler/web/templates/job.html`**
+- [ ] **Step 3: Create `local_story_archive/web/templates/job.html`**
 
 ```html
 {% extends "base.html" %}
-{% block title %}Job {{ job.job_id }} — Wattpad Crawler{% endblock %}
+{% block title %}Job {{ job.job_id }} — Local Story Archive{% endblock %}
 {% block content %}
   <h1>
     <span class="status-{{ job.status.value }}">[{{ job.status.value }}]</span>
@@ -1552,7 +1552,7 @@ def test_job_detail_unknown_returns_404(output_dir: Path):
 {% endblock %}
 ```
 
-- [ ] **Step 4: Add the route to `wattpad_crawler/web/routes.py`**
+- [ ] **Step 4: Add the route to `local_story_archive/web/routes.py`**
 
 ```python
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -1573,7 +1573,7 @@ def job_detail(request: Request, job_id: str) -> HTMLResponse:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/web/routes.py wattpad_crawler/web/templates/job.html tests/unit/test_web_routes.py
+git add local_story_archive/web/routes.py local_story_archive/web/templates/job.html tests/unit/test_web_routes.py
 git commit -m "feat(web): /jobs/{id} detail page with event log"
 ```
 
@@ -1582,7 +1582,7 @@ git commit -m "feat(web): /jobs/{id} detail page with event log"
 ### Task 12: GET /jobs/{id}/stream — Server-Sent Events for live progress
 
 **Files:**
-- Modify: `wattpad_crawler/web/routes.py`
+- Modify: `local_story_archive/web/routes.py`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -1613,7 +1613,7 @@ def test_sse_stream_404_unknown_job(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Add SSE route** to `wattpad_crawler/web/routes.py`
+- [ ] **Step 3: Add SSE route** to `local_story_archive/web/routes.py`
 
 Add at the top of the file:
 
@@ -1666,7 +1666,7 @@ async def job_stream(request: Request, job_id: str, after: int = 0):
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/web/routes.py tests/unit/test_web_routes.py
+git add local_story_archive/web/routes.py tests/unit/test_web_routes.py
 git commit -m "feat(web): SSE stream for live job progress"
 ```
 
@@ -1677,7 +1677,7 @@ git commit -m "feat(web): SSE stream for live job progress"
 ### Task 13: Library browser — list local archive
 
 **Files:**
-- Create: `wattpad_crawler/web/library_browser.py`
+- Create: `local_story_archive/web/library_browser.py`
 - Create: `tests/unit/test_library_browser.py`
 
 - [ ] **Step 1: Write failing tests**
@@ -1686,7 +1686,7 @@ git commit -m "feat(web): SSE stream for live job progress"
 import json
 from pathlib import Path
 
-from wattpad_crawler.web.library_browser import LibraryEntry, scan_library
+from local_story_archive.web.library_browser import LibraryEntry, scan_library
 
 
 def test_scan_library_empty(output_dir: Path):
@@ -1755,7 +1755,7 @@ def test_scan_library_sorts_by_author_then_title(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/web/library_browser.py`**
+- [ ] **Step 3: Implement `local_story_archive/web/library_browser.py`**
 
 ```python
 import json
@@ -1817,7 +1817,7 @@ def scan_library(output_dir: Path) -> list[LibraryEntry]:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/web/library_browser.py tests/unit/test_library_browser.py
+git add local_story_archive/web/library_browser.py tests/unit/test_library_browser.py
 git commit -m "feat(web): library browser scans local archive"
 ```
 
@@ -1826,8 +1826,8 @@ git commit -m "feat(web): library browser scans local archive"
 ### Task 14: GET /library page
 
 **Files:**
-- Modify: `wattpad_crawler/web/routes.py`
-- Create: `wattpad_crawler/web/templates/library.html`
+- Modify: `local_story_archive/web/routes.py`
+- Create: `local_story_archive/web/templates/library.html`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -1862,11 +1862,11 @@ def test_library_lists_stories(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Create `wattpad_crawler/web/templates/library.html`**
+- [ ] **Step 3: Create `local_story_archive/web/templates/library.html`**
 
 ```html
 {% extends "base.html" %}
-{% block title %}Library — Wattpad Crawler{% endblock %}
+{% block title %}Library — Local Story Archive{% endblock %}
 {% block content %}
   <h1>Library</h1>
   {% if entries %}
@@ -1890,12 +1890,12 @@ def test_library_lists_stories(output_dir: Path):
 {% endblock %}
 ```
 
-- [ ] **Step 4: Add routes** to `wattpad_crawler/web/routes.py`
+- [ ] **Step 4: Add routes** to `local_story_archive/web/routes.py`
 
 ```python
 from fastapi.responses import FileResponse
 
-from wattpad_crawler.web.library_browser import scan_library
+from local_story_archive.web.library_browser import scan_library
 
 
 @router.get("/library", response_class=HTMLResponse)
@@ -1925,7 +1925,7 @@ def library_cover(request: Request, author: str, dir_name: str) -> FileResponse:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/web/routes.py wattpad_crawler/web/templates/library.html tests/unit/test_web_routes.py
+git add local_story_archive/web/routes.py local_story_archive/web/templates/library.html tests/unit/test_web_routes.py
 git commit -m "feat(web): /library grid view + cover serving"
 ```
 
@@ -1934,8 +1934,8 @@ git commit -m "feat(web): /library grid view + cover serving"
 ### Task 15: Reader — story TOC + chapter view
 
 **Files:**
-- Modify: `wattpad_crawler/web/routes.py`
-- Create: `wattpad_crawler/web/templates/reader.html`
+- Modify: `local_story_archive/web/routes.py`
+- Create: `local_story_archive/web/templates/reader.html`
 - Modify: `tests/unit/test_web_routes.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -1995,11 +1995,11 @@ def test_reader_path_traversal_blocked(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Create `wattpad_crawler/web/templates/reader.html`**
+- [ ] **Step 3: Create `local_story_archive/web/templates/reader.html`**
 
 ```html
 {% extends "base.html" %}
-{% block title %}{{ meta.title }} — Wattpad Crawler{% endblock %}
+{% block title %}{{ meta.title }} — Local Story Archive{% endblock %}
 {% block content %}
   <div class="reader">
     {% if not chapter %}
@@ -2037,7 +2037,7 @@ def test_reader_path_traversal_blocked(output_dir: Path):
 {% endblock %}
 ```
 
-- [ ] **Step 4: Add the routes** to `wattpad_crawler/web/routes.py`
+- [ ] **Step 4: Add the routes** to `local_story_archive/web/routes.py`
 
 ```python
 def _resolve_story_dir(cfg, author: str, dir_name: str) -> Path:
@@ -2128,7 +2128,7 @@ def library_output(request: Request, author: str, dir_name: str, fmt: str) -> Fi
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/web/routes.py wattpad_crawler/web/templates/reader.html tests/unit/test_web_routes.py
+git add local_story_archive/web/routes.py local_story_archive/web/templates/reader.html tests/unit/test_web_routes.py
 git commit -m "feat(web): /read story TOC + chapter view + artifact downloads"
 ```
 
@@ -2136,10 +2136,10 @@ git commit -m "feat(web): /read story TOC + chapter view + artifact downloads"
 
 ## Phase 7 — CLI Wiring + Polish
 
-### Task 16: `wattpad-crawler serve` subcommand
+### Task 16: `local-story-archive serve` subcommand
 
 **Files:**
-- Modify: `wattpad_crawler/cli.py`
+- Modify: `local_story_archive/cli.py`
 - Modify: `tests/unit/test_cli.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -2176,7 +2176,7 @@ def test_main_serve_invokes_uvicorn(output_dir, monkeypatch):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Update `wattpad_crawler/cli.py`**
+- [ ] **Step 3: Update `local_story_archive/cli.py`**
 
 In `build_parser`, add the `serve` subcommand at the bottom (just before `return p`):
 
@@ -2195,7 +2195,7 @@ In `main`, add a branch for `serve` (after the existing branches, before `return
             manifest.close()
             client.close()
             import uvicorn
-            from wattpad_crawler.web.app import build_app
+            from local_story_archive.web.app import build_app
             app = build_app(cfg)
             uvicorn.run(app, host=args.host, port=args.port, log_level="info")
             return 0
@@ -2212,7 +2212,7 @@ pytest tests/unit/test_cli.py -v
 - [ ] **Step 5: Smoke-test the server starts (manual; mark as passing after starting and Ctrl-C)**
 
 ```bash
-wattpad-crawler --output ./wattpad-archive serve --port 8765
+local-story-archive --output ./wattpad-archive serve --port 8765
 # In another terminal:
 curl http://localhost:8765/_health
 # Expected: {"status":"ok"}
@@ -2222,7 +2222,7 @@ curl http://localhost:8765/_health
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/cli.py tests/unit/test_cli.py
+git add local_story_archive/cli.py tests/unit/test_cli.py
 git commit -m "feat(cli): serve subcommand — run local web UI via uvicorn"
 ```
 
@@ -2247,7 +2247,7 @@ cat README.md
 For a friendlier experience, run the local web UI:
 
 ```bash
-wattpad-crawler --output ./wattpad-archive serve
+local-story-archive --output ./wattpad-archive serve
 ```
 
 Then open <http://127.0.0.1:8000> in your browser. Features:
@@ -2263,7 +2263,7 @@ The web UI calls the same code as the CLI — `_state.sqlite` is the single sour
 To bind to all interfaces (e.g. for a homelab):
 
 ```bash
-wattpad-crawler serve --host 0.0.0.0 --port 8000
+local-story-archive serve --host 0.0.0.0 --port 8000
 ```
 ```
 
@@ -2283,7 +2283,7 @@ git commit -m "docs: add web UI section to README"
 - [ ] **Step 1: Run the full test suite**
 
 ```bash
-cd "D:/Dev/Wattpad Crawler"
+cd "D:/Dev/Local Story Archive"
 pytest -v
 ```
 
@@ -2292,7 +2292,7 @@ Expected: all unit tests pass (count = 121 + new tests added in this plan; shoul
 - [ ] **Step 2: Run ruff lint**
 
 ```bash
-ruff check wattpad_crawler tests
+ruff check local_story_archive tests
 ```
 
 Expected: All checks passed.
@@ -2300,9 +2300,9 @@ Expected: All checks passed.
 - [ ] **Step 3: Verify the full CLI**
 
 ```bash
-wattpad-crawler --help
-wattpad-crawler serve --help
-wattpad-crawler library --help
+local-story-archive --help
+local-story-archive serve --help
+local-story-archive library --help
 ```
 
 Expected: each prints help text including `serve` in the main list.
@@ -2311,7 +2311,7 @@ Expected: each prints help text including `serve` in the main list.
 
 ```bash
 # Start in one terminal:
-wattpad-crawler --output ./wattpad-archive serve --port 8765
+local-story-archive --output ./wattpad-archive serve --port 8765
 ```
 
 In a browser, visit:

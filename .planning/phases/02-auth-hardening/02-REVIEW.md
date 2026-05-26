@@ -10,12 +10,12 @@ files_reviewed_list:
   - tests/unit/test_jobs.py
   - tests/unit/test_runner.py
   - tests/unit/test_web_routes.py
-  - wattpad_crawler/auth.py
-  - wattpad_crawler/cli.py
-  - wattpad_crawler/client.py
-  - wattpad_crawler/jobs.py
-  - wattpad_crawler/web/routes.py
-  - wattpad_crawler/web/templates/setup.html
+  - local_story_archive/auth.py
+  - local_story_archive/cli.py
+  - local_story_archive/client.py
+  - local_story_archive/jobs.py
+  - local_story_archive/web/routes.py
+  - local_story_archive/web/templates/setup.html
 findings:
   critical: 0
   warning: 4
@@ -45,7 +45,7 @@ No security-critical findings. Cookie values are not logged anywhere. The masked
 
 ### WR-01: `_save_cookie` does not escape TOML metacharacters in cookie value
 
-**File:** `wattpad_crawler/web/routes.py:46`, `:51`, `:56`
+**File:** `local_story_archive/web/routes.py:46`, `:51`, `:56`
 **Issue:** Cookie strings are written into the TOML file via raw f-string interpolation: `f'cookie = "{cookie}"'`. If a user pastes a cookie containing a double-quote, backslash, or newline (e.g., `abc"def` or `abc\nde`), the resulting `_config.toml` will be malformed TOML. On the next `load_config()` call, `tomllib.loads(raw)` raises `TOMLDecodeError` → `ConfigError`, locking the user out of both CLI and web until they manually edit the file. There is no test for non-alphanumeric cookie values; `test_setup_post_strips_whitespace` only covers leading/trailing whitespace.
 
 In practice Wattpad's `token` cookie is a base64-ish alphanumeric string without quotes — so the user-impact probability is low. But this is a real input-validation gap at a documented trust boundary (the `/setup` form). The phase context explicitly calls out "missing input sanitization at boundaries".
@@ -69,7 +69,7 @@ Then surface the `ValueError` in `setup_post` as another `error_kind` branch (`"
 
 ### WR-02: `validate_cookie` reaches into `RateLimitedClient._client.cookies` (private attribute)
 
-**File:** `wattpad_crawler/auth.py:50-53`
+**File:** `local_story_archive/auth.py:50-53`
 **Issue:** `cookie_jar = getattr(client._client, "cookies", None)` accesses a private leading-underscore attribute of `RateLimitedClient`. This couples `auth.py` to `RateLimitedClient`'s internal layout — if the field is ever renamed (e.g., to `_httpx_client` for clarity), the short-circuit silently breaks: `getattr(..., None)` returns `None`, the `if cookie_jar is not None` guard skips the check, `token = ""`, and the function correctly raises `AuthError` — so the behavior degrades gracefully but the original intent (no HTTP call on blank cookie) is lost without any test failure.
 
 The test `test_validate_cookie_short_circuits_on_blank` catches the case where the short-circuit is removed (it monkey-patches `rlc.get` to `pytest.fail`), but it does NOT catch the case where `_client` is renamed.
@@ -91,7 +91,7 @@ def has_cookie(self) -> bool:
 
 ### WR-03: `_save_cookie` line-replace uses fragile `startswith("cookie ")` pattern
 
-**File:** `wattpad_crawler/web/routes.py:45`
+**File:** `local_story_archive/web/routes.py:45`
 **Issue:** The check `line.lstrip().startswith("cookie ")` requires a SPACE after `cookie`. A user (or a future code path) writing `cookie="abc"` (no space, also valid TOML) would NOT match — `replaced` stays False, and a SECOND `cookie = "..."` line gets appended. TOML's behavior on duplicate keys at the top level is to raise `TOMLDecodeError`, so the next `load_config()` blows up with a confusing parse error.
 
 Less likely but worth noting: a multi-line TOML string with `cookie = """..."""` would also confuse this parser, but that shape isn't expected here.
@@ -111,7 +111,7 @@ for line in lines:
 
 ### WR-04: `cli.py` serve branch double-closes `manifest` and `client`
 
-**File:** `wattpad_crawler/cli.py:118-119`, `:132-134`
+**File:** `local_story_archive/cli.py:118-119`, `:132-134`
 **Issue:** When `args.cmd == "serve"`, the code closes `manifest` and `client` at lines 118-119, calls `uvicorn.run(...)`, returns 0 — and then the outer `finally` block (lines 132-134) closes them again. `httpx.Client.close()` and `sqlite3.Connection.close()` are both idempotent in CPython today, so this works in practice, but it relies on undocumented behavior and looks like a bug to a reader. It's also asymmetric with the other branches that don't pre-close.
 
 **Fix:** Either restructure so the `serve` branch returns from a function that doesn't share the `finally`, or use a sentinel:
@@ -137,7 +137,7 @@ Or — cleaner — extract the serve branch into its own function that owns its 
 
 ### IN-01: Setup form re-uses masked cookie as input `value` (UX trap)
 
-**File:** `wattpad_crawler/web/templates/setup.html:31`
+**File:** `local_story_archive/web/templates/setup.html:31`
 **Issue:** `<input type="password" id="cookie" name="cookie" value="{{ attempted_cookie_masked or current_cookie_masked }}" required>` pre-fills the password field with the MASKED cookie (e.g. `AbCd…5678`). If a user lands on `/setup` from the dashboard's "update cookie" link and clicks Save without typing anything, they will submit the literal masked string `AbCd…5678` as their new cookie — which then fails validation (good), but the error banner says "cookie rejected" without explaining what just happened. The submitted-masked value is also visually indistinguishable from the prior value because the input is `type="password"`.
 
 This isn't a security issue (Jinja2 autoescapes the attribute, the masked string is not the real cookie), but it's a confusing UX surface.
@@ -151,20 +151,20 @@ Optionally add a small note: "Currently configured: `AbCd…5678`" near the fiel
 
 ### IN-02: Inline imports in `cli.py:103, 108`
 
-**File:** `wattpad_crawler/cli.py:103`, `:108`
-**Issue:** `from wattpad_crawler.api.user import fetch_library` and `fetch_list_story_ids` are imported inside `main()`. Project convention (per CLAUDE.md) is "Imports at module level, not inside functions". These imports were likely deferred for startup-cost reasons or to avoid a circular import, but the module already imports from many `wattpad_crawler` submodules at the top, so neither concern obviously applies.
+**File:** `local_story_archive/cli.py:103`, `:108`
+**Issue:** `from local_story_archive.api.user import fetch_library` and `fetch_list_story_ids` are imported inside `main()`. Project convention (per CLAUDE.md) is "Imports at module level, not inside functions". These imports were likely deferred for startup-cost reasons or to avoid a circular import, but the module already imports from many `local_story_archive` submodules at the top, so neither concern obviously applies.
 
 This pre-dates Phase 2 (the new diff didn't introduce them), but it's adjacent to the auth-gate code and worth noting.
 
 **Fix:** Hoist to module top:
 ```python
-from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
+from local_story_archive.api.user import fetch_library, fetch_list_story_ids
 ```
 If this introduces a circular import, leave with a comment explaining why.
 
 ### IN-03: `auth.py` redirect-handling code is dead under current `client.get()` flow
 
-**File:** `wattpad_crawler/auth.py:76-87`
+**File:** `local_story_archive/auth.py:76-87`
 **Issue:** The `if 300 <= status < 400:` branch handles 3xx responses by checking the `Location` header. But `client.get()` is called with `follow_redirects=False` and `max_attempts=1`, then `resp.raise_for_status()` is invoked at `client.py:130` for any non-special status code (3xx falls through). `raise_for_status()` only raises for 4xx/5xx, NOT 3xx — so 3xx responses do NOT raise from `client.get()`, they return successfully. Then in `auth.py` the success branch at line 110 (`if 200 <= resp.status_code < 300:`) skips them, and they fall through to `raise AuthError(f"Probe returned unexpected HTTP {resp.status_code}")` at line 112.
 
 So the carefully-written 3xx branch (lines 76-87) is unreachable. The 3xx-redirect test (`test_validate_cookie_raises_on_login_redirect`) passes because the fallthrough at line 112 raises AuthError — but the test asserts `"login" in msg or "redirect" in msg`, and the fallthrough message is `"Probe returned unexpected HTTP 302"`, which contains neither word. The test would fail for that reason.
@@ -195,7 +195,7 @@ And remove the now-dead 3xx branch from the `except` handler.
 
 ### IN-04: `client.py:134` uses `assert resp is not None` for type narrowing
 
-**File:** `wattpad_crawler/client.py:134`
+**File:** `local_story_archive/client.py:134`
 **Issue:** `assert resp is not None  # narrowed: loop ran at least once and resp was set` is stripped under `python -O`. In practice the assertion is true (the for-loop runs at least once because `max_attempts >= 1` is enforced at line 57-58), but if a future change breaks that invariant, the code would `AttributeError` on `resp.raise_for_status()` instead of producing a clear error.
 
 **Fix:** Replace with a runtime check:

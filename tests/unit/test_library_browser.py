@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from wattpad_crawler.archive.repository import ArchiveRepository
-from wattpad_crawler.models import Story
-from wattpad_crawler.web.library_browser import LibraryEntry, scan_library
+from local_story_archive.archive.repository import ArchiveRepository
+from local_story_archive.models import Story
+from local_story_archive.web.library_browser import LibraryEntry, scan_library
 
 
 def test_scan_library_empty(output_dir: Path):

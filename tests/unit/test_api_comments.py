@@ -2,8 +2,8 @@ import json
 import logging
 from pathlib import Path
 
-from wattpad_crawler.api import comments as comments_mod
-from wattpad_crawler.api.comments import parse_comments_page
+from local_story_archive.api import comments as comments_mod
+from local_story_archive.api.comments import parse_comments_page
 
 
 def test_parse_comments_page(fixtures_dir: Path):
@@ -576,7 +576,7 @@ def _nest(level: int) -> dict:
 
 
 def test_parse_one_caps_recursion_at_default_max_depth():
-    from wattpad_crawler.api.comments import _MAX_COMMENT_DEPTH, _parse_one
+    from local_story_archive.api.comments import _MAX_COMMENT_DEPTH, _parse_one
 
     raw = _nest(15)
     comment, truncated = _parse_one(raw)
@@ -596,7 +596,7 @@ def test_parse_one_caps_recursion_at_default_max_depth():
 
 
 def test_parse_one_respects_custom_max_depth():
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
 
     raw = _nest(10)
     comment, truncated = _parse_one(raw, max_depth=3)
@@ -611,7 +611,7 @@ def test_parse_one_respects_custom_max_depth():
 
 
 def test_parse_one_no_truncation_when_depth_below_cap():
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
 
     raw = _nest(5)
     comment, truncated = _parse_one(raw, max_depth=10)
@@ -627,7 +627,7 @@ def test_parse_one_no_truncation_when_depth_below_cap():
 
 def test_parse_one_no_recursion_error_on_30_level_chain():
     """A 30-level chain must not raise RecursionError even at the default cap of 10."""
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
 
     raw = _nest(30)
     comment, truncated = _parse_one(raw)
@@ -636,7 +636,7 @@ def test_parse_one_no_recursion_error_on_30_level_chain():
 
 
 def test_parse_one_returns_none_when_id_missing():
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
 
     comment, truncated = _parse_one({"body": "no id", "user": {"name": "u"}})
     assert comment is None
@@ -645,7 +645,7 @@ def test_parse_one_returns_none_when_id_missing():
 
 def test_parse_one_skips_non_dict_replies():
     """Defensive: malformed reply entries (strings, None) must not crash."""
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
 
     raw = {
         "id": "c1",
@@ -662,12 +662,12 @@ def test_parse_one_skips_non_dict_replies():
 
 def test_parse_comments_page_logs_warning_on_truncation(caplog):
     raw = {"comments": [_nest(15)], "nextUrl": None}
-    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+    with caplog.at_level(logging.WARNING, logger="local_story_archive.api.comments"):
         parsed, next_url = parse_comments_page(raw)
     assert len(parsed) == 1
     assert next_url is None
     # Exactly one warning record from this logger.
-    records = [r for r in caplog.records if r.name == "wattpad_crawler.api.comments"]
+    records = [r for r in caplog.records if r.name == "local_story_archive.api.comments"]
     assert len(records) == 1
     msg = records[0].getMessage().lower()
     assert "truncat" in msg
@@ -677,10 +677,10 @@ def test_parse_comments_page_logs_warning_on_truncation(caplog):
 
 def test_parse_comments_page_no_warning_when_under_cap(caplog):
     raw = {"comments": [_nest(5)], "nextUrl": None}
-    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+    with caplog.at_level(logging.WARNING, logger="local_story_archive.api.comments"):
         parsed, _ = parse_comments_page(raw)
     assert len(parsed) == 1
-    records = [r for r in caplog.records if r.name == "wattpad_crawler.api.comments"]
+    records = [r for r in caplog.records if r.name == "local_story_archive.api.comments"]
     assert records == []
 
 
@@ -690,17 +690,17 @@ def test_parse_comments_page_emits_one_warning_per_truncated_top_level(caplog):
         "comments": [_nest(15), _nest(5)],  # first truncates, second does not
         "nextUrl": None,
     }
-    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+    with caplog.at_level(logging.WARNING, logger="local_story_archive.api.comments"):
         parsed, _ = parse_comments_page(raw)
     assert len(parsed) == 2
-    records = [r for r in caplog.records if r.name == "wattpad_crawler.api.comments"]
+    records = [r for r in caplog.records if r.name == "local_story_archive.api.comments"]
     assert len(records) == 1
     assert "c15" in records[0].getMessage()
 
 
 def test_parse_one_monkeypatch_constant_changes_behavior(monkeypatch):
     """D-11: tests can monkeypatch _MAX_COMMENT_DEPTH; new calls pick up new default."""
-    from wattpad_crawler.api import comments as comments_mod
+    from local_story_archive.api import comments as comments_mod
 
     monkeypatch.setattr(comments_mod, "_MAX_COMMENT_DEPTH", 2)
     # _parse_one's default for max_depth was bound at function-def time

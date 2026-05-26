@@ -6,12 +6,12 @@ tags: [recursion, comments, dos-mitigation, rel-01]
 requirements: [REL-01]
 dependency_graph:
   requires:
-    - wattpad_crawler/models.py::Comment (existing dataclass — unchanged)
-    - wattpad_crawler/client.py::RateLimitedClient (existing — unchanged)
+    - local_story_archive/models.py::Comment (existing dataclass — unchanged)
+    - local_story_archive/client.py::RateLimitedClient (existing — unchanged)
   provides:
-    - "wattpad_crawler.api.comments._MAX_COMMENT_DEPTH = 10 (module constant; REL-01)"
-    - "wattpad_crawler.api.comments._parse_one(raw, depth=0, *, max_depth=_MAX_COMMENT_DEPTH) -> tuple[Comment | None, bool]"
-    - "wattpad_crawler.api.comments.parse_comments_page emits one logger.warning per truncated top-level subtree"
+    - "local_story_archive.api.comments._MAX_COMMENT_DEPTH = 10 (module constant; REL-01)"
+    - "local_story_archive.api.comments._parse_one(raw, depth=0, *, max_depth=_MAX_COMMENT_DEPTH) -> tuple[Comment | None, bool]"
+    - "local_story_archive.api.comments.parse_comments_page emits one logger.warning per truncated top-level subtree"
   affects:
     - parse_comments_page callers (signature unchanged — only logging behavior added)
 tech-stack:
@@ -24,7 +24,7 @@ key-files:
   created:
     - none
   modified:
-    - wattpad_crawler/api/comments.py
+    - local_story_archive/api/comments.py
     - tests/unit/test_api_comments.py
 decisions:
   - "Default _MAX_COMMENT_DEPTH set as module constant (not Config-exposed) per D-11 — single user, no need to surface in TOML"
@@ -48,7 +48,7 @@ Replaced unbounded recursion in `_parse_one()` with a depth-bounded variant capp
 
 ## What Changed
 
-### `wattpad_crawler/api/comments.py`
+### `local_story_archive/api/comments.py`
 - Added `import logging` and module-level `logger = logging.getLogger(__name__)`
 - Added module constant `_MAX_COMMENT_DEPTH = 10` (REL-01 default)
 - Refactored `_parse_one` signature from `(raw) -> Comment | None` to:
@@ -83,7 +83,7 @@ Replaced unbounded recursion in `_parse_one()` with a depth-bounded variant capp
   | `test_parse_one_no_recursion_error_on_30_level_chain` | 30-level chain at default cap exits cleanly |
   | `test_parse_one_returns_none_when_id_missing` | `(None, False)` on missing id |
   | `test_parse_one_skips_non_dict_replies` | strings/None in `replies` skipped, not crashed |
-  | `test_parse_comments_page_logs_warning_on_truncation` | 15-level top-level → one `caplog` record on `wattpad_crawler.api.comments` mentioning `c15` and `truncat` |
+  | `test_parse_comments_page_logs_warning_on_truncation` | 15-level top-level → one `caplog` record on `local_story_archive.api.comments` mentioning `c15` and `truncat` |
   | `test_parse_comments_page_no_warning_when_under_cap` | 5-level top-level under cap → zero warnings |
   | `test_parse_comments_page_emits_one_warning_per_truncated_top_level` | Two top-level comments (one truncates, one doesn't) → exactly one warning |
   | `test_parse_one_monkeypatch_constant_changes_behavior` | Documents the contract that `_parse_one`'s default `max_depth` is captured at function-definition time; monkeypatching `_MAX_COMMENT_DEPTH` does NOT change it — tests must pass `max_depth=` explicitly |
@@ -98,12 +98,12 @@ tests/unit/test_api_comments.py ..........  11 passed in 0.07s
 
 ## Verification Outputs
 
-- `ruff check wattpad_crawler/api/comments.py tests/unit/test_api_comments.py` → All checks passed!
-- `ruff format wattpad_crawler/api/comments.py` → 1 file left unchanged
+- `ruff check local_story_archive/api/comments.py tests/unit/test_api_comments.py` → All checks passed!
+- `ruff format local_story_archive/api/comments.py` → 1 file left unchanged
 - ROADMAP §Phase 1 success criterion #1 (the 15-level fixture script in the plan's `<verification>` block) printed `OK` and emitted exactly one warning line:
 
   ```
-  WARNING:wattpad_crawler.api.comments:comment c15 truncated: replies beyond depth 10 dropped
+  WARNING:local_story_archive.api.comments:comment c15 truncated: replies beyond depth 10 dropped
   OK: 15-level chain parsed; depth-cap warning logged; top-level preserved with replies truncated at depth 10
   ```
 
@@ -127,7 +127,7 @@ tests/unit/test_api_comments.py ..........  11 passed in 0.07s
 | `if depth >= max_depth:` literal guard | PASS |
 | `logger.warning(` inside `if was_truncated:` block | PASS |
 | Smoke test `python -c "...assert _MAX_COMMENT_DEPTH == 10..."` exits 0 | PASS |
-| `ruff check wattpad_crawler/api/comments.py` exits 0 | PASS |
+| `ruff check local_story_archive/api/comments.py` exits 0 | PASS |
 | `_parse_one` referenced only in `comments.py` + `test_api_comments.py` (Grep verified) | PASS |
 | All 10 new tests pass | PASS |
 | 30-level chain test exits in under 1 second | PASS (entire suite 0.07s) |
@@ -138,7 +138,7 @@ None — plan executed exactly as written. The provided code blocks transcribed 
 
 ## Notes for Future Contributors
 
-**Monkeypatch contract (locked by test):** Python evaluates default-argument expressions at function-definition time. Monkeypatching `wattpad_crawler.api.comments._MAX_COMMENT_DEPTH` does NOT change the default `max_depth` of an already-imported `_parse_one`. Tests that need a smaller cap must pass `max_depth=` explicitly. `test_parse_one_monkeypatch_constant_changes_behavior` documents this so a future contributor doesn't add a monkeypatch-based test that silently uses the original cap of 10.
+**Monkeypatch contract (locked by test):** Python evaluates default-argument expressions at function-definition time. Monkeypatching `local_story_archive.api.comments._MAX_COMMENT_DEPTH` does NOT change the default `max_depth` of an already-imported `_parse_one`. Tests that need a smaller cap must pass `max_depth=` explicitly. `test_parse_one_monkeypatch_constant_changes_behavior` documents this so a future contributor doesn't add a monkeypatch-based test that silently uses the original cap of 10.
 
 **Why warning fires in `parse_comments_page` not `_parse_one`:** An adversarial 100-level reply chain would trigger N recursive calls at the cap level if the warning fired inside `_parse_one`. Aggregating the truncation flag and emitting one warning per top-level subtree keeps the log signal loud (visible) but quiet (not spammy) — matching D-18.
 
@@ -149,7 +149,7 @@ None — plan executed exactly as written. The provided code blocks transcribed 
 
 ## Self-Check: PASSED
 
-- FOUND: wattpad_crawler/api/comments.py (modified)
+- FOUND: local_story_archive/api/comments.py (modified)
 - FOUND: tests/unit/test_api_comments.py (modified)
 - FOUND: commit 779b270 (Task 1 — feat)
 - FOUND: commit b8a93fc (Task 2 — test)

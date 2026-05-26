@@ -4175,7 +4175,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wattpad-crawler-desktop"
+name = "local-story-archive-desktop"
 version = "0.1.0"
 dependencies = [
  "tauri",

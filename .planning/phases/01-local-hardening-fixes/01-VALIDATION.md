@@ -23,7 +23,7 @@ mode: reconstructed_from_artifacts
 | **Quick run command** | `.venv/Scripts/python -m pytest tests/unit/test_<module>.py -q` |
 | **Full suite command** | `.venv/Scripts/python -m pytest tests/ -q` |
 | **Estimated runtime** | ~22 seconds (220 passed, 1 skipped) |
-| **Lint command** | `.venv/Scripts/python -m ruff check wattpad_crawler/ tests/` |
+| **Lint command** | `.venv/Scripts/python -m ruff check local_story_archive/ tests/` |
 
 ---
 
@@ -50,7 +50,7 @@ mode: reconstructed_from_artifacts
 | 01-03-03 | 03 | 1 | REL-02 | T-03-06 | `routes.py:job_stream(after_seq)` accepts renamed param; emits synthetic `events.evicted` with `dropped_count`/`requested_after_seq`/`oldest_available_seq` on first-poll gap; per-stream `gap_announced` latch; each real event JSON has `seq` field | integration | `pytest tests/unit/test_web_routes.py -q` | ✅ | ✅ green |
 | 01-04-01 | 04 | 1 | REL-04 | T-04-01 / T-04-02 | `RenderError(Exception)` adjacent to `ResolveError`; `render_status: dict[str, Literal["ok","failed"]]`; `story.done` emitted BEFORE conditional raise; raise gated on all-failed (not any-failed) | unit | `pytest tests/unit/test_jobs.py -q` | ✅ | ✅ green |
 | 01-04-02 | 04 | 1 | REL-04 | T-04-01 / T-04-02 | 6 tests: subclass-check, all-fail-raises, partial-fail-no-raise, all-ok-emits-status, renderer-independence-under-failure, archive_many-records-RenderError-in-results-dict | unit | `pytest tests/unit/test_jobs.py -q` | ✅ | ✅ green |
-| 01-05-01 | 05 | 2 | REL-02 | T-05-01 / T-05-02 | `templates/job.html` line 30 EventSource URL: `?after_seq={{ job.next_seq }}` — zero `?after=` references remain anywhere under `wattpad_crawler/` | template render | `pytest tests/unit/test_web_routes.py::test_job_detail_template_renders_after_seq_url -q` | ✅ | ✅ green |
+| 01-05-01 | 05 | 2 | REL-02 | T-05-01 / T-05-02 | `templates/job.html` line 30 EventSource URL: `?after_seq={{ job.next_seq }}` — zero `?after=` references remain anywhere under `local_story_archive/` | template render | `pytest tests/unit/test_web_routes.py::test_job_detail_template_renders_after_seq_url -q` | ✅ | ✅ green |
 | 01-05-02 | 05 | 2 | REL-02 | T-05-01..T-05-03 | 7 integrated SSE tests via `fastapi.testclient.TestClient`: rename-applied, seq-in-payload, no-evicted-when-no-gap, evicted-on-gap, evicted-only-once-per-stream, no-evicted-when-cursor-advanced-past-gap, template-renders-after_seq | integration | `pytest tests/unit/test_web_routes.py -q` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*

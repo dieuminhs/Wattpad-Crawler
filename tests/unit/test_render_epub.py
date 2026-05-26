@@ -2,7 +2,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from wattpad_crawler.render.epub import render_epub
+from local_story_archive.render.epub import render_epub
 
 
 def test_render_epub_creates_file(output_dir: Path):

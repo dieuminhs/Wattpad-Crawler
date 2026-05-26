@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::Manager;
 
-const BACKEND_NAME: &str = "wattpad-crawler-desktop-backend";
+const BACKEND_NAME: &str = "local-story-archive-desktop-backend";
 
 struct BackendProcess(Arc<Mutex<Option<Child>>>);
 
@@ -45,7 +45,7 @@ fn terminate_backend(child: &mut Child) {
 
 fn backend_exe_name() -> &'static str {
     if cfg!(windows) {
-        "wattpad-crawler-desktop-backend.exe"
+        "local-story-archive-desktop-backend.exe"
     } else {
         BACKEND_NAME
     }
@@ -74,7 +74,7 @@ fn candidate_backend_paths() -> Vec<PathBuf> {
 }
 
 fn backend_command() -> Command {
-    if let Ok(command) = env::var("WATTPAD_CRAWLER_BACKEND") {
+    if let Ok(command) = env::var("LOCAL_STORY_ARCHIVE_BACKEND") {
         return Command::new(command);
     }
 
@@ -93,7 +93,7 @@ fn startup_url_file() -> PathBuf {
         .map(|duration| duration.as_millis())
         .unwrap_or_default();
     env::temp_dir().join(format!(
-        "wattpad-crawler-desktop-backend-{timestamp}.url"
+        "local-story-archive-desktop-backend-{timestamp}.url"
     ))
 }
 
@@ -147,7 +147,7 @@ fn focus_main_window(app: &tauri::AppHandle) {
 
 fn main() {
     let (backend_url, backend_process) =
-        start_backend().expect("Wattpad Crawler backend failed to start");
+        start_backend().expect("Local Story Archive backend failed to start");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -165,7 +165,7 @@ fn main() {
                 "main",
                 tauri::WebviewUrl::External(backend_url.parse().expect("valid backend URL")),
             )
-            .title("Wattpad Crawler")
+            .title("Local Story Archive")
             .inner_size(1200.0, 800.0)
             .build()?;
             Ok(())

@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-from wattpad_crawler.archive.repository import ArchiveRepository
-from wattpad_crawler.models import Part, Story
-from wattpad_crawler.render.html import render_html
-from wattpad_crawler.scrape.chapter_html import ChapterContent
+from local_story_archive.archive.repository import ArchiveRepository
+from local_story_archive.models import Part, Story
+from local_story_archive.render.html import render_html
+from local_story_archive.scrape.chapter_html import ChapterContent
 
 
 def test_render_html_single_file(output_dir: Path):

@@ -19,22 +19,22 @@
 ## Frameworks
 
 **Core Web/API:**
-- FastAPI 0.110+ - REST API and web UI backend (`wattpad_crawler/web/app.py`)
-- Uvicorn 0.27+ - ASGI server for running web UI and CLI `serve` subcommand (`wattpad_crawler/cli.py:line 101`)
-- Jinja2 3.1+ - HTML templating for web UI pages (`wattpad_crawler/web/app.py:line 18`)
+- FastAPI 0.110+ - REST API and web UI backend (`local_story_archive/web/app.py`)
+- Uvicorn 0.27+ - ASGI server for running web UI and CLI `serve` subcommand (`local_story_archive/cli.py:line 101`)
+- Jinja2 3.1+ - HTML templating for web UI pages (`local_story_archive/web/app.py:line 18`)
 
 **HTTP Client:**
-- httpx 0.27+ - Async/sync HTTP requests with retry and timeout support (`wattpad_crawler/client.py`)
+- httpx 0.27+ - Async/sync HTTP requests with retry and timeout support (`local_story_archive/client.py`)
 
 **HTML Processing:**
-- BeautifulSoup4 4.12+ - Parsing Wattpad chapter HTML (`wattpad_crawler/scrape/chapter_html.py`)
+- BeautifulSoup4 4.12+ - Parsing Wattpad chapter HTML (`local_story_archive/scrape/chapter_html.py`)
 - lxml 5.0+ - Fast HTML/XML parsing backend for BeautifulSoup
 
 **E-book Generation:**
-- ebooklib 0.18+ - EPUB file creation (`wattpad_crawler/render/epub.py`)
+- ebooklib 0.18+ - EPUB file creation (`local_story_archive/render/epub.py`)
 
 **Real-time Server Communication:**
-- sse-starlette 2.0+ - Server-Sent Events for live progress streaming (`wattpad_crawler/web/routes.py`)
+- sse-starlette 2.0+ - Server-Sent Events for live progress streaming (`local_story_archive/web/routes.py`)
 
 **Testing:**
 - pytest 8.0+ - Test runner and framework
@@ -49,8 +49,8 @@
 
 **Build:**
 - hatchling - Build backend for PEP 517/518 builds
-  - Packages: `wattpad_crawler` module
-  - Includes web assets: `wattpad_crawler/web/templates` and `wattpad_crawler/web/static` directories
+  - Packages: `local_story_archive` module
+  - Includes web assets: `local_story_archive/web/templates` and `local_story_archive/web/static` directories
 
 ## Key Dependencies
 
@@ -71,7 +71,7 @@
 - Cookie-based authentication: Wattpad session token stored in `_config.toml` (see README setup instructions)
 
 **Configuration Files:**
-- `pyproject.toml` (`D:\Dev\Wattpad Crawler\pyproject.toml`) - Project metadata, dependencies, build config, tool settings (pytest, ruff)
+- `pyproject.toml` (`D:\Dev\Local Story Archive\pyproject.toml`) - Project metadata, dependencies, build config, tool settings (pytest, ruff)
 - `_config.toml` - Generated at runtime in archive output directory (`wattpad-archive/_config.toml`)
   - Fields: `cookie` (Wattpad session token), `rate_limit_per_sec` (default 2.0), `workers_per_story` (default 3), `user_agent`
 
@@ -102,7 +102,7 @@
 - `https://www.wattpad.com/api/v3/parts/{part_id}/comments` - Chapter comments (paginated, supports inline and end-of-chapter)
 
 **Rate Limiting:**
-- Token bucket implementation in `RateLimitedClient` (`wattpad_crawler/client.py`)
+- Token bucket implementation in `RateLimitedClient` (`local_story_archive/client.py`)
 - Default: 2.0 requests/sec (configurable)
 - Implements exponential backoff (up to 16s) for 5xx errors
 - Respects HTTP 429 (Too Many Requests) with Retry-After header parsing

@@ -541,7 +541,7 @@ Cookie validation requirement (config write is modified in the same phase)
 
 ## Sources
 
-- Direct codebase inspection: `wattpad_crawler/client.py`, `wattpad_crawler/archive/state.py`, `wattpad_crawler/jobs.py`, `wattpad_crawler/web/runner.py`, `wattpad_crawler/web/routes.py`, `wattpad_crawler/api/comments.py`, `wattpad_crawler/archive/store.py`, `wattpad_crawler/render/epub.py`, `wattpad_crawler/render/html.py`, `wattpad_crawler/scrape/chapter_html.py`
+- Direct codebase inspection: `local_story_archive/client.py`, `local_story_archive/archive/state.py`, `local_story_archive/jobs.py`, `local_story_archive/web/runner.py`, `local_story_archive/web/routes.py`, `local_story_archive/api/comments.py`, `local_story_archive/archive/store.py`, `local_story_archive/render/epub.py`, `local_story_archive/render/html.py`, `local_story_archive/scrape/chapter_html.py`
 - `.planning/codebase/CONCERNS.md` — codebase audit (2026-05-03)
 - `.planning/codebase/ARCHITECTURE.md` — architecture analysis (2026-05-03)
 - `.planning/codebase/TESTING.md` — test patterns (2026-05-03)

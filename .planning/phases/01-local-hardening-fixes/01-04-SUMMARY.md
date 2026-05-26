@@ -21,7 +21,7 @@ tech-stack:
 key-files:
   created: []
   modified:
-    - wattpad_crawler/jobs.py
+    - local_story_archive/jobs.py
     - tests/unit/test_jobs.py
 decisions:
   - "RenderError inherits directly from Exception (not from a JobError base) — matches existing ResolveError pattern; CONVENTIONS §Error Handling"
@@ -53,7 +53,7 @@ commits:
 
 ## What Changed
 
-`wattpad_crawler/jobs.py`:
+`local_story_archive/jobs.py`:
 - Added `from typing import Literal` import.
 - Restructured the render section of `archive_story()` to collect per-format `"ok"`/`"failed"` status and emit it in `story.done`.
 - Added `RenderError(Exception)` class adjacent to `ResolveError(Exception)`.
@@ -150,7 +150,7 @@ OK: RenderError raised; story.done has render_status naming all three failed for
 
 None — plan executed exactly as written.
 
-`ruff format wattpad_crawler/jobs.py` reflowed the `emit("story.done", {...})` call across multiple lines (and similarly reflowed two pre-existing multi-line dict calls within the `for part in story.parts` loop). This is a formatting-only consequence of running `ruff format` per the plan's Action step; semantics match the plan exactly.
+`ruff format local_story_archive/jobs.py` reflowed the `emit("story.done", {...})` call across multiple lines (and similarly reflowed two pre-existing multi-line dict calls within the `for part in story.parts` loop). This is a formatting-only consequence of running `ruff format` per the plan's Action step; semantics match the plan exactly.
 
 ## Authentication Gates
 
@@ -166,7 +166,7 @@ None — this plan is purely behavioral hardening. No UI rendering paths, no pla
 
 ## archive_many Path — Verified
 
-`archive_many` was NOT modified (per plan must_haves and the threat model). Its existing per-story `except Exception` handler at `wattpad_crawler/jobs.py:218-224` catches `RenderError` unchanged because `RenderError` is an `Exception` subclass. The `test_archive_many_records_render_error_in_results` test verifies this end-to-end: `archive_many(cfg, fake_client, manifest, ["42"], deps=deps)` returns `{"42": "failed: all renders failed: {...}"}` when all three renderers are monkeypatched to raise.
+`archive_many` was NOT modified (per plan must_haves and the threat model). Its existing per-story `except Exception` handler at `local_story_archive/jobs.py:218-224` catches `RenderError` unchanged because `RenderError` is an `Exception` subclass. The `test_archive_many_records_render_error_in_results` test verifies this end-to-end: `archive_many(cfg, fake_client, manifest, ["42"], deps=deps)` returns `{"42": "failed: all renders failed: {...}"}` when all three renderers are monkeypatched to raise.
 
 ## JobRunner._run Path — Inferred from Plan 03
 
@@ -175,13 +175,13 @@ Per the plan's must_haves point #5: "JobRunner._run path catches RenderError as 
 ## Self-Check: PASSED
 
 Verified:
-- `wattpad_crawler/jobs.py` — FOUND (modified)
+- `local_story_archive/jobs.py` — FOUND (modified)
 - `tests/unit/test_jobs.py` — FOUND (modified)
 - Commit `e0e38fa` (`feat(01-04): add RenderError and render_status dict to archive_story`) — FOUND in `git log`
 - Commit `89caab4` (`test(01-04): add REL-04 RenderError unit tests`) — FOUND in `git log`
 - `pytest tests/unit/test_jobs.py -v` — 20 passed (verified above)
-- `ruff check wattpad_crawler/jobs.py tests/unit/test_jobs.py` — All checks passed (verified above)
-- `python -c "from wattpad_crawler.jobs import RenderError, ResolveError; ..."` — prints `ok` (verified above)
+- `ruff check local_story_archive/jobs.py tests/unit/test_jobs.py` — All checks passed (verified above)
+- `python -c "from local_story_archive.jobs import RenderError, ResolveError; ..."` — prints `ok` (verified above)
 - `class RenderError(Exception):` — line 192 of jobs.py
 - `render_status: dict[str, Literal["ok", "failed"]] = {}` — line 162 of jobs.py
 - `render_status[name] = "ok"` — line 170 of jobs.py

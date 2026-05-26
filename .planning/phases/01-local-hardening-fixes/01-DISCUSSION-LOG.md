@@ -157,7 +157,7 @@
 | Option | Description | Selected |
 |--------|-------------|----------|
 | In jobs.py alongside ResolveError | ResolveError already lives there; RenderError is similar in scope (raised from archive_story). Single import for callers. | ✓ |
-| New module wattpad_crawler/errors.py | Centralizes domain exceptions. Bigger refactor — out of phase scope. | |
+| New module local_story_archive/errors.py | Centralizes domain exceptions. Bigger refactor — out of phase scope. | |
 | In render package __init__.py | Lives near the renderers. Logical but creates an unusual import for callers in jobs.py. | |
 
 **User's choice:** In jobs.py alongside ResolveError (Recommended)

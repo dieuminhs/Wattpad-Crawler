@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from wattpad_crawler.archive.backup import BackupError, create_backup, restore_backup
+from local_story_archive.archive.backup import BackupError, create_backup, restore_backup
 
 
 def test_create_backup_includes_archive_files_and_excludes_cookie_config(output_dir: Path):
@@ -26,7 +26,7 @@ def test_create_backup_includes_archive_files_and_excludes_cookie_config(output_
     with zipfile.ZipFile(backup_path) as archive:
         names = set(archive.namelist())
         manifest = json.loads(archive.read("backup-manifest.json"))
-    assert manifest["app"] == "Wattpad Crawler"
+    assert manifest["app"] == "Local Story Archive"
     assert manifest["file_count"] == 5
     assert "stories/alice/42_story/metadata.json" in names
     assert "stories/alice/42_story/parts/01_100_one.txt" in names
@@ -67,7 +67,7 @@ def test_restore_backup_rejects_missing_manifest(tmp_path: Path):
 def test_restore_backup_rejects_path_traversal(tmp_path: Path):
     backup_path = tmp_path / "bad.zip"
     with zipfile.ZipFile(backup_path, "w") as archive:
-        archive.writestr("backup-manifest.json", json.dumps({"app": "Wattpad Crawler"}))
+        archive.writestr("backup-manifest.json", json.dumps({"app": "Local Story Archive"}))
         archive.writestr("../evil.txt", "nope")
 
     with pytest.raises(BackupError, match="unsafe path"):

@@ -6,8 +6,8 @@ tags: [memory, jobs, deque, pruning, sse, seq-cursor]
 requirements_completed: [REL-02, REL-03]
 dependency_graph:
   requires:
-    - "Existing wattpad_crawler.web.runner module (Job/ProgressEvent/JobManager/JobRunner classes)"
-    - "Existing wattpad_crawler.web.routes:job_stream SSE handler (the only consumer of snapshot_events)"
+    - "Existing local_story_archive.web.runner module (Job/ProgressEvent/JobManager/JobRunner classes)"
+    - "Existing local_story_archive.web.routes:job_stream SSE handler (the only consumer of snapshot_events)"
   provides:
     - "Bounded Job.events deque (maxlen=_MAX_EVENTS_PER_JOB=1000) — REL-02"
     - "Monotonic Job.next_seq counter and ProgressEvent.seq field — REL-02 (D-07)"
@@ -19,7 +19,7 @@ dependency_graph:
     - "Per-stream gap_announced latch so events.evicted fires at most once per SSE connection"
     - "Each real SSE event JSON includes seq alongside kind, data, ts"
   affects:
-    - "wattpad_crawler/web/templates/job.html — still emits ?after={{ job.events|length }}; Plan 05 fixes (graceful: FastAPI ignores unknown param, replays from seq 0)"
+    - "local_story_archive/web/templates/job.html — still emits ?after={{ job.events|length }}; Plan 05 fixes (graceful: FastAPI ignores unknown param, replays from seq 0)"
 tech_stack:
   added:
     - "collections.deque (stdlib) — ring buffer for Job.events"
@@ -32,8 +32,8 @@ key_files:
   created:
     - ".planning/phases/01-local-hardening-fixes/01-03-SUMMARY.md"
   modified:
-    - "wattpad_crawler/web/runner.py (61 insertions, 5 deletions — commit 608d640)"
-    - "wattpad_crawler/web/routes.py (61 insertions, 12 deletions — commit edbad03)"
+    - "local_story_archive/web/runner.py (61 insertions, 5 deletions — commit 608d640)"
+    - "local_story_archive/web/routes.py (61 insertions, 12 deletions — commit edbad03)"
     - "tests/unit/test_runner.py (210 insertions, 1 deletion — commit 63b58c4)"
 decisions:
   - "Job.next_seq is PUBLIC (no leading underscore) — Jinja2 templates in Plan 05 access it as job.next_seq; RESEARCH Open Question #3 RESOLVED"
@@ -57,7 +57,7 @@ Bounded `Job.events` to a 1000-element `collections.deque` and `JobManager._jobs
 
 ## What Shipped
 
-### `wattpad_crawler/web/runner.py` — final dataclass shape
+### `local_story_archive/web/runner.py` — final dataclass shape
 
 ```python
 _MAX_EVENTS_PER_JOB = 1000   # module-level cap (REL-02 / D-11)
@@ -146,7 +146,7 @@ Key invariants verified by tests:
 - 60 jobs all done -> `_jobs` caps at exactly 50
 - Submitting 5 pending jobs with cap=3 keeps all 5 (overshoot is accepted)
 
-### `wattpad_crawler/web/routes.py:job_stream` — exact final body
+### `local_story_archive/web/routes.py:job_stream` — exact final body
 
 ```python
 @router.get("/jobs/{job_id}/stream")
@@ -272,7 +272,7 @@ The 24 tests in `tests/unit/test_web_routes.py` continue to pass — no regressi
 
 **1. [Rule 1 - Lint] Ruff E402 module-level imports**
 - **Found during:** Task 2 (test_runner.py append)
-- **Issue:** New tests required `from collections import deque` and `from wattpad_crawler.web import runner` placed AFTER the existing function bodies (mid-file imports). `ruff check` raised E402 for both.
+- **Issue:** New tests required `from collections import deque` and `from local_story_archive.web import runner` placed AFTER the existing function bodies (mid-file imports). `ruff check` raised E402 for both.
 - **Fix:** Moved both imports to the top of `tests/unit/test_runner.py` alongside the existing imports, removed the duplicates from below the test bodies. Functionality unchanged; just satisfies project ruff rules.
 - **Files modified:** `tests/unit/test_runner.py`
 - **Commit:** Folded into 63b58c4 before commit.
@@ -280,8 +280,8 @@ The 24 tests in `tests/unit/test_web_routes.py` continue to pass — no regressi
 **2. [Rule 1 - Format] Ruff format auto-reformat**
 - **Found during:** Task 1 + Task 3
 - **Issue:** Both `runner.py` and `routes.py` failed `ruff format --check` after my Write/Edit (line wrapping differences from the plan's literal text).
-- **Fix:** Ran `ruff format` on both files. The reformat is cosmetic only — same logic, fewer line breaks. Routes.py picked up one extra blank line after `from wattpad_crawler.config import load_config` inside `setup_post` (unchanged function, ruff just normalized whitespace).
-- **Files modified:** `wattpad_crawler/web/runner.py`, `wattpad_crawler/web/routes.py`
+- **Fix:** Ran `ruff format` on both files. The reformat is cosmetic only — same logic, fewer line breaks. Routes.py picked up one extra blank line after `from local_story_archive.config import load_config` inside `setup_post` (unchanged function, ruff just normalized whitespace).
+- **Files modified:** `local_story_archive/web/runner.py`, `local_story_archive/web/routes.py`
 - **Commit:** Folded into 608d640 and edbad03 respectively.
 
 No architectural deviations. No checkpoint or auth gates encountered. No deferred items.
@@ -319,8 +319,8 @@ The interim window between Plan 03 and Plan 05 shipping is graceful: the unchang
 
 ## Self-Check: PASSED
 
-- [x] `wattpad_crawler/web/runner.py` exists at HEAD — commit 608d640
-- [x] `wattpad_crawler/web/routes.py` exists at HEAD — commit edbad03
+- [x] `local_story_archive/web/runner.py` exists at HEAD — commit 608d640
+- [x] `local_story_archive/web/routes.py` exists at HEAD — commit edbad03
 - [x] `tests/unit/test_runner.py` exists at HEAD — commit 63b58c4
 - [x] `.planning/phases/01-local-hardening-fixes/01-03-SUMMARY.md` exists (this file)
 - [x] `608d640` in git log — verified (`feat(01-03): bound Job.events deque...`)
@@ -329,6 +329,6 @@ The interim window between Plan 03 and Plan 05 shipping is graceful: the unchang
 - [x] `pytest tests/unit/test_runner.py` — 31 passed
 - [x] `pytest tests/unit/test_web_routes.py` — 24 passed (no regression)
 - [x] `ruff check` — passes on all three modified files
-- [x] No `_next_seq` substring remains in `wattpad_crawler/web/runner.py` or `routes.py` (verified by Grep)
+- [x] No `_next_seq` substring remains in `local_story_archive/web/runner.py` or `routes.py` (verified by Grep)
 - [x] No `after_index` substring remains in any of the three modified files (verified by Grep)
 - [x] ROADMAP §Phase 1 success criterion #3 satisfied: 60 jobs caps at 50, 1100 events caps at 1000

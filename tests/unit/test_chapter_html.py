@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from wattpad_crawler.scrape.chapter_html import extract_chapter
+from local_story_archive.scrape.chapter_html import extract_chapter
 
 
 def test_extract_chapter_body_text(fixtures_dir: Path):
@@ -64,7 +64,7 @@ def test_extract_chapter_handles_p_tags_not_just_pre():
 def test_extract_chapter_logs_warning_when_no_paragraphs(caplog):
     import logging
     html = "<html><body><div class='page-container'><span>no data-p-id</span></div></body></html>"
-    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.scrape.chapter_html"):
+    with caplog.at_level(logging.WARNING, logger="local_story_archive.scrape.chapter_html"):
         result = extract_chapter(html)
     assert result.text == ""
     assert any("data-p-id" in rec.message for rec in caplog.records)

@@ -1,15 +1,15 @@
 import json
 from pathlib import Path
 
-from wattpad_crawler.archive.store import (
+from local_story_archive.archive.store import (
     atomic_write_bytes,
     atomic_write_text,
     slugify,
     story_dir,
     write_part_files,
 )
-from wattpad_crawler.models import Comment, Part, Story
-from wattpad_crawler.scrape.chapter_html import ChapterContent
+from local_story_archive.models import Comment, Part, Story
+from local_story_archive.scrape.chapter_html import ChapterContent
 
 
 def test_slugify_basic():
@@ -202,7 +202,7 @@ def test_write_part_files_handles_surrogate_in_comment(output_dir: Path):
 
 
 def test_write_story_metadata(output_dir: Path):
-    from wattpad_crawler.archive.store import write_story_metadata
+    from local_story_archive.archive.store import write_story_metadata
 
     s = Story(
         story_id="42",
@@ -223,7 +223,7 @@ def test_write_story_metadata(output_dir: Path):
 
 
 def test_write_cover_bytes(output_dir: Path):
-    from wattpad_crawler.archive.store import write_cover
+    from local_story_archive.archive.store import write_cover
 
     s = Story(story_id="42", title="Hi There", author_username="bob")
     write_cover(output_dir, s, b"FAKEJPGBYTES")
@@ -233,7 +233,7 @@ def test_write_cover_bytes(output_dir: Path):
 
 def test_write_cover_skips_empty_bytes(output_dir: Path):
     """Empty bytes should not produce an empty cover.jpg file."""
-    from wattpad_crawler.archive.store import write_cover
+    from local_story_archive.archive.store import write_cover
 
     s = Story(story_id="42", title="Hi There", author_username="bob")
     write_cover(output_dir, s, b"")

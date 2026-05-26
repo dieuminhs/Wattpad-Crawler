@@ -9,10 +9,10 @@ dependency_graph:
     - phase: 01-local-hardening-fixes/03
       provides: "Job.next_seq (public attr), Job.oldest_seq(), snapshot_events(after_seq), routes.py:job_stream(after_seq) handler with events.evicted gap announcement"
   provides:
-    - "wattpad_crawler/web/templates/job.html EventSource URL migrated to ?after_seq={{ job.next_seq }} — D-09 closure"
+    - "local_story_archive/web/templates/job.html EventSource URL migrated to ?after_seq={{ job.next_seq }} — D-09 closure"
     - "Integrated SSE test suite in tests/unit/test_web_routes.py (7 tests) covering rename, evicted-on-gap, no-evicted-when-no-gap, evicted-only-once, no-gap-when-cursor-advanced, seq-in-payload, template-renders-after_seq"
   affects:
-    - "Phase 1 sign-off: zero ?after= references remain anywhere in wattpad_crawler/ (templates, static, routes); end-to-end integration verified"
+    - "Phase 1 sign-off: zero ?after= references remain anywhere in local_story_archive/ (templates, static, routes); end-to-end integration verified"
 tech_stack:
   added:
     - "fastapi.testclient.TestClient driven through SSE stream — first integrated SSE coverage in this codebase"
@@ -24,7 +24,7 @@ key-files:
   created:
     - ".planning/phases/01-local-hardening-fixes/01-05-SUMMARY.md"
   modified:
-    - "wattpad_crawler/web/templates/job.html (1 line — commit 4a8982f)"
+    - "local_story_archive/web/templates/job.html (1 line — commit 4a8982f)"
     - "tests/unit/test_web_routes.py (1 import + 7 test funcs, 183 insertions — commit 762a13e)"
 key-decisions:
   - "Used the inline TestClient pattern (not a shared fixture) to match the existing 24 pre-existing tests in the file — consistent style trumps minor duplication"
@@ -46,7 +46,7 @@ metrics:
 
 # Phase 01 Plan 05: SSE template migration + integrated eviction-gap tests Summary
 
-**Closed the REL-02 loop: `templates/job.html` now emits `?after_seq={{ job.next_seq }}` consuming Plan 03's public seq cursor, and 7 new TestClient-driven SSE tests verify the rename, eviction-gap synthetic event shape, the gap-announced-once latch, the seq field on real-event payloads, and the rendered template URL — phase-1 has zero `?after=` references anywhere in `wattpad_crawler/`.**
+**Closed the REL-02 loop: `templates/job.html` now emits `?after_seq={{ job.next_seq }}` consuming Plan 03's public seq cursor, and 7 new TestClient-driven SSE tests verify the rename, eviction-gap synthetic event shape, the gap-announced-once latch, the seq field on real-event payloads, and the rendered template URL — phase-1 has zero `?after=` references anywhere in `local_story_archive/`.**
 
 ## Performance
 
@@ -58,10 +58,10 @@ metrics:
 
 ## Accomplishments
 
-- `wattpad_crawler/web/templates/job.html` line 30 EventSource URL migrated from the legacy `?after={{ job.events|length }}` (wrong cursor for jobs with > 1000 events because the deque cap silently caps `events|length`) to `?after_seq={{ job.next_seq }}` (monotonic, unaffected by deque eviction)
+- `local_story_archive/web/templates/job.html` line 30 EventSource URL migrated from the legacy `?after={{ job.events|length }}` (wrong cursor for jobs with > 1000 events because the deque cap silently caps `events|length`) to `?after_seq={{ job.next_seq }}` (monotonic, unaffected by deque eviction)
 - 7 new integrated tests in `tests/unit/test_web_routes.py` — each drives the live FastAPI SSE handler through `fastapi.testclient.TestClient`, asserting both the post-Plan-03 contract and the Plan 05 template render
 - All 31 tests in `test_web_routes.py` pass (24 pre-existing + 7 new)
-- Repo-wide: zero `?after=` substring matches remain anywhere under `wattpad_crawler/` (verified by Grep)
+- Repo-wide: zero `?after=` substring matches remain anywhere under `local_story_archive/` (verified by Grep)
 - `ruff check tests/unit/test_web_routes.py` clean
 
 ## Task Commits
@@ -73,7 +73,7 @@ Each task was committed atomically:
 
 ## What Shipped
 
-### `wattpad_crawler/web/templates/job.html` — line 30
+### `local_story_archive/web/templates/job.html` — line 30
 
 **Before:**
 
@@ -144,14 +144,14 @@ None during planned work.
 - All 24 pre-existing tests in `test_web_routes.py` continue to pass
 - `templates/base.html`, `templates/dashboard.html`, `templates/library.html`, `templates/setup.html`, `templates/reader.html` — unchanged
 - The static `{% for ev in job.events %}` event-log loop in `job.html` (lines 21-23) — preserved exactly; only line 30 changed
-- `wattpad_crawler/web/routes.py:job_stream` — unchanged (Plan 03 owns this file)
-- `wattpad_crawler/web/runner.py` — unchanged (Plan 03 owns this file)
+- `local_story_archive/web/routes.py:job_stream` — unchanged (Plan 03 owns this file)
+- `local_story_archive/web/runner.py` — unchanged (Plan 03 owns this file)
 
 ## Threat Mitigations Applied
 
 | Threat ID | Mitigation Verified |
 |-----------|---------------------|
-| T-05-01 (template still emits old `?after=` after handler is renamed) | Direct grep of `wattpad_crawler/` shows zero `?after=` matches. Test #7 (`test_job_detail_template_renders_after_seq_url`) asserts `assert "?after=" not in body` on the rendered HTML. |
+| T-05-01 (template still emits old `?after=` after handler is renamed) | Direct grep of `local_story_archive/` shows zero `?after=` matches. Test #7 (`test_job_detail_template_renders_after_seq_url`) asserts `assert "?after=" not in body` on the rendered HTML. |
 | T-05-02 (regression: future template edit reintroduces `?after=`) | Test #7 will fail in CI if any future edit puts `?after=` back into the template render. |
 | T-05-03 (Jinja2 expression injection via `{{ job.next_seq }}`) | Accepted — `next_seq` is a server-controlled int. No untrusted data flows in. |
 
@@ -168,7 +168,7 @@ Plan 05 closes the REL-02 loop. With Plans 01-01 → 01-05 all merged:
 Phase 1 verification suite (per the verification block in PLAN):
 - `pytest tests/unit/test_web_routes.py -v` → 31 passed
 - `ruff check tests/unit/test_web_routes.py` → clean
-- `Get-ChildItem -Path 'wattpad_crawler' -Recurse -File | Select-String -Pattern '\?after='` → no matches
+- `Get-ChildItem -Path 'local_story_archive' -Recurse -File | Select-String -Pattern '\?after='` → no matches
 
 The Plan 03→05 split eliminated the broken-interim-state warning by shipping `runner.py` + `routes.py` atomically in Plan 03 and the template + integrated tests here in Plan 05. The post-Plan-03 / pre-Plan-05 window was graceful (FastAPI silently ignored the unknown `?after=` query param, `after_seq` defaulted to 0, replaying from seq 0 — redundant but functional, no 500).
 
@@ -178,15 +178,15 @@ Phase 1 (Local hardening fixes) is complete pending verifier sign-off. Phase 2 (
 
 ## Self-Check: PASSED
 
-- [x] `wattpad_crawler/web/templates/job.html` exists at HEAD — verified via Read; line 30 contains `?after_seq={{ job.next_seq }}`
+- [x] `local_story_archive/web/templates/job.html` exists at HEAD — verified via Read; line 30 contains `?after_seq={{ job.next_seq }}`
 - [x] `tests/unit/test_web_routes.py` exists at HEAD — verified via Read; 489 lines (was 307); 7 new test functions added
 - [x] `.planning/phases/01-local-hardening-fixes/01-05-SUMMARY.md` exists (this file)
 - [x] `4a8982f` in git log — verified (`feat(01-05): migrate job.html EventSource URL...`)
 - [x] `762a13e` in git log — verified (`test(01-05): add 7 integrated SSE tests...`)
 - [x] `pytest tests/unit/test_web_routes.py -v` → 31 passed
 - [x] `ruff check tests/unit/test_web_routes.py` → All checks passed
-- [x] No `?after=` substring remains in `wattpad_crawler/` (verified via Grep — no matches)
-- [x] No `job.events|length` substring remains in `wattpad_crawler/web/templates/job.html` (verified via Grep — no matches)
+- [x] No `?after=` substring remains in `local_story_archive/` (verified via Grep — no matches)
+- [x] No `job.events|length` substring remains in `local_story_archive/web/templates/job.html` (verified via Grep — no matches)
 - [x] All 5 must_haves.truths from the plan verified by tests:
   1. Template renders `?after_seq={{ job.next_seq }}` — test #7 + Read
   2. events.evicted on gap — test #4

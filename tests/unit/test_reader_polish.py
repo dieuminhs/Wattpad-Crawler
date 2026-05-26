@@ -2,12 +2,12 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wattpad_crawler.config import Config
-from wattpad_crawler.web.app import build_app
+from local_story_archive.config import Config
+from local_story_archive.web.app import build_app
 
 
 def _template(name: str) -> str:
-    return (Path(__file__).parents[2] / "wattpad_crawler" / "web" / "templates" / name).read_text(
+    return (Path(__file__).parents[2] / "local_story_archive" / "web" / "templates" / name).read_text(
         encoding="utf-8"
     )
 

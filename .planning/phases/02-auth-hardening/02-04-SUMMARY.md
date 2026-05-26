@@ -6,14 +6,14 @@ tags: [auth, error-propagation, sse, tdd]
 dependency_graph:
   requires: [02-01]
   provides: [AuthFailedError propagation from archive_story, auth.failed SSE event]
-  affects: [wattpad_crawler/jobs.py, tests/unit/test_jobs.py, tests/unit/test_runner.py]
+  affects: [local_story_archive/jobs.py, tests/unit/test_jobs.py, tests/unit/test_runner.py]
 tech_stack:
   added: []
   patterns: [dedicated-except-before-broad, emit-before-raise, tdd-red-green]
 key_files:
   created: []
   modified:
-    - wattpad_crawler/jobs.py
+    - local_story_archive/jobs.py
     - tests/unit/test_jobs.py
     - tests/unit/test_runner.py
 decisions:
@@ -38,14 +38,14 @@ metrics:
 AUTH-04 / D-16 / D-17 / D-18: `archive_story()`'s per-part try/except previously had a single broad `except Exception` that caught `AuthFailedError` (which IS an Exception), logged it, marked the part `failed`, emitted `part.failed`, and continued to the next chapter. The next chapter would also 401, and so on. The job ended `done` with N chapters marked failed — no clear "your cookie died" signal.
 
 After this plan:
-- A new `except AuthFailedError as e:` branch at `wattpad_crawler/jobs.py:145` intercepts auth failures BEFORE the broad `except Exception` at line 165.
+- A new `except AuthFailedError as e:` branch at `local_story_archive/jobs.py:145` intercepts auth failures BEFORE the broad `except Exception` at line 165.
 - The branch sets part status `failed` (manifest consistency), emits `auth.failed` with `{part_id, status_code, url, message}`, then bare-`raise`s the exception.
 - `AuthFailedError` propagates to `JobRunner._run`'s top-level `except Exception`, which calls `job.set_failed(str(e))` — job ends `failed` with the auth message in `job.error`.
 - SSE consumers see `auth.failed` in the event stream before `__status__: failed`.
 
 ## Code-Order Audit
 
-Confirmed by `grep -n "except AuthFailedError\|except Exception" wattpad_crawler/jobs.py`:
+Confirmed by `grep -n "except AuthFailedError\|except Exception" local_story_archive/jobs.py`:
 
 ```
 45:   except Exception as e:   (cover fetch fallback — not in per-part loop)
@@ -60,7 +60,7 @@ Confirmed by `grep -n "except AuthFailedError\|except Exception" wattpad_crawler
 
 ## auth.failed Payload Confirmation
 
-`emit("auth.failed", {...})` at `wattpad_crawler/jobs.py:155` includes all four required keys:
+`emit("auth.failed", {...})` at `local_story_archive/jobs.py:155` includes all four required keys:
 - `part_id` — string part identifier
 - `status_code` — int (401 or 403) from `e.status_code`
 - `url` — string from `e.url` (Wattpad URL we constructed, not attacker-controlled)
@@ -84,7 +84,7 @@ The `emit` call appears before the bare `raise` statement — D-17 satisfied.
 
 - `pytest tests/unit/test_jobs.py tests/unit/test_runner.py -x -q`: **54 passed**
 - `pytest tests/unit/test_auth.py test_client.py test_cli.py test_jobs.py test_web_routes.py test_runner.py -x -q`: **124 passed, 6 warnings**
-- `ruff check wattpad_crawler/jobs.py tests/unit/test_jobs.py tests/unit/test_runner.py`: **All checks passed**
+- `ruff check local_story_archive/jobs.py tests/unit/test_jobs.py tests/unit/test_runner.py`: **All checks passed**
 
 ## Deviations from Plan
 
@@ -100,10 +100,10 @@ None. The auth.failed payload contains only: `part_id` (string from Wattpad meta
 
 ## Self-Check: PASSED
 
-- `wattpad_crawler/jobs.py` exists and contains `from wattpad_crawler.auth import AuthFailedError`: confirmed
-- `wattpad_crawler/jobs.py` contains `except AuthFailedError as e:`: confirmed (line 145)
-- `wattpad_crawler/jobs.py` contains `emit("auth.failed",`: confirmed (line 155)
-- `wattpad_crawler/jobs.py:archive_many` contains comment with "AuthFailedError": confirmed (line 263)
+- `local_story_archive/jobs.py` exists and contains `from local_story_archive.auth import AuthFailedError`: confirmed
+- `local_story_archive/jobs.py` contains `except AuthFailedError as e:`: confirmed (line 145)
+- `local_story_archive/jobs.py` contains `emit("auth.failed",`: confirmed (line 155)
+- `local_story_archive/jobs.py:archive_many` contains comment with "AuthFailedError": confirmed (line 263)
 - `tests/unit/test_jobs.py` contains `test_archive_story_propagates_auth_failed`: confirmed
 - `tests/unit/test_jobs.py` contains `test_archive_story_emits_auth_failed_event`: confirmed
 - `tests/unit/test_runner.py` contains `test_runner_marks_failed_on_auth_failure`: confirmed

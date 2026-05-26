@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import Config
-from wattpad_crawler.jobs import archive_story
+from local_story_archive.archive.state import Manifest
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.config import Config
+from local_story_archive.jobs import archive_story
 
 pytestmark = pytest.mark.skip(
     reason="Cassette not yet recorded; record per instructions in this file."

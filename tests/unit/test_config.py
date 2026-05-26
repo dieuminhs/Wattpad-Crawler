@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from wattpad_crawler.config import Config, ConfigError, load_config
+from local_story_archive.config import Config, ConfigError, load_config
 
 
 def test_load_config_creates_default_when_missing(output_dir: Path):
@@ -80,7 +80,7 @@ def test_config_is_frozen():
     import dataclasses
     from pathlib import Path as _P
 
-    from wattpad_crawler.config import Config
+    from local_story_archive.config import Config
 
     cfg = Config(output_dir=_P("/tmp"))
     with pytest.raises(dataclasses.FrozenInstanceError):

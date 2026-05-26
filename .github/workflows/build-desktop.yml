@@ -38,19 +38,19 @@ jobs:
         include:
           - name: Windows x64
             os: windows-latest
-            artifact_name: wattpad-crawler-windows
+            artifact_name: local-story-archive-windows
             artifact_paths: |
               src-tauri/target/release/bundle/msi/*.msi
               src-tauri/target/release/bundle/nsis/*setup.exe
           - name: macOS Apple Silicon
             os: macos-14
-            artifact_name: wattpad-crawler-macos-aarch64
+            artifact_name: local-story-archive-macos-aarch64
             artifact_paths: |
               src-tauri/target/release/bundle/dmg/*.dmg
               src-tauri/target/release/bundle/macos/*.app
           - name: macOS Intel
             os: macos-13
-            artifact_name: wattpad-crawler-macos-x64
+            artifact_name: local-story-archive-macos-x64
             artifact_paths: |
               src-tauri/target/release/bundle/dmg/*.dmg
               src-tauri/target/release/bundle/macos/*.app

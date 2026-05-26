@@ -2,9 +2,9 @@ import threading
 import time
 from collections import deque
 
-from wattpad_crawler.auth import AuthFailedError
-from wattpad_crawler.web import runner
-from wattpad_crawler.web.runner import Job, JobManager, JobRunner, JobStatus, ProgressEvent
+from local_story_archive.auth import AuthFailedError
+from local_story_archive.web import runner
+from local_story_archive.web.runner import Job, JobManager, JobRunner, JobStatus, ProgressEvent
 
 
 def test_progress_event_holds_fields():

@@ -39,11 +39,11 @@
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| New `wattpad_crawler/circuit_breakers.py` | Standalone module; mirrors auth.py precedent (Phase 2 D-23). Imported by jobs.py | ✓ |
+| New `local_story_archive/circuit_breakers.py` | Standalone module; mirrors auth.py precedent (Phase 2 D-23). Imported by jobs.py | ✓ |
 | Inline in jobs.py | Class + constants alongside RenderError/ResolveError | |
 | Inline class, constants in config | Caps in TOML config (rejected by Phase 1 D-11 — listed for symmetry) | |
 
-**User's choice:** New `wattpad_crawler/circuit_breakers.py`
+**User's choice:** New `local_story_archive/circuit_breakers.py`
 **Notes:** Keeps jobs.py focused on the archive pipeline; symmetric to Phase 2's auth.py module split.
 
 ### Q3: How should the breaker actually trip and abort?

@@ -43,11 +43,11 @@
 
 **Import organization:**
 - Order: Standard library → Third-party → First-party (configured in `pyproject.toml`)
-- First-party known modules: `wattpad_crawler`
+- First-party known modules: `local_story_archive`
 - Grouped logically with blank lines between groups
 - Imports at module level, not inside functions (except async context manager imports in `web/routes.py`)
 
-**Example from `wattpad_crawler/jobs.py`:**
+**Example from `local_story_archive/jobs.py`:**
 ```python
 import hashlib
 import logging
@@ -55,17 +55,17 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from wattpad_crawler.api import comments as api_comments
-from wattpad_crawler.api import story as api_story
-from wattpad_crawler.archive import store
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import Config
-from wattpad_crawler.models import Story
-from wattpad_crawler.render import epub as render_epub
-from wattpad_crawler.render import html as render_html
-from wattpad_crawler.render import txt as render_txt
-from wattpad_crawler.scrape.chapter_html import ChapterContent, extract_chapter
+from local_story_archive.api import comments as api_comments
+from local_story_archive.api import story as api_story
+from local_story_archive.archive import store
+from local_story_archive.archive.state import Manifest
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.config import Config
+from local_story_archive.models import Story
+from local_story_archive.render import epub as render_epub
+from local_story_archive.render import html as render_html
+from local_story_archive.render import txt as render_txt
+from local_story_archive.scrape.chapter_html import ChapterContent, extract_chapter
 ```
 
 ## Type Hints
@@ -95,13 +95,13 @@ class Config:
 
 **Callable types:**
 - Use `Callable[[ArgTypes], ReturnType]` from `collections.abc`
-- See `JobDeps` dataclass in `wattpad_crawler/jobs.py` for dependency injection pattern
+- See `JobDeps` dataclass in `local_story_archive/jobs.py` for dependency injection pattern
 
 ## Error Handling
 
 **Custom Exceptions:**
 - Define custom exception classes that inherit from `Exception`
-- Example: `ConfigError` in `wattpad_crawler/config.py`, `ResolveError` in `wattpad_crawler/jobs.py`
+- Example: `ConfigError` in `local_story_archive/config.py`, `ResolveError` in `local_story_archive/jobs.py`
 - Custom exceptions used for domain-specific errors (config parsing, story resolution)
 
 **Exception Patterns:**
@@ -126,7 +126,7 @@ except Exception as e:
 - Raise `ValueError` for invalid API responses with descriptive messages
 - Validate preconditions in public methods with clear error messages
 
-**Example from `wattpad_crawler/api/story.py`:**
+**Example from `local_story_archive/api/story.py`:**
 ```python
 story_id_raw = raw.get("id")
 if story_id_raw is None:
@@ -147,7 +147,7 @@ logger = logging.getLogger(__name__)
 - Use `logger.warning()` for recoverable failures (cover fetch failure, 429 rate limit)
 - Use `logger.exception()` for unhandled exceptions (logs traceback automatically)
 
-**Examples from `wattpad_crawler/client.py`:**
+**Examples from `local_story_archive/client.py`:**
 ```python
 logger.warning("429 on %s — sleeping %.1fs", url, wait)
 logger.warning("Unparseable Retry-After header %r, defaulting to 60s", raw)
@@ -155,7 +155,7 @@ logger.warning("Unparseable Retry-After header %r, defaulting to 60s", raw)
 
 **Log Format (configured in CLI):**
 - Format: `"%(asctime)s %(levelname)s %(name)s: %(message)s"`
-- Set in `wattpad_crawler/cli.py` via `logging.basicConfig()`
+- Set in `local_story_archive/cli.py` via `logging.basicConfig()`
 - Verbosity controlled by `--verbose` flag (DEBUG vs INFO)
 
 ## Comments
@@ -171,7 +171,7 @@ logger.warning("Unparseable Retry-After header %r, defaulting to 60s", raw)
 - Full docstrings for classes and complex methods
 - Docstrings on public API only
 
-**Example from `wattpad_crawler/archive/store.py`:**
+**Example from `local_story_archive/archive/store.py`:**
 ```python
 def _scrub_surrogates(s: str) -> str:
     """Replace lone UTF-16 surrogates with U+FFFD.
@@ -184,10 +184,10 @@ def _scrub_surrogates(s: str) -> str:
 
 ## Async vs Sync
 
-**Default:** Synchronous (blocking) code is the default throughout `wattpad_crawler/`
+**Default:** Synchronous (blocking) code is the default throughout `local_story_archive/`
 
 **Async used only in web layer:**
-- `wattpad_crawler/web/routes.py`: FastAPI route handlers are async (required by FastAPI)
+- `local_story_archive/web/routes.py`: FastAPI route handlers are async (required by FastAPI)
 - Async patterns include form parsing: `form = await request.form()`
 - Async request disconnection checks: `if await request.is_disconnected()`
 - Thread-to-asyncio bridging: `await asyncio.sleep(0.25)` for polling integration
@@ -197,7 +197,7 @@ def _scrub_surrogates(s: str) -> str:
 - Easier to reason about threading for rate limiting (TokenBucket uses `threading.Lock`)
 - Web UI uses async for server efficiency but delegates to sync thread pools
 
-**Example from `wattpad_crawler/web/routes.py`:**
+**Example from `local_story_archive/web/routes.py`:**
 ```python
 async def job_stream(request: Request, job_id: str, after: int = 0):
     async def event_gen():
@@ -212,7 +212,7 @@ async def job_stream(request: Request, job_id: str, after: int = 0):
 
 **Pattern:** Use context managers with `__enter__` / `__exit__` for resource cleanup
 
-**Example from `wattpad_crawler/client.py`:**
+**Example from `local_story_archive/client.py`:**
 ```python
 class RateLimitedClient:
     def __enter__(self) -> "RateLimitedClient":
@@ -240,7 +240,7 @@ with RateLimitedClient(cfg) as client:
 - Frozen dataclasses prevent accidental mutation (tested in `test_config.py`)
 - Field defaults via `default_factory` for mutable defaults
 
-**Example from `wattpad_crawler/models.py`:**
+**Example from `local_story_archive/models.py`:**
 ```python
 @dataclass
 class Story:
@@ -257,7 +257,7 @@ class Story:
 
 **Dependency Injection Pattern:**
 - Use dataclass wrappers for testable dependencies
-- See `JobDeps` in `wattpad_crawler/jobs.py`
+- See `JobDeps` in `local_story_archive/jobs.py`
 - Allows tests to inject mocks without monkeypatching
 - Default implementation provided by `_default_deps()`
 

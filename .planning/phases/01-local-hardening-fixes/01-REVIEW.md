@@ -5,12 +5,12 @@ depth: standard
 files_reviewed: 12
 files_reviewed_list:
   - pyproject.toml
-  - wattpad_crawler/api/comments.py
-  - wattpad_crawler/jobs.py
-  - wattpad_crawler/scrape/chapter_html.py
-  - wattpad_crawler/web/routes.py
-  - wattpad_crawler/web/runner.py
-  - wattpad_crawler/web/templates/job.html
+  - local_story_archive/api/comments.py
+  - local_story_archive/jobs.py
+  - local_story_archive/scrape/chapter_html.py
+  - local_story_archive/web/routes.py
+  - local_story_archive/web/runner.py
+  - local_story_archive/web/templates/job.html
   - tests/unit/test_api_comments.py
   - tests/unit/test_chapter_html.py
   - tests/unit/test_jobs.py
@@ -41,7 +41,7 @@ No critical security or correctness issues were identified. Two warnings cover (
 
 ### WR-01: SSE consumer interpolates `data.kind` directly into `innerHTML`
 
-**File:** `wattpad_crawler/web/templates/job.html:40`
+**File:** `local_story_archive/web/templates/job.html:40`
 **Issue:** The inline JS event handler builds new event-log entries with `div.innerHTML = '<code>' + data.kind + '</code> ' + JSON.stringify(data.data);`. `data.kind` is concatenated into HTML without escaping. Currently safe only because every `kind` value emitted by `archive_story`, `archive_many`, the JobRunner, and the SSE handler itself is a hard-coded literal (`"part.start"`, `"story.done"`, `"render.failed"`, `"events.evicted"`, `"__status__"`, etc.) with no user-controlled component. The first emit kind that ever interpolates a value (e.g. a future `f"render.{name}.failed"` pattern using user input, or a debug emit kind containing chapter titles) becomes a stored XSS vector for any browser that loads `/jobs/{job_id}`. Single-user tool with self-controlled input keeps the actual risk low, but the pattern is fragile and inconsistent with the server-side template's auto-escaped `{{ ev.kind }}` (line 22).
 **Fix:** Use `textContent` for the kind label (it's a plain identifier, not HTML), or build the children with `document.createElement` + `Node.textContent`:
 ```javascript
@@ -65,7 +65,7 @@ es.onmessage = function (e) {
 
 ### WR-02: Truncation warning hard-codes `_MAX_COMMENT_DEPTH` instead of the actual `max_depth` used
 
-**File:** `wattpad_crawler/api/comments.py:88-92`
+**File:** `local_story_archive/api/comments.py:88-92`
 **Issue:** `parse_comments_page` calls `_parse_one(r)` with no explicit `max_depth`, so `_parse_one` falls through to the module default of `_MAX_COMMENT_DEPTH = 10`. The warning emitted on truncation (lines 88-92) hard-codes `_MAX_COMMENT_DEPTH` in the format args:
 ```python
 logger.warning(
@@ -92,15 +92,15 @@ The current code already does (b) effectively (bare-name reference is resolved a
 
 ### IN-01: `RenderError` is referenced before its definition in the same module
 
-**File:** `wattpad_crawler/jobs.py:185, 192`
+**File:** `local_story_archive/jobs.py:185, 192`
 **Issue:** `archive_story` raises `RenderError` at line 185 but `class RenderError(Exception):` is defined at line 192, after the function body. Python resolves `RenderError` at raise-time so this works correctly, but it's awkward to read top-down: the exception name appears as an unresolved reference until the bottom of the file. The sibling `ResolveError` (line 188) follows the same pattern and is also referenced earlier than its definition (line 223 — `resolve_story_id`). This is consistent with the existing style, so the cleanest fix is just to acknowledge the pattern; a stricter alternative is to hoist both exception classes above `archive_story`.
 **Fix:** Optional. Move `class ResolveError(Exception):` and `class RenderError(Exception):` above `archive_story()` for readability. No behavioral change.
 
 ### IN-02: Function-local `import` statements in `web/routes.py` violate the convention exception scope
 
-**File:** `wattpad_crawler/web/routes.py:73, 179, 180`
+**File:** `local_story_archive/web/routes.py:73, 179, 180`
 **Issue:** Three function-local imports exist:
-- Line 73: `from wattpad_crawler.config import load_config` inside `setup_post`
+- Line 73: `from local_story_archive.config import load_config` inside `setup_post`
 - Line 179: `import asyncio` inside `event_gen`
 - Line 180: `import time as _time` inside `event_gen`
 
@@ -116,23 +116,23 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
-from wattpad_crawler.api.user import fetch_library, fetch_list_story_ids
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import load_config
-from wattpad_crawler.jobs import (
+from local_story_archive.api.user import fetch_library, fetch_list_story_ids
+from local_story_archive.archive.state import Manifest
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.config import load_config
+from local_story_archive.jobs import (
     ResolveError,
     archive_many,
     archive_story,
     resolve_story_id,
 )
-from wattpad_crawler.web.library_browser import scan_library
+from local_story_archive.web.library_browser import scan_library
 ```
-Then drop the `import asyncio`, `import time as _time`, and `from wattpad_crawler.config import load_config` lines from inside the functions. Replace `_time.time()` with `time.time()`.
+Then drop the `import asyncio`, `import time as _time`, and `from local_story_archive.config import load_config` lines from inside the functions. Replace `_time.time()` with `time.time()`.
 
 ### IN-03: Server-rendered event log shows `dict.__str__()` instead of JSON
 
-**File:** `wattpad_crawler/web/templates/job.html:21-24`
+**File:** `local_story_archive/web/templates/job.html:21-24`
 **Issue:** The pre-script section renders existing events as `<code>{{ ev.kind }}</code> {{ ev.data }}` where `{{ ev.data }}` is a Python dict that Jinja2 stringifies via `str(dict)`, producing single-quoted Python repr like `{'part_id': '100', 'ordinal': 1}`. The JS-rendered events (line 40) use `JSON.stringify(data.data)` which produces standard double-quoted JSON. The visible mismatch is cosmetic but confusing on a job that has both server-rendered (existing) and live (newly streamed) events visible at once.
 **Fix:** Use a Jinja2 filter to JSON-encode the data field so server-rendered events match the JS rendering:
 ```html
@@ -142,11 +142,11 @@ Then drop the `import asyncio`, `import time as _time`, and `from wattpad_crawle
 
 ### IN-04: `_resolve_story_dir` `cfg` parameter has no type hint
 
-**File:** `wattpad_crawler/web/routes.py:266`
+**File:** `local_story_archive/web/routes.py:266`
 **Issue:** Project convention per CLAUDE.md is *"Comprehensive type annotations on all functions and dataclass fields"* and *"Return types always specified"*. `_resolve_story_dir(cfg, author: str, dir_name: str) -> Path:` is missing the type for `cfg`, and `_build_work` (line 93) is also missing types on `cfg` (and `args: dict`). Sister helpers like `_save_cookie(output_dir: Path, cookie: str) -> None` correctly annotate every parameter.
 **Fix:** Annotate both helpers:
 ```python
-from wattpad_crawler.config import Config
+from local_story_archive.config import Config
 
 def _build_work(cfg: Config, kind: str, args: dict[str, Any]) -> Callable[..., None]:
     ...
@@ -158,7 +158,7 @@ def _resolve_story_dir(cfg: Config, author: str, dir_name: str) -> Path:
 
 ### IN-05: `IN-05`: `JobRunner.submit` adds to `_running` before `thread.start()`, briefly creating a window where the set says "running" but no work has started
 
-**File:** `wattpad_crawler/web/runner.py:168-174`
+**File:** `local_story_archive/web/runner.py:168-174`
 **Issue:** Order of operations in `submit`:
 ```python
 thread = threading.Thread(target=self._run, args=(job, work), name=f"job-{job.job_id}", daemon=True)

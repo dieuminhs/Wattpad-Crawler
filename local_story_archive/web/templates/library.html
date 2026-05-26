@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Library — Local Story Archive{% endblock %}
+{% block content %}
+  <h1 class="library-title">Library</h1>
+  {% if reset_story_id %}
+    <p class="status-done">Reset story {{ reset_story_id }}. Next archive run will refetch it.</p>
+  {% endif %}
+  {% if bookmarked_story_id %}
+    <p class="status-done">Updated bookmark for story {{ bookmarked_story_id }}.</p>
+  {% endif %}
+  {% if removed_story_id %}
+    <p class="status-done">Removed story {{ removed_story_id }} from the archive.</p>
+  {% endif %}
+
+  <section class="library-search-panel" aria-label="Search and filter library">
+    <form class="library-search-form" method="get" action="/library">
+      <input type="hidden" name="filter" value="{{ filter_name }}">
+      <label class="library-search-box">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input type="search" name="q" value="{{ query }}" placeholder="Search title, author, tag, story ID…" autocomplete="off">
+      </label>
+      <button class="library-search-button" type="submit">Search</button>
+      {% if query or filter_name != "all" %}<a class="btn btn-light library-clear-button" href="/library">Clear</a>{% endif %}
+    </form>
+    <div class="library-filter-row" aria-label="Library filters">
+      {% for value, label, url in filter_options %}
+        <a class="filter-chip{% if filter_name == value %} filter-chip--active{% endif %}" href="{{ url }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="library-search-meta">
+      {% if total_entries %}
+        {% if total_filtered == total_entries %}
+          <span>{{ total_entries }} stories archived</span>
+        {% else %}
+          <span>{{ total_filtered }} of {{ total_entries }} stories shown</span>
+        {% endif %}
+      {% else %}
+        <span>No stories archived yet</span>
+      {% endif %}
+      {% if query %}<span>Searching for “{{ query }}”</span>{% endif %}
+    </div>
+  </section>
+
+  {% if total_entries %}
+    <section class="library-health-summary" aria-label="Archive health summary">
+      <a class="health-summary-card health-summary-card--ok" href="/library">
+        <strong>{{ health_summary.ok }}</strong>
+        <span>Complete</span>
+      </a>
+      <a class="health-summary-card health-summary-card--warning" href="/library?filter=needs_repair">
+        <strong>{{ health_summary.warning }}</strong>
+        <span>Warnings</span>
+      </a>
+      <a class="health-summary-card health-summary-card--broken" href="/library?filter=needs_repair">
+        <strong>{{ health_summary.broken }}</strong>
+        <span>Need repair</span>
+      </a>
+      <a class="health-summary-card" href="/library?filter=needs_repair">
+        <strong>{{ health_summary.needs_repair }}</strong>
+        <span>Actionable</span>
+      </a>
+    </section>
+  {% endif %}
+
+  {% if entries %}
+    <div class="library-bulk-card">
+      <label class="library-select-all">
+        <input id="library-select-all" type="checkbox">
+        Select all
+      </label>
+      <form class="library-bulk-actions" id="library-bulk-form" method="post" action="/library/bulk">
+        <select name="bulk_action" aria-label="Bulk action">
+          <option value="repair">Repair archive</option>
+          <option value="refresh_comments">Refresh comments</option>
+          <option value="remove">Remove from archive</option>
+        </select>
+        <button type="submit">Apply to selected</button>
+      </form>
+    </div>
+    <div class="library-grid">
+      {% for e in entries %}
+        <div class="library-card">
+          <label class="library-select-story">
+            <input form="library-bulk-form" type="checkbox" name="story_ids" value="{{ e.story_id }}">
+            <span class="sr-only">Select {{ e.title }}</span>
+          </label>
+          <a class="library-item" href="/read/{{ e.author }}/{{ e.dir_name }}">
+            {% if e.has_cover %}
+              <img src="/library/cover/{{ e.author }}/{{ e.dir_name }}" alt="cover">
+            {% else %}
+              <div class="library-cover-placeholder" aria-hidden="true"></div>
+            {% endif %}
+            {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
+            <div class="title">{{ e.title }}</div>
+            <div class="author">by {{ e.author }}</div>
+            <div class="library-health library-health--{{ e.health_status }}">
+              <span>{{ e.health_summary }}</span>
+            </div>
+          </a>
+          {% if e.health_issues %}
+            <details class="library-health-details">
+              <summary>Health details</summary>
+              <ul>
+                {% for issue in e.health_issues[:4] %}<li>{{ issue }}</li>{% endfor %}
+                {% if e.health_issues|length > 4 %}<li>{{ e.health_issues|length - 4 }} more issues...</li>{% endif %}
+              </ul>
+            </details>
+          {% endif %}
+          {% if e.first_ordinal %}
+            <div class="library-read-actions">
+              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Read first</a>
+              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.last_ordinal }}">Read last</a>
+              <a class="btn btn-light" href="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</a>
+            </div>
+          {% endif %}
+          <details class="library-menu">
+            <summary aria-label="Story actions">⋯</summary>
+            <div class="library-menu-items">
+              <form method="post" action="/library/bookmark/{{ e.story_id }}">
+                <button type="submit">{% if e.bookmarked %}Unbookmark{% else %}Bookmark{% endif %}</button>
+              </form>
+              <form method="post" action="/library/reset/{{ e.story_id }}">
+                <button type="submit">Reset for refetch</button>
+              </form>
+              <form method="post" action="/jobs">
+                <input type="hidden" name="kind" value="repair_story">
+                <input type="hidden" name="story_id" value="{{ e.story_id }}">
+                <button type="submit">Repair archive</button>
+              </form>
+              <form method="post" action="/jobs">
+                <input type="hidden" name="kind" value="comments">
+                <input type="hidden" name="story_id" value="{{ e.story_id }}">
+                <button type="submit">Refresh comments</button>
+              </form>
+              <form method="post" action="/library/remove/{{ e.story_id }}" onsubmit="return confirm('Remove this story from the archive?');">
+                <button type="submit" class="danger-button">Remove from archive</button>
+              </form>
+            </div>
+          </details>
+        </div>
+      {% endfor %}
+    </div>
+    {% if total_pages > 1 %}
+      <nav class="pagination" aria-label="Library pages">
+        {% if prev_page_url %}<a href="{{ prev_page_url }}">Previous</a>{% else %}<span>Previous</span>{% endif %}
+        <strong>Page {{ page }} of {{ total_pages }}</strong>
+        {% if next_page_url %}<a href="{{ next_page_url }}">Next</a>{% else %}<span>Next</span>{% endif %}
+      </nav>
+    {% endif %}
+    <script>
+      (function () {
+        const selectAll = document.getElementById('library-select-all');
+        if (!selectAll) return;
+        const boxes = Array.from(document.querySelectorAll('input[name="story_ids"]'));
+        selectAll.addEventListener('change', () => {
+          boxes.forEach((box) => { box.checked = selectAll.checked; });
+        });
+        boxes.forEach((box) => {
+          box.addEventListener('change', () => {
+            selectAll.checked = boxes.length > 0 && boxes.every((item) => item.checked);
+          });
+        });
+      })();
+    </script>
+    <script>
+      (function () {
+        let lastRead = {};
+        try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
+        document.querySelectorAll('[data-continue-story]').forEach((link) => {
+          const storyId = link.dataset.continueStory;
+          link.href = lastRead[storyId] || link.dataset.defaultContinue;
+        });
+      })();
+    </script>
+  {% else %}
+    {% if total_entries %}
+      <p>No stories match this search. <a href="/library">Clear filters</a> to see everything.</p>
+    {% else %}
+      <p>No stories yet. <a href="/">Archive one</a> to get started — the library is empty.</p>
+    {% endif %}
+  {% endif %}
+{% endblock %}

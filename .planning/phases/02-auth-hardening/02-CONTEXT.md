@@ -6,13 +6,13 @@
 <domain>
 ## Phase Boundary
 
-A new `wattpad_crawler/auth.py` module that catches dead-cookie failures at three points so a stale cookie produces an immediate, loud error rather than hours of empty-chapter "successes":
+A new `local_story_archive/auth.py` module that catches dead-cookie failures at three points so a stale cookie produces an immediate, loud error rather than hours of empty-chapter "successes":
 
 1. **Pre-archive validation** — CLI archive commands and `/setup` POST probe Wattpad before doing any work (AUTH-01, AUTH-02, AUTH-03)
 2. **Mid-job detection** — `RateLimitedClient.get()` short-circuits on 401/403 so a cookie that goes bad mid-archive aborts the job loudly instead of silently failing every chapter (AUTH-04)
 3. **Atomic cookie persistence** — `/setup` POST writes `_config.toml` via tmp + `os.replace()` so a crash during a write never leaves a zero-byte or partial config (AUTH-05)
 
-In scope: new `wattpad_crawler/auth.py` (validate_cookie, AuthError, AuthFailedError); CLI hook in archive/library/list/url branches in `cli.py`; updates to `web/routes.py` setup_post + `_save_cookie()`; updates to `client.py:RateLimitedClient.get()`; updates to `archive_story()` re-raise behavior + new `auth.failed` progress event; setup.html template addition for error banner + masked attempted cookie.
+In scope: new `local_story_archive/auth.py` (validate_cookie, AuthError, AuthFailedError); CLI hook in archive/library/list/url branches in `cli.py`; updates to `web/routes.py` setup_post + `_save_cookie()`; updates to `client.py:RateLimitedClient.get()`; updates to `archive_story()` re-raise behavior + new `auth.failed` progress event; setup.html template addition for error banner + masked attempted cookie.
 
 Out of scope: cookie refresh / re-login automation (AUTH-V2-01); persisting auth status to manifest; OS-keyring credential storage; circuit-breakers (Phase 3); in-story parallelism (Phase 4); streaming renders / integration test (Phase 5); switching to async httpx; cover-fetch auth handling (covers tolerate failures already per Phase 1).
 
@@ -25,7 +25,7 @@ Out of scope: cookie refresh / re-login automation (AUTH-V2-01); persisting auth
 
 - **D-01:** `validate_cookie(client: RateLimitedClient) -> None` probes a **single canonical endpoint** — researcher confirms the exact path (default candidate: `GET https://www.wattpad.com/api/v3/users/me`, flagged as "verify during Phase 2 implementation" in STATE.md). One probe site means one place to update if Wattpad changes endpoints.
 - **D-02:** Auth failure signals are **strict**: HTTP 401, HTTP 403, and 3xx redirects whose `Location` header points at `/login` (or similar). Anything else — network errors (`httpx.RequestError`), timeouts, 5xx — propagates as its own exception type. Don't conflate transport with auth.
-- **D-03:** **Two error classes**, both in `wattpad_crawler/auth.py`:
+- **D-03:** **Two error classes**, both in `local_story_archive/auth.py`:
   - `class AuthError(Exception)` — raised by `validate_cookie()` at startup / `/setup` POST. Base class.
   - `class AuthFailedError(AuthError)` — raised by `RateLimitedClient.get()` mid-job on 401/403. Subclass so callers can `except AuthError` (catches both) or `except AuthFailedError` (catches only the mid-job variant). Matches REQUIREMENTS.md AUTH-01 / AUTH-04 wording.
 - **D-04:** `validate_cookie()` makes the probe via the **existing `RateLimitedClient` with `max_attempts=1`**. Reuses the configured cookie / user-agent / token bucket; doesn't burn retries on a probe; no duplicate httpx setup. One token consumed per probe — negligible.
@@ -105,22 +105,22 @@ None — `gsd-tools todo match-phase 2` returned zero matches.
 
 ### Codebase intel
 
-- `.planning/codebase/CONCERNS.md` §"Cookie expiration not enforced" — origin of all five AUTH-* requirements; cites `wattpad_crawler/client.py:13-20` and `wattpad_crawler/web/routes.py:54-76` as fix sites
+- `.planning/codebase/CONCERNS.md` §"Cookie expiration not enforced" — origin of all five AUTH-* requirements; cites `local_story_archive/client.py:13-20` and `local_story_archive/web/routes.py:54-76` as fix sites
 - `.planning/codebase/CONCERNS.md` §"Config file can be corrupted by concurrent writes" — origin of AUTH-05; recommends "atomic write pattern (write to temp, then rename)"
 - `.planning/codebase/CONVENTIONS.md` §"Naming Patterns", §"Error Handling" — custom exceptions inherit directly from `Exception`; pipe-syntax unions; `_lowercase` for module-level private constants
-- `.planning/codebase/STRUCTURE.md` §"Where to Add New Code" — top-level package modules house cross-cutting concerns; `wattpad_crawler/auth.py` is the right home for D-23
+- `.planning/codebase/STRUCTURE.md` §"Where to Add New Code" — top-level package modules house cross-cutting concerns; `local_story_archive/auth.py` is the right home for D-23
 - `.planning/codebase/ARCHITECTURE.md` — layered architecture; `RateLimitedClient.get()` is the choke point all API calls flow through (justifies D-13 single-detection-site choice)
 - `.planning/codebase/INTEGRATIONS.md`, `.planning/codebase/STACK.md` — httpx version + features in use; no async refactor needed for this phase
 
 ### Files to edit (verified during scout)
 
-- `wattpad_crawler/auth.py` — **NEW** module: `validate_cookie()`, `AuthError`, `AuthFailedError`, probe URL constant
-- `wattpad_crawler/client.py:56-89` — `RateLimitedClient.get()` — insert 401/403 fast-fail branch + `from wattpad_crawler.auth import AuthFailedError`
-- `wattpad_crawler/cli.py:72-106` — `main()` — call `_require_auth()` (or equivalent) at the top of `story` / `url` / `library` / `list` branches; catch `AuthError` and exit 2 with formatted message
-- `wattpad_crawler/jobs.py:114-152` — `archive_story()` per-part try/except — re-raise `AuthFailedError`; emit `auth.failed` event before re-raise
-- `wattpad_crawler/web/routes.py:22-45` — `_save_cookie()` — switch to tmp + `os.replace()`; add cleanup on exception
-- `wattpad_crawler/web/routes.py:69-76` — `setup_post()` — validate before save, three-category error handling, render setup.html with attempted_cookie_masked + error_kind/error_message on failure
-- `wattpad_crawler/web/templates/setup.html` — render an error banner if `error_kind` set; show `attempted_cookie_masked` next to or in place of `current_cookie_masked` on errored re-render
+- `local_story_archive/auth.py` — **NEW** module: `validate_cookie()`, `AuthError`, `AuthFailedError`, probe URL constant
+- `local_story_archive/client.py:56-89` — `RateLimitedClient.get()` — insert 401/403 fast-fail branch + `from local_story_archive.auth import AuthFailedError`
+- `local_story_archive/cli.py:72-106` — `main()` — call `_require_auth()` (or equivalent) at the top of `story` / `url` / `library` / `list` branches; catch `AuthError` and exit 2 with formatted message
+- `local_story_archive/jobs.py:114-152` — `archive_story()` per-part try/except — re-raise `AuthFailedError`; emit `auth.failed` event before re-raise
+- `local_story_archive/web/routes.py:22-45` — `_save_cookie()` — switch to tmp + `os.replace()`; add cleanup on exception
+- `local_story_archive/web/routes.py:69-76` — `setup_post()` — validate before save, three-category error handling, render setup.html with attempted_cookie_masked + error_kind/error_message on failure
+- `local_story_archive/web/templates/setup.html` — render an error banner if `error_kind` set; show `attempted_cookie_masked` next to or in place of `current_cookie_masked` on errored re-render
 
 ### Test fixture sites
 
@@ -157,7 +157,7 @@ None — `gsd-tools todo match-phase 2` returned zero matches.
 - **No try/except in `cli.py:main()` currently** — adding a top-level `except AuthError` block to format-and-exit-2 (D-08) is a small, contained addition. Watch the `finally: manifest.close(); client.close()` block — already correctly cleaning up, AuthError exit must run after cleanup.
 - **Templates in `web/templates/` use Jinja2 auto-escape** — the error banner content (D-10) and `attempted_cookie_masked` are auto-escaped by default, no XSS risk from showing back submitted text.
 - **JobRunner emits `__status__` sentinel after job completion** — `auth.failed` (D-17) emits BEFORE the failure propagates, so it lands before `__status__: failed` in the SSE stream — natural ordering.
-- **`from wattpad_crawler.X import Y` (absolute imports throughout)** — all new imports follow.
+- **`from local_story_archive.X import Y` (absolute imports throughout)** — all new imports follow.
 
 ### Integration Points
 

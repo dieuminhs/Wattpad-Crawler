@@ -378,10 +378,10 @@ pip uninstall pytest-vcr
 - PyPI ebooklib: https://pypi.org/project/EbookLib/ — version 0.20, October 26 2025 (verified)
 - PyPI respx: version 0.23.1 (verified via pip)
 - PyPI pytest-httpx: version 0.36.2 (verified via pip)
-- Existing codebase: `wattpad_crawler/client.py` — TokenBucket is already threading.Lock-safe (confirmed by source read)
-- Existing codebase: `wattpad_crawler/api/user.py` — library endpoint used for cookie validation recommendation (confirmed by source read)
+- Existing codebase: `local_story_archive/client.py` — TokenBucket is already threading.Lock-safe (confirmed by source read)
+- Existing codebase: `local_story_archive/api/user.py` — library endpoint used for cookie validation recommendation (confirmed by source read)
 - PROJECT.md constraint: "Concurrency: Stay single-process. In-story parallelism via `concurrent.futures.ThreadPoolExecutor`; rate limit shared via the existing `RateLimitedClient` token bucket." (directly constrains the parallelism decision)
 
 ---
-*Stack research for: Wattpad Crawler hardening milestone*
+*Stack research for: Local Story Archive hardening milestone*
 *Researched: 2026-05-03*

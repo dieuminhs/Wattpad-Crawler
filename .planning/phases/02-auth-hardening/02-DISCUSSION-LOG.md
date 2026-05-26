@@ -150,8 +150,8 @@
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| wattpad_crawler/auth.py (top-level) | Peer to client.py / config.py. Cross-cutting concern. | ✓ |
-| wattpad_crawler/api/auth.py | Under api/ — but auth.py exports classes used BY client.py, creates backwards layering. | |
+| local_story_archive/auth.py (top-level) | Peer to client.py / config.py. Cross-cutting concern. | ✓ |
+| local_story_archive/api/auth.py | Under api/ — but auth.py exports classes used BY client.py, creates backwards layering. | |
 | Split: AuthError in client.py, validate_cookie elsewhere | Two import sites. Ugly. | |
 
 ---

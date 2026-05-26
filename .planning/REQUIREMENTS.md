@@ -1,4 +1,4 @@
-# Requirements: Wattpad Crawler — Harden v1
+# Requirements: Local Story Archive — Harden v1
 
 **Defined:** 2026-05-03
 **Core Value:** Reliably preserve Wattpad stories the user cares about — without silent failures, dead cookies, or broken scrapers wasting hours of archive time.

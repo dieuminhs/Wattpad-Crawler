@@ -1,4 +1,4 @@
-# Wattpad Crawler
+# Local Story Archive
 
 Archive Wattpad stories â€” chapters, inline images, and all comments â€” to a local
 append-only folder before they get removed.
@@ -6,10 +6,10 @@ append-only folder before they get removed.
 
 ## Acceptable use
 
-Wattpad Crawler is a local-first personal archive tool. Use it only for content you own or have permission to archive, and keep the resulting files for personal backup/offline reading. Do not redistribute archived stories, sell downloaded content, or run this project as a hosted scraping service.
+Local Story Archive is a local-first personal archive tool. Use it only for content you own or have permission to archive, and keep the resulting files for personal backup/offline reading. Do not redistribute archived stories, sell downloaded content, or run this project as a hosted scraping service.
 ## Desktop App Preview
 
-A Tauri desktop wrapper is available for turning Wattpad Crawler into a native local application instead of a command-line workflow. It keeps the existing Python/FastAPI crawler backend and opens it in a native desktop window.
+A Tauri desktop wrapper is available for turning Local Story Archive into a native local application instead of a command-line workflow. It keeps the existing Python/FastAPI crawler backend and opens it in a native desktop window.
 
 See `docs/desktop.md` for the current development workflow and packaging plan.
 
@@ -22,7 +22,7 @@ npm run desktop:dev
 ## Install
 ```bash
 git clone <this-repo>
-cd "Wattpad Crawler"
+cd "Local Story Archive"
 python -m venv .venv
 # Windows (PowerShell):  .venv\Scripts\Activate.ps1
 # Windows (Bash):        source .venv/Scripts/activate
@@ -82,14 +82,14 @@ python3 --version
 
 If `python3 --version` prints `Python 3.11` or newer, continue.
 
-### 3. Download and install Wattpad Crawler
+### 3. Download and install Local Story Archive
 
 Choose a folder where you want the app files to live. `Downloads` is fine for most people.
 
 ```bash
 cd ~/Downloads
 git clone <this-repo>
-cd "Wattpad Crawler"
+cd "Local Story Archive"
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -101,7 +101,7 @@ If Terminal shows `(.venv)` at the start of the line, setup is active.
 ### 4. Create your local archive folder
 
 ```bash
-wattpad-crawler --output ./wattpad-archive status
+local-story-archive --output ./wattpad-archive status
 ```
 
 This creates a folder named `wattpad-archive`. That folder is where saved stories, covers, comments, EPUB files, HTML files, and settings go.
@@ -111,14 +111,14 @@ This creates a folder named `wattpad-archive`. That folder is where saved storie
 ### 5. Start the local web app
 
 ```bash
-wattpad-crawler --output ./wattpad-archive serve
+local-story-archive --output ./wattpad-archive serve
 ```
 
 Open <http://127.0.0.1:8000> in your browser. Keep Terminal open while using the web app. If you close Terminal, the web app stops.
 
 ### 6. Add your Wattpad login cookie
 
-Wattpad Crawler needs your Wattpad login cookie so it can save stories your account can read. Treat this cookie like a password. Do not share it.
+Local Story Archive needs your Wattpad login cookie so it can save stories your account can read. Treat this cookie like a password. Do not share it.
 
 1. Log in to Wattpad in Safari, Chrome, or Firefox.
 2. Open <http://127.0.0.1:8000/setup>.
@@ -139,9 +139,9 @@ Keep `_config.toml` private because it contains your Wattpad session cookie.
 Use the web app buttons to save your library, a reading list, or one story. If you are comfortable with commands, these do the same thing:
 
 ```bash
-wattpad-crawler --output ./wattpad-archive story 123456789
-wattpad-crawler --output ./wattpad-archive url https://www.wattpad.com/story/123456-some-title
-wattpad-crawler --output ./wattpad-archive library --user yourusername
+local-story-archive --output ./wattpad-archive story 123456789
+local-story-archive --output ./wattpad-archive url https://www.wattpad.com/story/123456-some-title
+local-story-archive --output ./wattpad-archive library --user yourusername
 ```
 
 ### 8. Back up your saved stories
@@ -152,8 +152,8 @@ Back up the whole `wattpad-archive` folder. Do not copy only the EPUB files. The
 
 - **`brew: command not found`:** install Homebrew from <https://brew.sh>, then reopen Terminal.
 - **`python: command not found`:** use `python3` before activating `.venv`; after activation, `python` should work.
-- **`wattpad-crawler: command not found`:** run `cd ~/Downloads/Wattpad\ Crawler`, then `source .venv/bin/activate`.
-- **Web app will not open:** make sure Terminal is still running `wattpad-crawler --output ./wattpad-archive serve`.
+- **`local-story-archive: command not found`:** run `cd ~/Downloads/Local\ Story\ Archive`, then `source .venv/bin/activate`.
+- **Web app will not open:** make sure Terminal is still running `local-story-archive --output ./wattpad-archive serve`.
 - **Private stories fail:** refresh your Wattpad `token` cookie in the Setup page or `./wattpad-archive/_config.toml`.
 - **Moving to a new Mac:** copy the full `wattpad-archive` folder.
 
@@ -161,7 +161,7 @@ Back up the whole `wattpad-archive` folder. Do not copy only the EPUB files. The
 
 1. Run the tool once to create a default config:
    ```bash
-   wattpad-crawler --output ./wattpad-archive status
+   local-story-archive --output ./wattpad-archive status
    ```
 2. Open `./wattpad-archive/_config.toml` in a text editor.
 3. Get your Wattpad session cookie:
@@ -175,20 +175,20 @@ Back up the whole `wattpad-archive` folder. Do not copy only the EPUB files. The
 
 ```bash
 # Archive everything in your library
-wattpad-crawler library --user yourusername
+local-story-archive library --user yourusername
 
 # Archive a reading list (by ID â€” see lists in your Wattpad profile URL)
-wattpad-crawler list <list-id>
+local-story-archive list <list-id>
 
 # Archive a single story
-wattpad-crawler story 123456789
-wattpad-crawler url https://www.wattpad.com/story/123456-some-title
+local-story-archive story 123456789
+local-story-archive url https://www.wattpad.com/story/123456-some-title
 
 # Show status of what's been archived
-wattpad-crawler status
+local-story-archive status
 
 # Verbose logging (shows every fetch)
-wattpad-crawler -v library --user yourusername
+local-story-archive -v library --user yourusername
 ```
 
 Re-running is safe and incremental â€” already-downloaded chapters are skipped, only
@@ -200,7 +200,7 @@ never deletes a file, even if the remote story is removed from Wattpad.
 For a friendlier experience, run the local web UI:
 
 ```bash
-wattpad-crawler --output ./wattpad-archive serve
+local-story-archive --output ./wattpad-archive serve
 ```
 
 Then open <http://127.0.0.1:8000> in your browser. Features:
@@ -216,7 +216,7 @@ The web UI calls the same code as the CLI â€” `_state.sqlite` is the single
 To bind to all interfaces (e.g. for a homelab):
 
 ```bash
-wattpad-crawler serve --host 127.0.0.1 --port 8081
+local-story-archive serve --host 127.0.0.1 --port 8081
 ```
 
 ## Output Layout
@@ -261,7 +261,7 @@ wattpad-archive/
 pip install -e ".[dev]"
 pytest                    # full unit suite
 pytest -v                 # verbose
-ruff check wattpad_crawler tests
+ruff check local_story_archive tests
 ```
 
 The integration test is skipped by default and requires a vcrpy cassette to be recorded against a real Wattpad public story (instructions in `tests/integration/test_end_to_end.py`).

@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from wattpad_crawler.archive.health import check_story_archive
-from wattpad_crawler.web.library_browser import scan_library
+from local_story_archive.archive.health import check_story_archive
+from local_story_archive.web.library_browser import scan_library
 
 
 def _write_metadata(story_dir: Path, *, cover_url: str = "") -> dict:

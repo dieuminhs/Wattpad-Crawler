@@ -8,7 +8,7 @@
 
 Phase 1 lands six surgical hardening fixes: depth-cap on comment-reply recursion (REL-01), event-deque cap on `Job.events` (REL-02), pruning of `JobManager._jobs` (REL-03), `RenderError` when all three renderers fail (REL-04), `nh3` paragraph-HTML sanitization at extract-time (SAN-01), and `nh3` added to `pyproject.toml` (SAN-02). Every locked decision in CONTEXT.md is implementable with the existing `nh3 0.3.x` API surface and standard library primitives.
 
-The single non-trivial external integration is `nh3`. Its 0.3.x API exposes both `nh3.clean(html, ...)` and the reusable `nh3.Cleaner(...)` instance — both accept identical kwargs. For Phase 1 the planner should use `nh3.Cleaner` constructed once at module scope in `wattpad_crawler/scrape/chapter_html.py` and reuse across the per-paragraph loop; this is the documented idiomatic pattern for fragment-by-fragment sanitization with a fixed allowlist. The required `data-p-id` attribute can be allowed cleanly through the `attributes={"*": {"data-p-id"}}` parameter (universal-tag allowlist), and `url_schemes` defaulting to ammonia's safe-scheme list (which includes `http` and `https`) handles D-02's URL validation without further configuration — disallowed schemes strip the attribute, preserving the link text.
+The single non-trivial external integration is `nh3`. Its 0.3.x API exposes both `nh3.clean(html, ...)` and the reusable `nh3.Cleaner(...)` instance — both accept identical kwargs. For Phase 1 the planner should use `nh3.Cleaner` constructed once at module scope in `local_story_archive/scrape/chapter_html.py` and reuse across the per-paragraph loop; this is the documented idiomatic pattern for fragment-by-fragment sanitization with a fixed allowlist. The required `data-p-id` attribute can be allowed cleanly through the `attributes={"*": {"data-p-id"}}` parameter (universal-tag allowlist), and `url_schemes` defaulting to ammonia's safe-scheme list (which includes `http` and `https`) handles D-02's URL validation without further configuration — disallowed schemes strip the attribute, preserving the link text.
 
 **Primary recommendation:** Module-scope `nh3.Cleaner` instance in `chapter_html.py`, called inside the existing `for para in para_els:` loop on the `decode_contents()` output before assignment to `paragraphs[i]["html"]`. All six requirements are implementable as additive changes — no refactor of the archive pipeline required.
 
@@ -21,7 +21,7 @@ The single non-trivial external integration is `nh3`. Its 0.3.x API exposes both
 - **D-01:** Allowlist is reading-rich — tags: `img`, `br`, `b`, `i`, `em`, `strong`, `u`, `a`. Strips bold/italic markup is **not** acceptable for archived reading experience.
 - **D-02:** Per-tag attrs: `img[src, alt]`, `a[href]` (validated to `http://` or `https://` only — non-conforming URLs strip the attribute, leaving plain text). All elements may carry `data-p-id` (must be in nh3's `attributes` allowlist explicitly because nh3 strips `data-*` by default).
 - **D-03:** `class` and `style` attributes are **stripped from every tag**. Renderers use the project's own CSS/EPUB stylesheet anyway. Smaller XSS surface.
-- **D-04:** Sanitization runs **inside `extract_chapter()`** in `wattpad_crawler/scrape/chapter_html.py` — each `paragraphs[i]["html"]` field passes through `nh3.clean()` before being added to `ChapterContent`. Stored JSON is already clean; renderers consume pre-sanitized data.
+- **D-04:** Sanitization runs **inside `extract_chapter()`** in `local_story_archive/scrape/chapter_html.py` — each `paragraphs[i]["html"]` field passes through `nh3.clean()` before being added to `ChapterContent`. Stored JSON is already clean; renderers consume pre-sanitized data.
 - **D-05:** Comment `body` text is **not** sanitized in this phase — REQUIREMENTS.md SAN-01 names "paragraph HTML" specifically; comment-injection is deferred. Comments in EPUB output are escaped at render time (already true).
 
 **Event-cap eviction (REL-02):**
@@ -33,14 +33,14 @@ The single non-trivial external integration is `nh3`. Its 0.3.x API exposes both
 
 **Cap configurability (REL-01, REL-02, REL-03):**
 - **D-11:** All three caps are **module-level constants**, not Config-exposed:
-  - `_MAX_COMMENT_DEPTH = 10` in `wattpad_crawler/api/comments.py`
-  - `_MAX_EVENTS_PER_JOB = 1000` in `wattpad_crawler/web/runner.py`
-  - `_MAX_JOBS = 50` in `wattpad_crawler/web/runner.py`
+  - `_MAX_COMMENT_DEPTH = 10` in `local_story_archive/api/comments.py`
+  - `_MAX_EVENTS_PER_JOB = 1000` in `local_story_archive/web/runner.py`
+  - `_MAX_JOBS = 50` in `local_story_archive/web/runner.py`
 - **D-12:** `_parse_one(raw, depth=0, max_depth=_MAX_COMMENT_DEPTH)` — depth is a positional param so recursive calls can increment; `max_depth` is a keyword param defaulting to the module constant so tests can pass `max_depth=3` per call.
 - **D-13:** **JobManager pruning preserves running jobs:** when `create()` would push count over `_MAX_JOBS`, iterate `_order` from oldest forward and evict only jobs with `status in {done, failed}`. Running jobs are pinned. Cap may be temporarily exceeded if many jobs are running simultaneously.
 
 **Render failure & comment truncation (REL-04 + REL-01):**
-- **D-14:** New `RenderError(Exception)` lives in `wattpad_crawler/jobs.py` alongside `ResolveError`.
+- **D-14:** New `RenderError(Exception)` lives in `local_story_archive/jobs.py` alongside `ResolveError`.
 - **D-15:** `archive_story()` render section restructures to:
   1. Build `render_status: dict[str, Literal["ok", "failed"]]` covering txt/html/epub
   2. For each renderer: try → mark `ok`; except → mark `failed`, emit `render.failed` (existing event)
@@ -128,7 +128,7 @@ Then `pip install -e .` in the existing `.venv`. No optional-extra dance, no dev
 ### Recommended File Touch Map
 
 ```
-wattpad_crawler/
+local_story_archive/
 ├── api/
 │   └── comments.py          # REL-01: _MAX_COMMENT_DEPTH, _parse_one(depth, max_depth), tuple-return, warn-once-per-subtree
 ├── web/
@@ -283,7 +283,7 @@ This is a refactor/feature-addition phase, not a rename or string-replacement ph
 
 **What goes wrong:** `web/routes.py` is changed to expect `?after_seq=N`, but `templates/job.html` still emits `?after=N`. The route's `after_seq: int = 0` default kicks in, so every SSE connection replays the entire deque from seq 0 — looks like it works on small jobs, fails subtly on jobs that have evicted events (UI shows duplicate events).
 **Why it happens:** Two-line change spread across two files. Easy to forget the template.
-**How to avoid:** Plan must include `wattpad_crawler/web/templates/job.html` in `files_modified` (verified: only one `?after=` reference in the templates dir, line 30 of job.html). Verifier should grep for any remaining `?after=` in templates and static.
+**How to avoid:** Plan must include `local_story_archive/web/templates/job.html` in `files_modified` (verified: only one `?after=` reference in the templates dir, line 30 of job.html). Verifier should grep for any remaining `?after=` in templates and static.
 **Warning signs:** Job page shows the same event twice, or shows old events on every page reload.
 
 ### Pitfall 4: `_parse_one` recursion at depth limit drops the parent
@@ -385,8 +385,8 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.models import Comment
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.models import Comment
 
 logger = logging.getLogger(__name__)
 
@@ -695,7 +695,7 @@ def _nest(level: int) -> dict:
 
 
 def test_parse_one_caps_recursion_at_max_depth():
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
     raw = _nest(15)
     comment, truncated = _parse_one(raw, max_depth=10)
     assert comment is not None
@@ -712,9 +712,9 @@ def test_parse_one_caps_recursion_at_max_depth():
 
 def test_parse_comments_page_logs_warning_on_truncation(caplog):
     import logging
-    from wattpad_crawler.api.comments import parse_comments_page
+    from local_story_archive.api.comments import parse_comments_page
     raw = {"comments": [_nest(15)], "nextUrl": None}
-    with caplog.at_level(logging.WARNING, logger="wattpad_crawler.api.comments"):
+    with caplog.at_level(logging.WARNING, logger="local_story_archive.api.comments"):
         parsed, _ = parse_comments_page(raw)
     assert len(parsed) == 1
     assert any("truncat" in rec.message.lower() for rec in caplog.records)
@@ -722,7 +722,7 @@ def test_parse_comments_page_logs_warning_on_truncation(caplog):
 
 def test_parse_one_no_recursion_error_on_deep_chain():
     """30-level chain must not raise RecursionError even at default cap."""
-    from wattpad_crawler.api.comments import _parse_one
+    from local_story_archive.api.comments import _parse_one
     comment, truncated = _parse_one(_nest(30))
     assert comment is not None
     assert truncated is True
@@ -823,7 +823,7 @@ def test_extract_chapter_strips_class_and_style():
 # tests/unit/test_runner.py — new tests
 
 def test_job_events_capped_at_max_events_per_job(monkeypatch):
-    from wattpad_crawler.web import runner
+    from local_story_archive.web import runner
     monkeypatch.setattr(runner, "_MAX_EVENTS_PER_JOB", 1000)
     # Re-instantiate Job's deque with the patched cap by constructing a fresh one
     job = runner.Job(job_id="j1", kind="archive_story", args={})
@@ -851,7 +851,7 @@ def test_job_snapshot_events_uses_seq_filter():
 
 ```python
 def test_jobmanager_prunes_old_finished_jobs(monkeypatch):
-    from wattpad_crawler.web import runner
+    from local_story_archive.web import runner
     monkeypatch.setattr(runner, "_MAX_JOBS", 5)
     mgr = runner.JobManager()
     jobs = [mgr.create("k", {}) for _ in range(5)]
@@ -865,7 +865,7 @@ def test_jobmanager_prunes_old_finished_jobs(monkeypatch):
 
 
 def test_jobmanager_pruning_preserves_running_jobs(monkeypatch):
-    from wattpad_crawler.web import runner
+    from local_story_archive.web import runner
     monkeypatch.setattr(runner, "_MAX_JOBS", 3)
     mgr = runner.JobManager()
     j1 = mgr.create("k", {})  # will stay running
@@ -881,7 +881,7 @@ def test_jobmanager_pruning_preserves_running_jobs(monkeypatch):
 
 
 def test_jobmanager_overshoots_when_all_running(monkeypatch):
-    from wattpad_crawler.web import runner
+    from local_story_archive.web import runner
     monkeypatch.setattr(runner, "_MAX_JOBS", 3)
     mgr = runner.JobManager()
     js = [mgr.create("k", {}) for _ in range(5)]  # all pending
@@ -897,10 +897,10 @@ def test_jobmanager_overshoots_when_all_running(monkeypatch):
 def test_archive_story_raises_render_error_when_all_renderers_fail(
     output_dir: Path, monkeypatch,
 ):
-    from wattpad_crawler.jobs import RenderError
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.jobs import RenderError
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
@@ -933,9 +933,9 @@ def test_archive_story_partial_render_failure_does_not_raise(
     output_dir: Path, monkeypatch,
 ):
     """Two of three failing is partial — story.done with render_status, no RenderError."""
-    from wattpad_crawler.render import epub as render_epub_mod
-    from wattpad_crawler.render import html as render_html_mod
-    from wattpad_crawler.render import txt as render_txt_mod
+    from local_story_archive.render import epub as render_epub_mod
+    from local_story_archive.render import html as render_html_mod
+    from local_story_archive.render import txt as render_txt_mod
 
     cfg = Config(output_dir=output_dir)
     manifest = Manifest(output_dir).connect()
@@ -994,11 +994,11 @@ All three open questions surfaced during research were resolved during planning.
    - What we know: a single SSE connection has one `after_seq` from the client, and `last_seq` advances locally on the server side. A gap can only exist on the first poll — subsequent polls always have `last_seq` >= `oldest_seq` because we advance through every event we yield.
    - What's unclear: whether reconnection by the JS client (after a network blip) creates a *new* SSE handler with a fresh `gap_announced=False`, in which case the user could see two `events.evicted` for the same job. Probably fine — they reflect different points in time.
    - Recommendation: keep `gap_announced` as a per-stream bool. Document the reconnection behavior in a code comment.
-   - **RESOLVED:** Plan 03 (`01-03-PLAN.md`, after the merge of the SSE-rename task) follows this recommendation. The `event_gen` async generator inside `wattpad_crawler/web/routes.py:job_stream` declares `gap_announced = False` as a function-local variable; once the synthetic `events.evicted` event is yielded (or the gap check passes), `gap_announced` is set to `True` and the gap branch is never re-entered for the lifetime of that SSE connection. Reconnection creates a fresh `event_gen` invocation and re-evaluates the gap by design. A code comment in the handler documents this.
+   - **RESOLVED:** Plan 03 (`01-03-PLAN.md`, after the merge of the SSE-rename task) follows this recommendation. The `event_gen` async generator inside `local_story_archive/web/routes.py:job_stream` declares `gap_announced = False` as a function-local variable; once the synthetic `events.evicted` event is yielded (or the gap check passes), `gap_announced` is set to `True` and the gap branch is never re-entered for the lifetime of that SSE connection. Reconnection creates a fresh `event_gen` invocation and re-evaluates the gap by design. A code comment in the handler documents this.
 
 3. **`Job._next_seq` Jinja2 access** — accessing a leading-underscore attribute from a template feels weird.
    - Recommendation: rename to `next_seq: int = 0` (no leading underscore) or expose a property `@property def next_seq(self): return self._next_seq`. The attribute *is* used as part of the API surface to the template — leading underscore implies "internal" which is no longer accurate. **Suggest renaming to `next_seq`** in the plan; trivial cost, clearer intent.
-   - **RESOLVED:** Plan 03 (`01-03-PLAN.md`) follows this recommendation. The `Job` dataclass declares `next_seq: int = 0` as a public field (no leading underscore), and the file does not contain the substring `_next_seq` anywhere. Plan 05 (`01-05-PLAN.md`) consumes the public attribute via Jinja2 in `wattpad_crawler/web/templates/job.html` as `?after_seq={{ job.next_seq }}`.
+   - **RESOLVED:** Plan 03 (`01-03-PLAN.md`) follows this recommendation. The `Job` dataclass declares `next_seq: int = 0` as a public field (no leading underscore), and the file does not contain the substring `_next_seq` anywhere. Plan 05 (`01-05-PLAN.md`) consumes the public attribute via Jinja2 in `local_story_archive/web/templates/job.html` as `?after_seq={{ job.next_seq }}`.
 
 ## Project Constraints (from CLAUDE.md)
 

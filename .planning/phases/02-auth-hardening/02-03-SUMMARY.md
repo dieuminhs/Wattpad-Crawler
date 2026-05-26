@@ -6,18 +6,18 @@ tags: [auth, cli, gate, AUTH-02]
 dependency_graph:
   requires: ["02-01"]
   provides: [cli-auth-gate]
-  affects: [wattpad_crawler/cli.py, tests/unit/test_cli.py]
+  affects: [local_story_archive/cli.py, tests/unit/test_cli.py]
 tech_stack:
   added: []
   patterns: [monkeypatch-bypass, inner-try-except-with-outer-finally]
 key_files:
   created: []
   modified:
-    - wattpad_crawler/cli.py
+    - local_story_archive/cli.py
     - tests/unit/test_cli.py
 decisions:
   - "Inner try/except AuthError nested inside outer try/finally so cleanup always runs"
-  - "validate_cookie imported at module level into cli.py so monkeypatch works via wattpad_crawler.cli.validate_cookie"
+  - "validate_cookie imported at module level into cli.py so monkeypatch works via local_story_archive.cli.validate_cookie"
   - "Unused sys and MagicMock imports removed from plan template (ruff F401 auto-fix)"
 metrics:
   duration_minutes: 4
@@ -35,13 +35,13 @@ metrics:
 | Task | Name | Commit | Files |
 |------|------|--------|-------|
 | 0 | Migrate existing archive-branch tests to bypass auth gate | b243e97 | tests/unit/test_cli.py |
-| 1 | Add _require_auth + per-branch calls + AuthError catch + 4 new tests | b28b321 | wattpad_crawler/cli.py, tests/unit/test_cli.py |
+| 1 | Add _require_auth + per-branch calls + AuthError catch + 4 new tests | b28b321 | local_story_archive/cli.py, tests/unit/test_cli.py |
 
 ## What Was Built
 
-### wattpad_crawler/cli.py
+### local_story_archive/cli.py
 
-- Added `from wattpad_crawler.auth import AuthError, validate_cookie` at module level
+- Added `from local_story_archive.auth import AuthError, validate_cookie` at module level
 - Added `_require_auth(client: RateLimitedClient) -> None` helper (delegates to `validate_cookie`)
 - Modified `main()` dispatch block: inner `try/except AuthError` nested inside existing outer `try/finally`
 - `_require_auth(client)` called at the top of `story`, `url`, `library`, and `list` branches (4 occurrences)
@@ -52,7 +52,7 @@ metrics:
 
 **Task 0 — Locked migration (4 pre-existing tests):**
 
-Each of these received `monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)` as their first statement:
+Each of these received `monkeypatch.setattr("local_story_archive.cli.validate_cookie", lambda client: None)` as their first statement:
 1. `test_main_story_calls_archive_story`
 2. `test_main_url_command_resolves_then_archives`
 3. `test_main_library_calls_fetch_library_and_archive_many`
@@ -74,7 +74,7 @@ Each of these received `monkeypatch.setattr("wattpad_crawler.cli.validate_cookie
 pytest tests/unit/test_cli.py -x -q
 23 passed in 7.97s
 
-ruff check wattpad_crawler/cli.py tests/unit/test_cli.py
+ruff check local_story_archive/cli.py tests/unit/test_cli.py
 All checks passed!
 
 Quick cross-suite (128 tests):
@@ -113,7 +113,7 @@ None. Plan's threat register covered: T-02-XX (stderr message content) accepted 
 
 ## Self-Check: PASSED
 
-- [x] `wattpad_crawler/cli.py` exists and contains `_require_auth`
+- [x] `local_story_archive/cli.py` exists and contains `_require_auth`
 - [x] `tests/unit/test_cli.py` exists and contains all 4 new test functions
 - [x] Commits b243e97 and b28b321 exist in git log
 - [x] 23 tests pass, ruff clean

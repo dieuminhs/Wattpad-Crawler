@@ -1,8 +1,8 @@
 import sqlite3
 from pathlib import Path
 
-from wattpad_crawler.archive.compact import compact_archive
-from wattpad_crawler.cli import build_parser
+from local_story_archive.archive.compact import compact_archive
+from local_story_archive.cli import build_parser
 
 
 def _create_archive_db(output_dir: Path) -> None:

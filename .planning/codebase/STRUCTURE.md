@@ -5,7 +5,7 @@
 ## Directory Layout
 
 ```
-Wattpad Crawler/
+Local Story Archive/
 ├── .git/                                # Git repository
 ├── .planning/                           # GSD planning documents (generated)
 ├── .venv/                               # Python virtual environment
@@ -52,7 +52,7 @@ Wattpad Crawler/
 │                   ├── <slug>.epub
 │                   ├── <slug>.html
 │                   └── <slug>.txt
-├── wattpad_crawler/                     # Main source code package
+├── local_story_archive/                     # Main source code package
 │   ├── __init__.py
 │   ├── cli.py                           # CLI entry point & argument parser
 │   ├── client.py                        # RateLimitedClient (rate-limited HTTP)
@@ -101,11 +101,11 @@ Wattpad Crawler/
 
 ## Directory Purposes
 
-**wattpad_crawler/ (Source Root)**
+**local_story_archive/ (Source Root)**
 - Purpose: Main package directory; contains all runnable code
-- Python 3.11+ only; entry point via `wattpad_crawler.cli:main`
+- Python 3.11+ only; entry point via `local_story_archive.cli:main`
 
-**wattpad_crawler/api/**
+**local_story_archive/api/**
 - Purpose: Wattpad API v3 client layer
 - Contains:
   - `story.py`: Fetch story metadata + parse into Story/Part objects
@@ -114,7 +114,7 @@ Wattpad Crawler/
 - Key pattern: All functions accept RateLimitedClient, return dataclasses or dicts
 - Used by: `jobs.py` archive pipeline
 
-**wattpad_crawler/archive/**
+**local_story_archive/archive/**
 - Purpose: Persistent state tracking (Manifest) and atomic file I/O (Store)
 - `state.py`:
   - Manifest class: SQLite context manager, CRUD for stories/parts
@@ -129,7 +129,7 @@ Wattpad Crawler/
   - Safe path part sanitization (no path traversal)
 - Used by: Archive pipeline, web library scanner
 
-**wattpad_crawler/scrape/**
+**local_story_archive/scrape/**
 - Purpose: Parse HTML into structured chapter data
 - `chapter_html.py`:
   - `extract_chapter()`: BeautifulSoup parser that finds chapter text + images + paragraph IDs
@@ -138,7 +138,7 @@ Wattpad Crawler/
 - Dependency: beautifulsoup4, lxml
 - Used by: Archive pipeline (per-chapter)
 
-**wattpad_crawler/render/**
+**local_story_archive/render/**
 - Purpose: Generate output artifacts (EPUB, HTML, TXT) from archived parts
 - `txt.py`: Concatenate chapter text files into single TXT
 - `html.py`: Generate single-file HTML with styling (chapters as sections)
@@ -146,7 +146,7 @@ Wattpad Crawler/
 - Pattern: All take story_dir Path, read metadata.json + part files, write to output/
 - Used by: Archive pipeline (post-fetch, all formats)
 
-**wattpad_crawler/web/**
+**local_story_archive/web/**
 - Purpose: FastAPI-based local web UI
 - `app.py`: FastAPI instance factory; mounts static/templates, includes router, stashes state
 - `routes.py`: 10+ route handlers (setup, dashboard, library, reader, jobs)
@@ -185,50 +185,50 @@ Wattpad Crawler/
 
 **Entry Points:**
 
-- `wattpad_crawler/cli.py`: CLI entry point (argparse, subcommands: story, library, list, url, status, serve)
-- `wattpad_crawler/web/app.py`: Web app factory (FastAPI instance)
-- `wattpad_crawler/__init__.py`: Package init (empty)
+- `local_story_archive/cli.py`: CLI entry point (argparse, subcommands: story, library, list, url, status, serve)
+- `local_story_archive/web/app.py`: Web app factory (FastAPI instance)
+- `local_story_archive/__init__.py`: Package init (empty)
 
 **Configuration:**
 
-- `wattpad_crawler/config.py`: Config dataclass + load_config()
+- `local_story_archive/config.py`: Config dataclass + load_config()
 - `wattpad-archive/_config.toml`: User's cookie + rate limits (created on first run)
 
 **Core Pipeline:**
 
-- `wattpad_crawler/jobs.py`: archive_story(), archive_many(), resolve_story_id()
-- `wattpad_crawler/models.py`: Story, Part, Comment, status Literals
+- `local_story_archive/jobs.py`: archive_story(), archive_many(), resolve_story_id()
+- `local_story_archive/models.py`: Story, Part, Comment, status Literals
 
 **API Layer:**
 
-- `wattpad_crawler/api/story.py`: fetch_story() + parse_story()
-- `wattpad_crawler/api/user.py`: fetch_library(), fetch_list_story_ids()
-- `wattpad_crawler/api/comments.py`: fetch_inline_comments(), fetch_end_comments()
+- `local_story_archive/api/story.py`: fetch_story() + parse_story()
+- `local_story_archive/api/user.py`: fetch_library(), fetch_list_story_ids()
+- `local_story_archive/api/comments.py`: fetch_inline_comments(), fetch_end_comments()
 
 **HTTP Client:**
 
-- `wattpad_crawler/client.py`: RateLimitedClient, TokenBucket
+- `local_story_archive/client.py`: RateLimitedClient, TokenBucket
 
 **Archive Storage:**
 
-- `wattpad_crawler/archive/state.py`: Manifest (SQLite backend)
-- `wattpad_crawler/archive/store.py`: Atomic I/O, path layout
+- `local_story_archive/archive/state.py`: Manifest (SQLite backend)
+- `local_story_archive/archive/store.py`: Atomic I/O, path layout
 
 **Content Processing:**
 
-- `wattpad_crawler/scrape/chapter_html.py`: extract_chapter() (BeautifulSoup)
-- `wattpad_crawler/render/txt.py`: render_txt()
-- `wattpad_crawler/render/html.py`: render_html()
-- `wattpad_crawler/render/epub.py`: render_epub() (EbookLib)
+- `local_story_archive/scrape/chapter_html.py`: extract_chapter() (BeautifulSoup)
+- `local_story_archive/render/txt.py`: render_txt()
+- `local_story_archive/render/html.py`: render_html()
+- `local_story_archive/render/epub.py`: render_epub() (EbookLib)
 
 **Web UI:**
 
-- `wattpad_crawler/web/app.py`: build_app()
-- `wattpad_crawler/web/routes.py`: All route handlers
-- `wattpad_crawler/web/runner.py`: JobManager, JobRunner
-- `wattpad_crawler/web/library_browser.py`: scan_library()
-- `wattpad_crawler/web/templates/base.html`: Layout template
-- `wattpad_crawler/web/templates/*.html`: Page templates
+- `local_story_archive/web/app.py`: build_app()
+- `local_story_archive/web/routes.py`: All route handlers
+- `local_story_archive/web/runner.py`: JobManager, JobRunner
+- `local_story_archive/web/library_browser.py`: scan_library()
+- `local_story_archive/web/templates/base.html`: Layout template
+- `local_story_archive/web/templates/*.html`: Page templates
 
 **Testing:**
 
@@ -274,35 +274,35 @@ Wattpad Crawler/
 
 **New Feature (Archive Enhancement):**
 
-- Core logic: `wattpad_crawler/jobs.py` — modify `archive_story()` or add new function
-- API call: `wattpad_crawler/api/*.py` — add new endpoint fetcher
-- Storage: `wattpad_crawler/archive/store.py` — add write function if storing new files
-- State tracking: `wattpad_crawler/archive/state.py` — add Manifest CRUD method if tracking new data
+- Core logic: `local_story_archive/jobs.py` — modify `archive_story()` or add new function
+- API call: `local_story_archive/api/*.py` — add new endpoint fetcher
+- Storage: `local_story_archive/archive/store.py` — add write function if storing new files
+- State tracking: `local_story_archive/archive/state.py` — add Manifest CRUD method if tracking new data
 - Tests: `tests/unit/test_jobs.py`, `tests/unit/test_api_*.py`, `tests/unit/test_store.py`
 
 **New Web Route:**
 
-- Handler: `wattpad_crawler/web/routes.py` — add @router.get/post route
-- Template: `wattpad_crawler/web/templates/new_page.html`
-- CSS: `wattpad_crawler/web/static/style.css` (add new selectors)
+- Handler: `local_story_archive/web/routes.py` — add @router.get/post route
+- Template: `local_story_archive/web/templates/new_page.html`
+- CSS: `local_story_archive/web/static/style.css` (add new selectors)
 - Tests: `tests/unit/test_web_routes.py` — add test for route
 
 **New CLI Subcommand:**
 
-- Parser: `wattpad_crawler/cli.py` — add subparser to `build_parser()`
-- Handler: `wattpad_crawler/cli.py:main()` — add elif branch in argument dispatch
+- Parser: `local_story_archive/cli.py` — add subparser to `build_parser()`
+- Handler: `local_story_archive/cli.py:main()` — add elif branch in argument dispatch
 - Tests: `tests/unit/test_cli.py` — test parser + handler
 
 **New Data Model:**
 
-- Definition: `wattpad_crawler/models.py` — add @dataclass or Literal type
-- API parsing: `wattpad_crawler/api/*.py` — parse API response into model
-- Storage: `wattpad_crawler/archive/store.py` — serialize to JSON if persisting
+- Definition: `local_story_archive/models.py` — add @dataclass or Literal type
+- API parsing: `local_story_archive/api/*.py` — parse API response into model
+- Storage: `local_story_archive/archive/store.py` — serialize to JSON if persisting
 
 **New Render Format:**
 
-- Renderer: `wattpad_crawler/render/format_name.py` — implement `render_<format>()` function
-- Pipeline: `wattpad_crawler/jobs.py` — add to render loop in `archive_story()`
+- Renderer: `local_story_archive/render/format_name.py` — implement `render_<format>()` function
+- Pipeline: `local_story_archive/jobs.py` — add to render loop in `archive_story()`
 - Tests: `tests/unit/test_render_<format>.py`
 
 **Testing:**
@@ -317,13 +317,13 @@ Wattpad Crawler/
 **wattpad-archive/ (Runtime Archive):**
 
 - Purpose: Default local archive (user can override with --output)
-- Generated: Yes (created by first `wattpad-crawler` run)
+- Generated: Yes (created by first `local-story-archive` run)
 - Committed: No (in .gitignore)
 - Ownership: User; should never be modified by git operations
 - Safe to delete: Yes (recreated on next archive run, but data lost)
 - SQLite database: `_state.sqlite` with WAL mode (reader-writer safe)
 
-**wattpad_crawler/web/templates/ & static/:**
+**local_story_archive/web/templates/ & static/:**
 
 - Purpose: Jinja2 templates + CSS for web UI
 - Generated: No (hand-written)
@@ -331,7 +331,7 @@ Wattpad Crawler/
 - Included in wheel: Yes (via hatch.build.targets.wheel.force-include in pyproject.toml)
 - Note: Must be bundled with package for installed CLI to serve UI
 
-**.pytest_cache/, .ruff_cache/, wattpad_crawler/__pycache__/:**
+**.pytest_cache/, .ruff_cache/, local_story_archive/__pycache__/:**
 
 - Purpose: Caches from tools (pytest, ruff, Python bytecode)
 - Generated: Yes (auto-created on first run)

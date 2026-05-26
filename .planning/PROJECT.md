@@ -1,8 +1,8 @@
-# Wattpad Crawler
+# Local Story Archive
 
 ## What This Is
 
-A personal Python tool for archiving Wattpad stories — fetches metadata, chapters, and comments via Wattpad's unofficial API, stores them on disk in an append-only layout, and renders EPUB / HTML / TXT artifacts. Ships both a CLI (`wattpad-crawler`) and a local FastAPI web UI (dashboard, library browser, reader, live progress) for solo use on the owner's machine.
+A personal Python tool for archiving Wattpad stories — fetches metadata, chapters, and comments via Wattpad's unofficial API, stores them on disk in an append-only layout, and renders EPUB / HTML / TXT artifacts. Ships both a CLI (`local-story-archive`) and a local FastAPI web UI (dashboard, library browser, reader, live progress) for solo use on the owner's machine.
 
 ## Core Value
 

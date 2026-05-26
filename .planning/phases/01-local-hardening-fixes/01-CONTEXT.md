@@ -27,7 +27,7 @@ Out of scope: pipeline restructuring, parallel chapter fetch (Phase 4), circuit-
 - **D-01:** Allowlist is **reading-rich** — tags: `img`, `br`, `b`, `i`, `em`, `strong`, `u`, `a`. Strips bold/italic markup is **not** acceptable for archived reading experience.
 - **D-02:** Per-tag attrs: `img[src, alt]`, `a[href]` (validated to `http://` or `https://` only — non-conforming URLs strip the attribute, leaving plain text). All elements may carry `data-p-id` (must be in nh3's `attributes` allowlist explicitly because nh3 strips `data-*` by default).
 - **D-03:** `class` and `style` attributes are **stripped from every tag**. Renderers use the project's own CSS/EPUB stylesheet anyway. Smaller XSS surface.
-- **D-04:** Sanitization runs **inside `extract_chapter()`** in `wattpad_crawler/scrape/chapter_html.py` — each `paragraphs[i]["html"]` field passes through `nh3.clean()` before being added to `ChapterContent`. Stored JSON is already clean; renderers consume pre-sanitized data.
+- **D-04:** Sanitization runs **inside `extract_chapter()`** in `local_story_archive/scrape/chapter_html.py` — each `paragraphs[i]["html"]` field passes through `nh3.clean()` before being added to `ChapterContent`. Stored JSON is already clean; renderers consume pre-sanitized data.
 - **D-05:** Comment `body` text is **not** sanitized in this phase — REQUIREMENTS.md SAN-01 names "paragraph HTML" specifically; comment-injection is deferred. Comments in EPUB output are escaped at render time (already true).
 
 ### Event-cap eviction (REL-02)
@@ -41,16 +41,16 @@ Out of scope: pipeline restructuring, parallel chapter fetch (Phase 4), circuit-
 ### Cap configurability (REL-01, REL-02, REL-03)
 
 - **D-11:** All three caps are **module-level constants**, not Config-exposed:
-  - `_MAX_COMMENT_DEPTH = 10` in `wattpad_crawler/api/comments.py`
-  - `_MAX_EVENTS_PER_JOB = 1000` in `wattpad_crawler/web/runner.py`
-  - `_MAX_JOBS = 50` in `wattpad_crawler/web/runner.py`
+  - `_MAX_COMMENT_DEPTH = 10` in `local_story_archive/api/comments.py`
+  - `_MAX_EVENTS_PER_JOB = 1000` in `local_story_archive/web/runner.py`
+  - `_MAX_JOBS = 50` in `local_story_archive/web/runner.py`
   Tests monkeypatch the constants for unit testing. No TOML plumbing because no realistic solo-user reason to tune these.
 - **D-12:** `_parse_one(raw, depth=0, max_depth=_MAX_COMMENT_DEPTH)` — depth is a positional param so recursive calls can increment; `max_depth` is a keyword param defaulting to the module constant so tests can pass `max_depth=3` per call. Matches REQUIREMENTS.md REL-01 wording.
 - **D-13:** **JobManager pruning preserves running jobs:** when `create()` would push count over `_MAX_JOBS`, iterate `_order` from oldest forward and evict only jobs with `status in {done, failed}`. Running jobs are pinned. Cap may be temporarily exceeded if many jobs are running simultaneously — that's better than orphaning a JobRunner thread that's still emitting events to a dropped Job.
 
 ### Render failure & comment truncation (REL-04 + REL-01)
 
-- **D-14:** New `RenderError(Exception)` lives in `wattpad_crawler/jobs.py` alongside `ResolveError`. Single-purpose: signals "all renderers failed for this story."
+- **D-14:** New `RenderError(Exception)` lives in `local_story_archive/jobs.py` alongside `ResolveError`. Single-purpose: signals "all renderers failed for this story."
 - **D-15:** `archive_story()` render section restructures to:
   1. Build `render_status: dict[str, Literal["ok", "failed"]]` covering txt/html/epub
   2. For each renderer: try → mark `ok`; except → mark `failed`, emit `render.failed` (existing event)
@@ -92,14 +92,14 @@ None — `gsd-tools todo match-phase 1` returned zero matches.
 
 ### Files to edit (verified in scout)
 
-- `wattpad_crawler/api/comments.py:12-33` — `_parse_one()` recursion site for REL-01
-- `wattpad_crawler/web/runner.py:18-41` — `Job` dataclass, `events` field, `emit()` for REL-02
-- `wattpad_crawler/web/runner.py:62-65` — `snapshot_events()` for SSE seq migration
-- `wattpad_crawler/web/runner.py:72-94` — `JobManager` for REL-03
-- `wattpad_crawler/web/routes.py` — SSE handler that consumes `?after=N` for D-09 rename
-- `wattpad_crawler/jobs.py:131-142` — render loop for REL-04
-- `wattpad_crawler/jobs.py:146-147` — `ResolveError` defined here; `RenderError` joins it
-- `wattpad_crawler/scrape/chapter_html.py:35-45` — paragraph extraction site for SAN-01
+- `local_story_archive/api/comments.py:12-33` — `_parse_one()` recursion site for REL-01
+- `local_story_archive/web/runner.py:18-41` — `Job` dataclass, `events` field, `emit()` for REL-02
+- `local_story_archive/web/runner.py:62-65` — `snapshot_events()` for SSE seq migration
+- `local_story_archive/web/runner.py:72-94` — `JobManager` for REL-03
+- `local_story_archive/web/routes.py` — SSE handler that consumes `?after=N` for D-09 rename
+- `local_story_archive/jobs.py:131-142` — render loop for REL-04
+- `local_story_archive/jobs.py:146-147` — `ResolveError` defined here; `RenderError` joins it
+- `local_story_archive/scrape/chapter_html.py:35-45` — paragraph extraction site for SAN-01
 - `pyproject.toml` lines 10-19 — dependencies block for SAN-02 (`nh3>=0.3,<0.4`)
 
 ### External (researcher to fetch)

@@ -6,14 +6,14 @@ tags: [auth, fast-fail, rate-limited-client, tdd]
 dependency_graph:
   requires: [02-01]
   provides: [AUTH-04-partial]
-  affects: [wattpad_crawler/client.py, tests/unit/test_client.py]
+  affects: [local_story_archive/client.py, tests/unit/test_client.py]
 tech_stack:
   added: []
   patterns: [deferred-function-scope-import, tdd-red-green]
 key_files:
   created: []
   modified:
-    - wattpad_crawler/client.py
+    - local_story_archive/client.py
     - tests/unit/test_client.py
 decisions:
   - Deferred function-scope import of AuthFailedError inside get() to break auth.py <-> client.py circular dependency
@@ -36,18 +36,18 @@ Added 401/403/400-PermissionDenied fast-fail detection in `RateLimitedClient.get
 
 | Task | Name | Commit | Files |
 |------|------|--------|-------|
-| 1 | Insert 401/403/400-PermissionDenied fast-fail branch + 5 AUTH-04 tests | 11177b7 | wattpad_crawler/client.py, tests/unit/test_client.py |
+| 1 | Insert 401/403/400-PermissionDenied fast-fail branch + 5 AUTH-04 tests | 11177b7 | local_story_archive/client.py, tests/unit/test_client.py |
 
 ## What Was Built
 
-### wattpad_crawler/client.py
+### local_story_archive/client.py
 
 Inserted a new auth fast-fail branch between line 72 (`last_exc = None`) and the existing 429 branch (now at line 120). The branch has two parts:
 
 1. **401/403 detection** (inserted at line 80): Immediately raises `AuthFailedError` with `status_code=resp.status_code` and `url=url`. No retry.
 2. **HTTP 400 + PermissionDenied detection** (inserted at line 99): Parses response JSON; raises `AuthFailedError(status_code=400, url=url)` only if `error_type == "PermissionDenied"` or `error_code == 1018`. Plain HTTP 400 (e.g. `InvalidEndpoint=1001`) falls through to existing `raise_for_status()`.
 
-Both branches use a **deferred function-scope import** (`from wattpad_crawler.auth import AuthFailedError` inside `get()`) to avoid the circular import that would arise from a module-level import (auth.py uses `RateLimitedClient` under `TYPE_CHECKING`).
+Both branches use a **deferred function-scope import** (`from local_story_archive.auth import AuthFailedError` inside `get()`) to avoid the circular import that would arise from a module-level import (auth.py uses `RateLimitedClient` under `TYPE_CHECKING`).
 
 **Insertion line numbers (final):**
 - `if resp.status_code in (401, 403):` → line 80
@@ -57,7 +57,7 @@ Both branches use a **deferred function-scope import** (`from wattpad_crawler.au
 
 ### tests/unit/test_client.py
 
-Added `from wattpad_crawler.auth import AuthFailedError` import (line 8) and 5 new tests appended after the existing 16 tests:
+Added `from local_story_archive.auth import AuthFailedError` import (line 8) and 5 new tests appended after the existing 16 tests:
 
 1. `test_get_does_not_retry_on_401` — 401 raises AuthFailedError, handler called exactly once
 2. `test_get_raises_on_403` — 403 raises AuthFailedError, handler called exactly once
@@ -76,13 +76,13 @@ pytest tests/unit/test_client.py -x -q
 pytest tests/unit/test_auth.py tests/unit/test_client.py -x -q
 28 passed in 26.85s
 
-ruff check wattpad_crawler/client.py tests/unit/test_client.py
+ruff check local_story_archive/client.py tests/unit/test_client.py
 All checks passed!
 ```
 
 T-02-02 audit — logger calls in client.py contain no sensitive data:
 ```
-grep -i -E "logger\.(warning|info|debug|error)" wattpad_crawler/client.py | grep -i -E "(token|cookie|cookies|body|resp\.text|resp\.content)"
+grep -i -E "logger\.(warning|info|debug|error)" local_story_archive/client.py | grep -i -E "(token|cookie|cookies|body|resp\.text|resp\.content)"
 (no matches — CLEAN)
 ```
 
@@ -100,7 +100,7 @@ No new threat surface introduced. The two new logger.warning calls log only `url
 
 ## Self-Check: PASSED
 
-- `wattpad_crawler/client.py` exists and contains all required substrings
+- `local_story_archive/client.py` exists and contains all required substrings
 - `tests/unit/test_client.py` exists and defines all 5 required test functions
 - Commit `11177b7` exists: `git log --oneline | grep 11177b7` confirms
 - All 21 tests pass; ruff clean

@@ -236,5 +236,5 @@ Patterns that arise naturally when hardening a scraper but are wrong scope here.
 
 ---
 
-*Feature research for: Wattpad Crawler — Harden v1 milestone*
+*Feature research for: Local Story Archive — Harden v1 milestone*
 *Researched: 2026-05-03*

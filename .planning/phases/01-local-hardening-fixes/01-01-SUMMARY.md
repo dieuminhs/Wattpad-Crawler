@@ -29,7 +29,7 @@ key-files:
     - ".planning/phases/01-local-hardening-fixes/01-01-SUMMARY.md"
   modified:
     - "pyproject.toml (added nh3>=0.3,<0.4 dependency)"
-    - "wattpad_crawler/scrape/chapter_html.py (added _PARAGRAPH_CLEANER + per-paragraph .clean call)"
+    - "local_story_archive/scrape/chapter_html.py (added _PARAGRAPH_CLEANER + per-paragraph .clean call)"
     - "tests/unit/test_chapter_html.py (added 12 sanitization tests)"
 
 key-decisions:
@@ -62,7 +62,7 @@ completed: 2026-05-03
 - **Started:** 2026-05-03T13:06:57+07:00
 - **Completed:** 2026-05-03T13:09:30+07:00
 - **Tasks:** 3 of 3
-- **Files modified:** 3 (pyproject.toml, wattpad_crawler/scrape/chapter_html.py, tests/unit/test_chapter_html.py)
+- **Files modified:** 3 (pyproject.toml, local_story_archive/scrape/chapter_html.py, tests/unit/test_chapter_html.py)
 
 ## Accomplishments
 
@@ -102,7 +102,7 @@ _Note: Task 2 was marked tdd="true" in the plan, but the plan structures the imp
 ## Files Created/Modified
 
 - `pyproject.toml` — added `"nh3>=0.3,<0.4",` to `[project] dependencies` (1 line); dev dependencies block untouched
-- `wattpad_crawler/scrape/chapter_html.py` — added `import nh3`, `_PARAGRAPH_CLEANER = nh3.Cleaner(...)` module-scope constant, and `clean_html = _PARAGRAPH_CLEANER.clean(raw_html)` call inside the `for para in para_els:` loop; ruff format applied
+- `local_story_archive/scrape/chapter_html.py` — added `import nh3`, `_PARAGRAPH_CLEANER = nh3.Cleaner(...)` module-scope constant, and `clean_html = _PARAGRAPH_CLEANER.clean(raw_html)` call inside the `for para in para_els:` loop; ruff format applied
 - `tests/unit/test_chapter_html.py` — appended 12 new test functions covering the full D-01..D-04 surface; existing 7 tests untouched
 - `.planning/phases/01-local-hardening-fixes/01-01-SUMMARY.md` — this file
 
@@ -134,7 +134,7 @@ All decisions were locked upstream in `01-CONTEXT.md` (D-01 through D-04). No ne
 
 ## Issues Encountered
 
-- The worktree does not contain its own `.venv`; it shares the parent project's `.venv` at `D:\Dev\Wattpad Crawler\.venv`. Used `D:/Dev/Wattpad Crawler/.venv/Scripts/python.exe` directly for all installs/tests/lints. No GSD-tools issue — just an environment note for future worktree-based plans in this repo.
+- The worktree does not contain its own `.venv`; it shares the parent project's `.venv` at `D:\Dev\Local Story Archive\.venv`. Used `D:/Dev/Local Story Archive/.venv/Scripts/python.exe` directly for all installs/tests/lints. No GSD-tools issue — just an environment note for future worktree-based plans in this repo.
 - pytest-vcr is the configured VCR plugin (`pytest-vcr 1.0.2` per pyproject dev deps); no live HTTP was hit by these unit tests, so no cassette interaction occurred.
 
 ## Threat Flags
@@ -165,7 +165,7 @@ None — no external service configuration required. nh3 is a pure Python wheel 
 Verified before write-out:
 
 - File `pyproject.toml` exists and contains `nh3>=0.3,<0.4` (line 19)
-- File `wattpad_crawler/scrape/chapter_html.py` exists and contains `_PARAGRAPH_CLEANER = nh3.Cleaner(`, `_PARAGRAPH_CLEANER.clean(raw_html)`, `"a": {"href"}`, `"*": {"data-p-id"}`; does NOT contain `generic_attribute_prefixes` or `url_schemes=`
+- File `local_story_archive/scrape/chapter_html.py` exists and contains `_PARAGRAPH_CLEANER = nh3.Cleaner(`, `_PARAGRAPH_CLEANER.clean(raw_html)`, `"a": {"href"}`, `"*": {"data-p-id"}`; does NOT contain `generic_attribute_prefixes` or `url_schemes=`
 - File `tests/unit/test_chapter_html.py` exists and contains all 12 required test function definitions
 - Commits `2a70bf1`, `d408593`, `ce4cefa` exist on the worktree branch (verified via `git log 314bae4..HEAD`)
 - All 19 tests pass; ruff check clean on both modified source files; `python -c "import nh3; assert hasattr(nh3, 'Cleaner')"` exits 0

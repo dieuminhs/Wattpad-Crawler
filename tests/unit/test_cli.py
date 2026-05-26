@@ -3,9 +3,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from wattpad_crawler.auth import AuthError
-from wattpad_crawler.cli import build_parser, main
-from wattpad_crawler.jobs import ResolveError
+from local_story_archive.auth import AuthError
+from local_story_archive.cli import build_parser, main
+from local_story_archive.jobs import ResolveError
 
 
 def test_parser_has_expected_subcommands():
@@ -80,14 +80,14 @@ def test_main_invalid_config_exits_2_without_traceback(output_dir, capsys):
 
 
 def test_main_story_calls_archive_story(output_dir, monkeypatch):
-    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
+    monkeypatch.setattr("local_story_archive.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_archive_story(cfg, client, manifest, sid, deps=None):
         captured["sid"] = sid
         captured["out"] = cfg.output_dir
 
-    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.cli.archive_story", fake_archive_story)
     rc = main(["--output", str(output_dir), "story", "123456"])
     assert rc == 0
     assert captured["sid"] == "123456"
@@ -95,13 +95,13 @@ def test_main_story_calls_archive_story(output_dir, monkeypatch):
 
 
 def test_main_url_command_resolves_then_archives(output_dir, monkeypatch):
-    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
+    monkeypatch.setattr("local_story_archive.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_archive_story(cfg, client, manifest, sid, deps=None):
         captured["sid"] = sid
 
-    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.cli.archive_story", fake_archive_story)
     rc = main([
         "--output", str(output_dir),
         "url", "https://www.wattpad.com/story/789-foo-bar",
@@ -117,10 +117,10 @@ def test_main_url_command_accepts_numeric_wattpad_paths(output_dir, monkeypatch)
         captured["sid"] = sid
 
     monkeypatch.setattr(
-        "wattpad_crawler.cli.resolve_url_story_id",
+        "local_story_archive.cli.resolve_url_story_id",
         lambda client, target: "123456789",
     )
-    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.cli.archive_story", fake_archive_story)
     rc = main(["--output", str(output_dir), "url", "https://www.wattpad.com/1529869290"])
 
     assert rc == 0
@@ -138,7 +138,7 @@ def test_main_direct_story_commands_do_not_run_auth_probe(output_dir, monkeypatc
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "wattpad_crawler.cli.validate_cookie",
+        "local_story_archive.cli.validate_cookie",
         lambda client: (_ for _ in ()).throw(AuthError("probe rejected")),
     )
     captured = {}
@@ -146,7 +146,7 @@ def test_main_direct_story_commands_do_not_run_auth_probe(output_dir, monkeypatc
     def fake_archive_story(cfg, client, manifest, sid, deps=None):
         captured["sid"] = sid
 
-    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.cli.archive_story", fake_archive_story)
 
     rc = main(["--output", str(output_dir), *cmd_args])
 
@@ -155,7 +155,7 @@ def test_main_direct_story_commands_do_not_run_auth_probe(output_dir, monkeypatc
 
 
 def test_main_library_calls_fetch_library_and_archive_many(output_dir, monkeypatch):
-    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
+    monkeypatch.setattr("local_story_archive.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_fetch_library(client, username):
@@ -166,8 +166,8 @@ def test_main_library_calls_fetch_library_and_archive_many(output_dir, monkeypat
         captured["ids"] = ids
         return {sid: "done" for sid in ids}
 
-    monkeypatch.setattr("wattpad_crawler.api.user.fetch_library", fake_fetch_library)
-    monkeypatch.setattr("wattpad_crawler.cli.archive_many", fake_archive_many)
+    monkeypatch.setattr("local_story_archive.api.user.fetch_library", fake_fetch_library)
+    monkeypatch.setattr("local_story_archive.cli.archive_many", fake_archive_many)
     rc = main(["--output", str(output_dir), "library", "--user", "alice"])
     assert rc == 0
     assert captured["user"] == "alice"
@@ -175,7 +175,7 @@ def test_main_library_calls_fetch_library_and_archive_many(output_dir, monkeypat
 
 
 def test_main_list_calls_fetch_list_and_archive_many(output_dir, monkeypatch):
-    monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None)
+    monkeypatch.setattr("local_story_archive.cli.validate_cookie", lambda client: None)
     captured = {}
 
     def fake_fetch_list(client, lid):
@@ -186,8 +186,8 @@ def test_main_list_calls_fetch_list_and_archive_many(output_dir, monkeypatch):
         captured["ids"] = ids
         return {}
 
-    monkeypatch.setattr("wattpad_crawler.api.user.fetch_list_story_ids", fake_fetch_list)
-    monkeypatch.setattr("wattpad_crawler.cli.archive_many", fake_archive_many)
+    monkeypatch.setattr("local_story_archive.api.user.fetch_list_story_ids", fake_fetch_list)
+    monkeypatch.setattr("local_story_archive.cli.archive_many", fake_archive_many)
     rc = main(["--output", str(output_dir), "list", "L1"])
     assert rc == 0
     assert captured["lid"] == "L1"
@@ -203,8 +203,8 @@ def test_main_status_does_not_make_network_calls(output_dir, monkeypatch, capsys
 
 
 def test_main_reset_marks_story_pending(output_dir, capsys):
-    from wattpad_crawler.archive.state import Manifest
-    from wattpad_crawler.models import Part, Story
+    from local_story_archive.archive.state import Manifest
+    from local_story_archive.models import Part, Story
 
     m = Manifest(output_dir).connect()
     story = Story(
@@ -280,7 +280,7 @@ def test_main_collection_auth_failure_exits_2(output_dir, monkeypatch, capsys):
     """Blank cookie + collection command exits 2 before collection API calls."""
     _seed_blank_cookie_config(output_dir)
     monkeypatch.setattr(
-        "wattpad_crawler.api.user.fetch_library",
+        "local_story_archive.api.user.fetch_library",
         lambda *a, **kw: pytest.fail("fetch_library was called despite blank cookie"),
     )
     rc = main(["--output", str(output_dir), "library", "--user", "alice"])
@@ -301,11 +301,11 @@ def test_main_auth_probe_network_error_exits_2_without_traceback(
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "wattpad_crawler.cli.validate_cookie",
+        "local_story_archive.cli.validate_cookie",
         lambda client: (_ for _ in ()).throw(httpx.ConnectError("simulated reset")),
     )
     monkeypatch.setattr(
-        "wattpad_crawler.api.user.fetch_library",
+        "local_story_archive.api.user.fetch_library",
         lambda *a, **kw: pytest.fail("fetch_library was called despite network error"),
     )
 
@@ -320,7 +320,7 @@ def test_main_auth_probe_network_error_exits_2_without_traceback(
 
 def test_main_url_resolve_error_exits_2_without_traceback(output_dir, monkeypatch, capsys):
     monkeypatch.setattr(
-        "wattpad_crawler.cli.resolve_url_story_id",
+        "local_story_archive.cli.resolve_url_story_id",
         lambda client, target: (_ for _ in ()).throw(ResolveError("not a Wattpad URL")),
     )
 
@@ -338,7 +338,7 @@ def test_main_http_status_error_exits_2_without_traceback(output_dir, monkeypatc
     response = httpx.Response(400, request=request)
     error = httpx.HTTPStatusError("400 Bad Request", request=request, response=response)
     monkeypatch.setattr(
-        "wattpad_crawler.cli.archive_story",
+        "local_story_archive.cli.archive_story",
         lambda *a, **kw: (_ for _ in ()).throw(error),
     )
 
@@ -352,8 +352,8 @@ def test_main_http_status_error_exits_2_without_traceback(output_dir, monkeypatc
 
 
 @pytest.mark.parametrize("cmd_args,downstream_attr", [
-    (["library", "--user", "alice"], "wattpad_crawler.cli.archive_many"),
-    (["list", "L1"], "wattpad_crawler.cli.archive_many"),
+    (["library", "--user", "alice"], "local_story_archive.cli.archive_many"),
+    (["list", "L1"], "local_story_archive.cli.archive_many"),
 ])
 def test_main_collection_archive_branches_gated(output_dir, monkeypatch, cmd_args, downstream_attr):
     """Collection archive branches are gated because they require auth."""
@@ -361,7 +361,7 @@ def test_main_collection_archive_branches_gated(output_dir, monkeypatch, cmd_arg
     # Force validate_cookie to raise — guarantees we go through the AuthError path
     # regardless of how the cookie short-circuit is implemented.
     monkeypatch.setattr(
-        "wattpad_crawler.cli.validate_cookie",
+        "local_story_archive.cli.validate_cookie",
         lambda client: (_ for _ in ()).throw(AuthError("simulated auth failure")),
     )
     # If the downstream archive function is reached, the gate failed.
@@ -377,7 +377,7 @@ def test_main_status_skips_validation(output_dir, monkeypatch):
     """AUTH-02 / D-06: status reads local sqlite only — does not call validate_cookie."""
     _seed_blank_cookie_config(output_dir)
     monkeypatch.setattr(
-        "wattpad_crawler.cli.validate_cookie",
+        "local_story_archive.cli.validate_cookie",
         lambda client: pytest.fail("validate_cookie was called for `status` command"),
     )
     rc = main(["--output", str(output_dir), "status"])
@@ -389,7 +389,7 @@ def test_main_serve_skips_validation(output_dir, monkeypatch):
     (web /setup covers it interactively)."""
     _seed_blank_cookie_config(output_dir)
     monkeypatch.setattr(
-        "wattpad_crawler.cli.validate_cookie",
+        "local_story_archive.cli.validate_cookie",
         lambda client: pytest.fail("validate_cookie was called for `serve` command"),
     )
     uvicorn_called = {"n": 0}
@@ -397,7 +397,7 @@ def test_main_serve_skips_validation(output_dir, monkeypatch):
     def fake_run(*args, **kwargs):
         uvicorn_called["n"] += 1
 
-    monkeypatch.setattr("wattpad_crawler.cli.uvicorn.run", fake_run)
+    monkeypatch.setattr("local_story_archive.cli.uvicorn.run", fake_run)
     rc = main(["--output", str(output_dir), "serve"])
     assert rc == 0
     assert uvicorn_called["n"] == 1

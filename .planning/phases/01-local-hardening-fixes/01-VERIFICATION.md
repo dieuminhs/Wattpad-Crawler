@@ -19,7 +19,7 @@ overrides_applied: 0
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| SC1 | A 15-level nested-replies fixture is parsed without RecursionError; the log contains a depth-cap warning and the top-level Comment object is preserved with replies truncated at depth 10 | VERIFIED | End-to-end probe printed `WARNING:wattpad_crawler.api.comments:comment c15 truncated: replies beyond depth 10 dropped` then `OK: 15-level chain parsed; top-level preserved with replies truncated at depth 10`. Walked exactly 10 levels deep; level-10 leaf has `replies == []`. |
+| SC1 | A 15-level nested-replies fixture is parsed without RecursionError; the log contains a depth-cap warning and the top-level Comment object is preserved with replies truncated at depth 10 | VERIFIED | End-to-end probe printed `WARNING:local_story_archive.api.comments:comment c15 truncated: replies beyond depth 10 dropped` then `OK: 15-level chain parsed; top-level preserved with replies truncated at depth 10`. Walked exactly 10 levels deep; level-10 leaf has `replies == []`. |
 | SC2 | A chapter HTML containing `<img src="...">`, `<br>`, and `data-p-id` is extracted; the stored paragraph `html` contains all three intact after nh3 sanitization | VERIFIED | End-to-end probe output: `hi <img src="a.jpg"><br>x <b data-p-id="in">y</b>`. All three constructs preserved; script/onerror/javascript: stripped (verified by 12 unit tests in `tests/unit/test_chapter_html.py`). |
 | SC3 | Submitting 60+ jobs does not grow `JobManager._jobs` beyond the 50-job cap; a long-running Job does not grow past 1000 events | VERIFIED | End-to-end probe: 60 done jobs → `len(mgr._jobs) == 50`. 1100 emits → `len(j.events) == 1000`. Eviction starts at seq 101. |
 | SC4 | All-renderers-fail story produces job with `status == "failed"` and a progress event naming which formats failed | VERIFIED | `RenderError(Exception)` raised after `story.done` emit when all 3 renderers fail; `JobRunner._run`'s existing `except Exception` routes to `set_failed(str(e))`. Verified by `test_archive_story_raises_render_error_when_all_renderers_fail` and `test_archive_many_records_render_error_in_results`. |
@@ -31,12 +31,12 @@ overrides_applied: 0
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
 | `pyproject.toml` | `nh3>=0.3,<0.4` in `[project] dependencies`; no `bleach` | VERIFIED | Line 19 contains `"nh3>=0.3,<0.4",`. Grep for `bleach` in pyproject.toml returns no matches. `import nh3; nh3.Cleaner` available. |
-| `wattpad_crawler/scrape/chapter_html.py` | Module-scope `_PARAGRAPH_CLEANER = nh3.Cleaner(...)` with D-01..D-03 allowlist; `.clean(raw_html)` called in extract loop | VERIFIED | Lines 15-23 construct the Cleaner with `tags={"img","br","b","i","em","strong","u","a"}`, `attributes={"img":{"src","alt"},"a":{"href"},"*":{"data-p-id"}}`, `strip_comments=True`. Line 59 calls `clean_html = _PARAGRAPH_CLEANER.clean(raw_html)`. No `generic_attribute_prefixes` or `url_schemes=` overrides. |
-| `wattpad_crawler/api/comments.py` | `_MAX_COMMENT_DEPTH = 10`; `_parse_one(raw, depth=0, *, max_depth=...) -> tuple[Comment | None, bool]`; `parse_comments_page` emits `logger.warning` per truncated subtree | VERIFIED | Line 16: `_MAX_COMMENT_DEPTH = 10`. Lines 19-24: signature exactly matches plan. Line 42: `if depth >= max_depth:` guard. Lines 88-92: `logger.warning` inside `if was_truncated:` block. Module logger defined line 8. |
-| `wattpad_crawler/web/runner.py` | `_MAX_EVENTS_PER_JOB = 1000`, `_MAX_JOBS = 50`; `Job.events: deque[ProgressEvent]`; `Job.next_seq` PUBLIC; `ProgressEvent.seq`; `Job.snapshot_events(after_seq)`; `Job.oldest_seq()`; `JobManager.create` insert-then-prune; running pinned | VERIFIED | Lines 15-16 declare module caps. Line 30: `seq: int = 0`. Line 45: `events: deque[ProgressEvent] = field(default_factory=lambda: deque(maxlen=_MAX_EVENTS_PER_JOB))`. Line 52: `next_seq: int = 0` (PUBLIC, no underscore). Lines 81-89: `snapshot_events(after_seq)` filters by `e.seq > after_seq`. Lines 91-100: `oldest_seq()` returns 0 for empty deque. Lines 115-141: `JobManager.create` inserts first, then prunes only `JobStatus.done/failed`. No `_next_seq` or `after_index` substring anywhere in `wattpad_crawler/`. |
-| `wattpad_crawler/web/routes.py` | `job_stream(after_seq: int = 0)`; emits synthetic `events.evicted` with `dropped_count`/`requested_after_seq`/`oldest_available_seq` on first-poll gap; per-stream `gap_announced` latch; each real event JSON has `seq` | VERIFIED | Line 164: signature exactly `async def job_stream(request: Request, job_id: str, after_seq: int = 0):`. Line 182: `last_seq = after_seq`. Line 186: `gap_announced = False`. Lines 195-212: gap check with synthetic `events.evicted` payload using exact key names. Line 222: `"seq": ev.seq` in real event JSON. No `?after=` substring or `after: int = 0` in file. |
-| `wattpad_crawler/web/templates/job.html` | EventSource URL uses `?after_seq={{ job.next_seq }}` | VERIFIED | Line 30: `var es = new EventSource("/jobs/{{ job.job_id }}/stream?after_seq={{ job.next_seq }}");`. No `?after=` or `job.events|length` anywhere in `wattpad_crawler/web/templates/`. |
-| `wattpad_crawler/jobs.py` | `class RenderError(Exception):` adjacent to `ResolveError`; `render_status: dict[str, Literal["ok","failed"]]`; `story.done` emitted BEFORE `raise RenderError`; raise gated on all-failed | VERIFIED | Line 6: `from typing import Literal` imported. Lines 162-174: render loop assigns `render_status[name] = "ok"` / `"failed"` per branch; existing `emit("render.failed", ...)` preserved. Lines 176-182: `emit("story.done", {..., "render_status": render_status})` BEFORE raise. Lines 184-185: `if all(v == "failed" ...): raise RenderError(...)`. Lines 188-189: `class ResolveError(Exception): pass`. Lines 192-203: `class RenderError(Exception):` with docstring. |
+| `local_story_archive/scrape/chapter_html.py` | Module-scope `_PARAGRAPH_CLEANER = nh3.Cleaner(...)` with D-01..D-03 allowlist; `.clean(raw_html)` called in extract loop | VERIFIED | Lines 15-23 construct the Cleaner with `tags={"img","br","b","i","em","strong","u","a"}`, `attributes={"img":{"src","alt"},"a":{"href"},"*":{"data-p-id"}}`, `strip_comments=True`. Line 59 calls `clean_html = _PARAGRAPH_CLEANER.clean(raw_html)`. No `generic_attribute_prefixes` or `url_schemes=` overrides. |
+| `local_story_archive/api/comments.py` | `_MAX_COMMENT_DEPTH = 10`; `_parse_one(raw, depth=0, *, max_depth=...) -> tuple[Comment | None, bool]`; `parse_comments_page` emits `logger.warning` per truncated subtree | VERIFIED | Line 16: `_MAX_COMMENT_DEPTH = 10`. Lines 19-24: signature exactly matches plan. Line 42: `if depth >= max_depth:` guard. Lines 88-92: `logger.warning` inside `if was_truncated:` block. Module logger defined line 8. |
+| `local_story_archive/web/runner.py` | `_MAX_EVENTS_PER_JOB = 1000`, `_MAX_JOBS = 50`; `Job.events: deque[ProgressEvent]`; `Job.next_seq` PUBLIC; `ProgressEvent.seq`; `Job.snapshot_events(after_seq)`; `Job.oldest_seq()`; `JobManager.create` insert-then-prune; running pinned | VERIFIED | Lines 15-16 declare module caps. Line 30: `seq: int = 0`. Line 45: `events: deque[ProgressEvent] = field(default_factory=lambda: deque(maxlen=_MAX_EVENTS_PER_JOB))`. Line 52: `next_seq: int = 0` (PUBLIC, no underscore). Lines 81-89: `snapshot_events(after_seq)` filters by `e.seq > after_seq`. Lines 91-100: `oldest_seq()` returns 0 for empty deque. Lines 115-141: `JobManager.create` inserts first, then prunes only `JobStatus.done/failed`. No `_next_seq` or `after_index` substring anywhere in `local_story_archive/`. |
+| `local_story_archive/web/routes.py` | `job_stream(after_seq: int = 0)`; emits synthetic `events.evicted` with `dropped_count`/`requested_after_seq`/`oldest_available_seq` on first-poll gap; per-stream `gap_announced` latch; each real event JSON has `seq` | VERIFIED | Line 164: signature exactly `async def job_stream(request: Request, job_id: str, after_seq: int = 0):`. Line 182: `last_seq = after_seq`. Line 186: `gap_announced = False`. Lines 195-212: gap check with synthetic `events.evicted` payload using exact key names. Line 222: `"seq": ev.seq` in real event JSON. No `?after=` substring or `after: int = 0` in file. |
+| `local_story_archive/web/templates/job.html` | EventSource URL uses `?after_seq={{ job.next_seq }}` | VERIFIED | Line 30: `var es = new EventSource("/jobs/{{ job.job_id }}/stream?after_seq={{ job.next_seq }}");`. No `?after=` or `job.events|length` anywhere in `local_story_archive/web/templates/`. |
+| `local_story_archive/jobs.py` | `class RenderError(Exception):` adjacent to `ResolveError`; `render_status: dict[str, Literal["ok","failed"]]`; `story.done` emitted BEFORE `raise RenderError`; raise gated on all-failed | VERIFIED | Line 6: `from typing import Literal` imported. Lines 162-174: render loop assigns `render_status[name] = "ok"` / `"failed"` per branch; existing `emit("render.failed", ...)` preserved. Lines 176-182: `emit("story.done", {..., "render_status": render_status})` BEFORE raise. Lines 184-185: `if all(v == "failed" ...): raise RenderError(...)`. Lines 188-189: `class ResolveError(Exception): pass`. Lines 192-203: `class RenderError(Exception):` with docstring. |
 | Test files | 5 test files contain the new tests | VERIFIED | `tests/unit/test_chapter_html.py` (19 tests, 12 new), `tests/unit/test_api_comments.py` (11 tests, 10 new), `tests/unit/test_runner.py` (31 tests, 19 new), `tests/unit/test_jobs.py` (20 tests, 6 new), `tests/unit/test_web_routes.py` (31 tests, 7 new). All required test function names from plan acceptance criteria present. |
 
 ### Key Link Verification
@@ -69,7 +69,7 @@ overrides_applied: 0
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
 | Full test suite | `.venv/Scripts/python -m pytest tests/ -q` | `220 passed, 1 skipped, 6 warnings in 22.31s` | PASS |
-| Lint clean | `.venv/Scripts/python -m ruff check wattpad_crawler/` | `All checks passed!` | PASS |
+| Lint clean | `.venv/Scripts/python -m ruff check local_story_archive/` | `All checks passed!` | PASS |
 | nh3 import | `python -c "import nh3; assert hasattr(nh3, 'Cleaner')"` | OK | PASS |
 | REL-01 cap default | `_MAX_COMMENT_DEPTH == 10`; `_parse_one({"id":"x"})` returns tuple | `REL-01 ok` | PASS |
 | REL-02/03 caps | `_MAX_EVENTS_PER_JOB == 1000`, `_MAX_JOBS == 50`; emit increments next_seq; events[0].seq == 1; oldest_seq() == 1 | `REL-02/REL-03 ok` | PASS |
@@ -78,10 +78,10 @@ overrides_applied: 0
 | ROADMAP SC1 | 15-level chain via `parse_comments_page` | `WARNING ... comment c15 truncated: replies beyond depth 10 dropped`; 10 levels walkable | PASS |
 | ROADMAP SC2 | Chapter with img+br+data-p-id | All three preserved post-sanitization | PASS |
 | ROADMAP SC3 | 60 done jobs cap at 50; 1100 emits cap at 1000 | Both assertions hold | PASS |
-| No legacy `?after=` | Grep `wattpad_crawler/` for `?after=` | Zero matches | PASS |
-| No legacy `_next_seq`/`after_index` | Grep `wattpad_crawler/` | Zero matches | PASS |
+| No legacy `?after=` | Grep `local_story_archive/` for `?after=` | Zero matches | PASS |
+| No legacy `_next_seq`/`after_index` | Grep `local_story_archive/` | Zero matches | PASS |
 | No `bleach` in deps | Grep `pyproject.toml` (case-insensitive) | Zero matches | PASS |
-| No `job.events|length` in templates | Grep `wattpad_crawler/web/templates/` | Zero matches | PASS |
+| No `job.events|length` in templates | Grep `local_story_archive/web/templates/` | Zero matches | PASS |
 
 ### Requirements Coverage
 
@@ -102,7 +102,7 @@ overrides_applied: 0
 |------|------|---------|----------|--------|
 | _none_ | — | — | — | — |
 
-Anti-pattern scan run on all phase-modified source files (`pyproject.toml`, `wattpad_crawler/api/comments.py`, `wattpad_crawler/jobs.py`, `wattpad_crawler/scrape/chapter_html.py`, `wattpad_crawler/web/routes.py`, `wattpad_crawler/web/runner.py`, `wattpad_crawler/web/templates/job.html`). Empty-list/dict patterns found are either:
+Anti-pattern scan run on all phase-modified source files (`pyproject.toml`, `local_story_archive/api/comments.py`, `local_story_archive/jobs.py`, `local_story_archive/scrape/chapter_html.py`, `local_story_archive/web/routes.py`, `local_story_archive/web/runner.py`, `local_story_archive/web/templates/job.html`). Empty-list/dict patterns found are either:
 - `replies: list[Comment] = []` initialization in `_parse_one` (legitimate accumulator overwritten by recursion)
 - `survivors: list[str] = []` in `JobManager.create` (legitimate accumulator overwritten in the loop)
 - `out: list[Comment] = []` in `_fetch_all` (legitimate accumulator)
@@ -110,7 +110,7 @@ Anti-pattern scan run on all phase-modified source files (`pyproject.toml`, `wat
 - `paragraphs: list[dict] = []`, `images: list[str] = []` in `extract_chapter` (legitimate accumulators populated by loop)
 - `render_status: dict[...] = {}` in `archive_story` (legitimate accumulator populated by render loop)
 
-None flow to UI as final values — every accumulator is filled by a real data-producing loop before consumption. No `TODO`/`FIXME`/`PLACEHOLDER`/`coming soon`/`not yet implemented` markers introduced. No console.log-only or `=> {}` empty handlers. Lint (`ruff check wattpad_crawler/`) clean.
+None flow to UI as final values — every accumulator is filled by a real data-producing loop before consumption. No `TODO`/`FIXME`/`PLACEHOLDER`/`coming soon`/`not yet implemented` markers introduced. No console.log-only or `=> {}` empty handlers. Lint (`ruff check local_story_archive/`) clean.
 
 ### Human Verification Required
 

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">Wattpad Crawler MacBook local setup before and after</title>
+  <title id="title">Local Story Archive MacBook local setup before and after</title>
   <desc id="desc">A before-and-after diagram showing Wattpad stories archived from the web into a local MacBook folder with EPUB, HTML, TXT, cover images, metadata, comments, and reader files.</desc>
   <defs>
     <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
@@ -19,7 +19,7 @@
   <circle cx="1090" cy="76" r="112" fill="#fb923c" opacity="0.16" />
   <circle cx="114" cy="568" r="132" fill="#38bdf8" opacity="0.14" />
 
-  <text x="600" y="72" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="40" font-weight="800" fill="#111827">Wattpad Crawler: local MacBook archive</text>
+  <text x="600" y="72" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="40" font-weight="800" fill="#111827">Local Story Archive: local MacBook archive</text>
   <text x="600" y="112" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="20" fill="#475569">Save stories before they disappear. Read them later from your own files.</text>
 
   <g filter="url(#shadow)">
@@ -70,6 +70,6 @@
   <g transform="translate(120 535)" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#334155">
     <rect x="0" y="0" width="960" height="52" rx="26" fill="#ffffff" opacity="0.86" />
     <text x="32" y="34" font-weight="800" fill="#0f172a">Quick start:</text>
-    <text x="150" y="34">install → add cookie → run `wattpad-crawler serve` → open `http://127.0.0.1:8000`</text>
+    <text x="150" y="34">install → add cookie → run `local-story-archive serve` → open `http://127.0.0.1:8000`</text>
   </g>
 </svg>

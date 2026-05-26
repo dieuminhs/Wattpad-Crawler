@@ -11,8 +11,8 @@
 
 ### Locked Decisions
 
-- **D-01:** One `Breaker` class, two instances per `archive_story()` call, in new module `wattpad_crawler/circuit_breakers.py`.
-- **D-02:** New module `wattpad_crawler/circuit_breakers.py`; four `_lowercase` module constants: `_EXTRACTION_EMPTY_CONSECUTIVE = 3`, `_HTTP_WALL_CONSECUTIVE = 5`, `_TEXT_THRESHOLD = 100`, `_HTML_THRESHOLD = 5000`. Tests monkeypatch these constants.
+- **D-01:** One `Breaker` class, two instances per `archive_story()` call, in new module `local_story_archive/circuit_breakers.py`.
+- **D-02:** New module `local_story_archive/circuit_breakers.py`; four `_lowercase` module constants: `_EXTRACTION_EMPTY_CONSECUTIVE = 3`, `_HTTP_WALL_CONSECUTIVE = 5`, `_TEXT_THRESHOLD = 100`, `_HTML_THRESHOLD = 5000`. Tests monkeypatch these constants.
 - **D-03:** `Breaker.record_failure(...)` raises `CircuitOpenError` itself when threshold crossed. `record_success()` resets counter.
 - **D-04:** Thread-safe via `threading.Lock` per Breaker instance. Lock acquired inside `record_failure`/`record_success`; `CircuitOpenError` raised after lock release.
 - **D-05:** `CircuitOpenError(Exception)` in `circuit_breakers.py`. Constructor: `CircuitOpenError(message: str, *, kind: Literal["extraction_empty", "http_wall"], threshold: int, count: int, recent: list[dict])`.
@@ -120,7 +120,7 @@ The `auth.py` precedent matches CONTEXT.md's claims exactly. The `write_part_fil
 ### Recommended Project Structure
 
 ```
-wattpad_crawler/
+local_story_archive/
 ├── circuit_breakers.py     # NEW: Breaker class, CircuitOpenError, 4 constants
 ├── auth.py                 # PRECEDENT: mirrors circuit_breakers.py shape
 ├── client.py               # UNCHANGED (TokenBucket Lock pattern referenced)
@@ -135,7 +135,7 @@ tests/
 
 ### Pattern 1: Breaker Class Shape (mirrors auth.py)
 
-`auth.py` structure (verified at `wattpad_crawler/auth.py:1-113`):
+`auth.py` structure (verified at `local_story_archive/auth.py:1-113`):
 - Module docstring
 - `logger = logging.getLogger(__name__)`
 - `_PROBE_URL = "..."` (module constant, lowercase with leading underscore)
@@ -510,14 +510,14 @@ except Exception as e:
 
 ```python
 # In jobs.py:
-import wattpad_crawler.circuit_breakers as cb
+import local_story_archive.circuit_breakers as cb
 ...
 extraction_empty = cb.Breaker("extraction_empty", cb._EXTRACTION_EMPTY_CONSECUTIVE)
 ```
 
 Tests monkeypatch `cb._EXTRACTION_EMPTY_CONSECUTIVE` AND mock the `Breaker` constructor call (or use `cb.Breaker` directly so the threshold comes from the module attribute at instantiation). The cleaner approach: `jobs.py` reads the constant at Breaker-instantiation time, so monkeypatching the module attribute before calling `archive_story()` works correctly.
 
-**The Phase 1 precedent** (D-11 / D-02): test monkeypatching the `_MAX_*` constants in the module that READS them at use-time. Phase 3 follows: monkeypatch `wattpad_crawler.circuit_breakers._EXTRACTION_EMPTY_CONSECUTIVE = 2` before calling `archive_story()`. [ASSUMED based on Phase 1 pattern; verify in test_circuit_breakers.py implementation]
+**The Phase 1 precedent** (D-11 / D-02): test monkeypatching the `_MAX_*` constants in the module that READS them at use-time. Phase 3 follows: monkeypatch `local_story_archive.circuit_breakers._EXTRACTION_EMPTY_CONSECUTIVE = 2` before calling `archive_story()`. [ASSUMED based on Phase 1 pattern; verify in test_circuit_breakers.py implementation]
 
 ---
 
@@ -529,7 +529,7 @@ Tests monkeypatch `cb._EXTRACTION_EMPTY_CONSECUTIVE` AND mock the `Breaker` cons
 # Source: derived from auth.py test pattern and D-04 spec, 2026-05-05
 import threading
 import pytest
-from wattpad_crawler.circuit_breakers import Breaker, CircuitOpenError
+from local_story_archive.circuit_breakers import Breaker, CircuitOpenError
 
 def test_breaker_does_not_trip_below_threshold():
     b = Breaker("http_wall", threshold=3)
@@ -578,7 +578,7 @@ def test_breaker_thread_safety():
 
 ```python
 # Source: existing test_jobs.py _make_deps pattern, 2026-05-05
-import wattpad_crawler.circuit_breakers as cb
+import local_story_archive.circuit_breakers as cb
 
 def test_extraction_empty_breaker_trips_after_3(output_dir, monkeypatch):
     # Monkeypatch threshold to 2 for small test story
@@ -691,7 +691,7 @@ No missing dependencies. [VERIFIED: pyproject.toml + running test suite 249 pass
 
 ### Monkeypatch Strategy for Constants
 
-All four constants live in `wattpad_crawler.circuit_breakers`. Tests use `monkeypatch.setattr(cb, "_EXTRACTION_EMPTY_CONSECUTIVE", 2)` BEFORE calling `archive_story()`. `jobs.py` reads the constant at Breaker-instantiation time (call to `cb.Breaker("extraction_empty", cb._EXTRACTION_EMPTY_CONSECUTIVE)`), so the monkeypatch is effective.
+All four constants live in `local_story_archive.circuit_breakers`. Tests use `monkeypatch.setattr(cb, "_EXTRACTION_EMPTY_CONSECUTIVE", 2)` BEFORE calling `archive_story()`. `jobs.py` reads the constant at Breaker-instantiation time (call to `cb.Breaker("extraction_empty", cb._EXTRACTION_EMPTY_CONSECUTIVE)`), so the monkeypatch is effective.
 
 For Breaker isolation tests that don't touch `jobs.py`, pass `threshold=N` directly to `Breaker(kind, threshold=N)` — no monkeypatching needed.
 
@@ -719,7 +719,7 @@ No new network access, no authentication changes, no user input, no cryptography
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Monkeypatching `cb._EXTRACTION_EMPTY_CONSECUTIVE` before calling `archive_story()` is effective because Breaker is instantiated at call time using `cb._EXTRACTION_EMPTY_CONSECUTIVE` | Pitfall 5 / Validation | If planner uses a local import of the constant (`from wattpad_crawler.circuit_breakers import _EXTRACTION_EMPTY_CONSECUTIVE`), monkeypatch hits wrong name; planner must use `cb._EXTRACTION_EMPTY_CONSECUTIVE` via module reference |
+| A1 | Monkeypatching `cb._EXTRACTION_EMPTY_CONSECUTIVE` before calling `archive_story()` is effective because Breaker is instantiated at call time using `cb._EXTRACTION_EMPTY_CONSECUTIVE` | Pitfall 5 / Validation | If planner uses a local import of the constant (`from local_story_archive.circuit_breakers import _EXTRACTION_EMPTY_CONSECUTIVE`), monkeypatch hits wrong name; planner must use `cb._EXTRACTION_EMPTY_CONSECUTIVE` via module reference |
 | A2 | `test_runner.py` tests will pass without changes because `JobRunner._run` has an existing `except Exception → set_failed` that catches `CircuitOpenError` | Validation Architecture | If `JobRunner._run` catches only specific exception types, a new test or code change may be needed |
 
 ---
@@ -742,13 +742,13 @@ No new network access, no authentication changes, no user input, no cryptography
 
 ### Primary (HIGH confidence)
 
-- `wattpad_crawler/jobs.py` — read in full; per-part try/except structure at lines 115–174 verified; exact lines documented
-- `wattpad_crawler/auth.py` — read in full; precedent module shape confirmed; `AuthFailedError` constructor confirmed
-- `wattpad_crawler/archive/store.py` — read in full; `write_part_files()` signature confirmed; `atomic_write_text` pattern confirmed
-- `wattpad_crawler/archive/state.py` — read in full; `set_part_status()` signature confirmed; `pending_parts_for()` exclusion list confirmed
-- `wattpad_crawler/models.py` — read in full; `PartStatus` literals confirmed including `body_text_failed` and `gone`
-- `wattpad_crawler/client.py` — read in full; 429/5xx retry behavior confirmed; `AuthFailedError` raising before `raise_for_status()` confirmed
-- `wattpad_crawler/scrape/chapter_html.py` — read in full; `ChapterContent.text` field confirmed as sanitized text
+- `local_story_archive/jobs.py` — read in full; per-part try/except structure at lines 115–174 verified; exact lines documented
+- `local_story_archive/auth.py` — read in full; precedent module shape confirmed; `AuthFailedError` constructor confirmed
+- `local_story_archive/archive/store.py` — read in full; `write_part_files()` signature confirmed; `atomic_write_text` pattern confirmed
+- `local_story_archive/archive/state.py` — read in full; `set_part_status()` signature confirmed; `pending_parts_for()` exclusion list confirmed
+- `local_story_archive/models.py` — read in full; `PartStatus` literals confirmed including `body_text_failed` and `gone`
+- `local_story_archive/client.py` — read in full; 429/5xx retry behavior confirmed; `AuthFailedError` raising before `raise_for_status()` confirmed
+- `local_story_archive/scrape/chapter_html.py` — read in full; `ChapterContent.text` field confirmed as sanitized text
 - `tests/unit/test_jobs.py` — read in full; `_make_deps()` helper, `output_dir` fixture usage, monkeypatch pattern confirmed
 - `tests/conftest.py` — read in full; `output_dir` fixture confirmed
 - Python 3.14 live execution — D-14 control flow verified: exceptions raised inside `except` body do NOT get caught by sibling `except` clauses of the same `try` block

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.models import Part, Story
+from local_story_archive.archive.state import Manifest
+from local_story_archive.models import Part, Story
 
 
 def test_manifest_creates_schema(output_dir: Path):

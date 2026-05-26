@@ -1,9 +1,9 @@
 import httpx
 import pytest
 
-from wattpad_crawler.auth import AuthError, validate_cookie
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import Config
+from local_story_archive.auth import AuthError, validate_cookie
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.config import Config
 
 
 def make_client(tmp_path, transport, cookie="valid-cookie-value"):

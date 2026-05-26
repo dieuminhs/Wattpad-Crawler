@@ -1,9 +1,9 @@
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**Wattpad Crawler**
+**Local Story Archive**
 
-A personal Python tool for archiving Wattpad stories — fetches metadata, chapters, and comments via Wattpad's unofficial API, stores them on disk in an append-only layout, and renders EPUB / HTML / TXT artifacts. Ships both a CLI (`wattpad-crawler`) and a local FastAPI web UI (dashboard, library browser, reader, live progress) for solo use on the owner's machine.
+A personal Python tool for archiving Wattpad stories — fetches metadata, chapters, and comments via Wattpad's unofficial API, stores them on disk in an append-only layout, and renders EPUB / HTML / TXT artifacts. Ships both a CLI (`local-story-archive`) and a local FastAPI web UI (dashboard, library browser, reader, live progress) for solo use on the owner's machine.
 
 **Core Value:** Reliably preserve Wattpad stories the user cares about — without silent failures, dead cookies, or broken scrapers wasting hours of archive time.
 
@@ -28,14 +28,14 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - pip (with `pyproject.toml` as single source of truth)
 - Lockfile: Not present (uses `pyproject.toml` PEP 517/518 format)
 ## Frameworks
-- FastAPI 0.110+ - REST API and web UI backend (`wattpad_crawler/web/app.py`)
-- Uvicorn 0.27+ - ASGI server for running web UI and CLI `serve` subcommand (`wattpad_crawler/cli.py:line 101`)
-- Jinja2 3.1+ - HTML templating for web UI pages (`wattpad_crawler/web/app.py:line 18`)
-- httpx 0.27+ - Async/sync HTTP requests with retry and timeout support (`wattpad_crawler/client.py`)
-- BeautifulSoup4 4.12+ - Parsing Wattpad chapter HTML (`wattpad_crawler/scrape/chapter_html.py`)
+- FastAPI 0.110+ - REST API and web UI backend (`local_story_archive/web/app.py`)
+- Uvicorn 0.27+ - ASGI server for running web UI and CLI `serve` subcommand (`local_story_archive/cli.py:line 101`)
+- Jinja2 3.1+ - HTML templating for web UI pages (`local_story_archive/web/app.py:line 18`)
+- httpx 0.27+ - Async/sync HTTP requests with retry and timeout support (`local_story_archive/client.py`)
+- BeautifulSoup4 4.12+ - Parsing Wattpad chapter HTML (`local_story_archive/scrape/chapter_html.py`)
 - lxml 5.0+ - Fast HTML/XML parsing backend for BeautifulSoup
-- ebooklib 0.18+ - EPUB file creation (`wattpad_crawler/render/epub.py`)
-- sse-starlette 2.0+ - Server-Sent Events for live progress streaming (`wattpad_crawler/web/routes.py`)
+- ebooklib 0.18+ - EPUB file creation (`local_story_archive/render/epub.py`)
+- sse-starlette 2.0+ - Server-Sent Events for live progress streaming (`local_story_archive/web/routes.py`)
 - pytest 8.0+ - Test runner and framework
 - pytest-vcr 1.0.2+ - HTTP cassette recording for repeatable tests
 - vcrpy 6.0+ - Records HTTP interactions for mocking external API calls
@@ -51,7 +51,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 ## Configuration
 - No environment variables required; configuration stored in TOML file
 - Cookie-based authentication: Wattpad session token stored in `_config.toml` (see README setup instructions)
-- `pyproject.toml` (`D:\Dev\Wattpad Crawler\pyproject.toml`) - Project metadata, dependencies, build config, tool settings (pytest, ruff)
+- `pyproject.toml` (`D:\Dev\Local Story Archive\pyproject.toml`) - Project metadata, dependencies, build config, tool settings (pytest, ruff)
 - `_config.toml` - Generated at runtime in archive output directory (`wattpad-archive/_config.toml`)
 - `pyproject.toml` - Uses `hatchling` as build backend
 - Wheel configuration at `[tool.hatch.build.targets.wheel]` forces inclusion of web templates and static files
@@ -69,7 +69,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - `https://www.wattpad.com/api/v3/users/{username}/lists` - User's reading lists
 - `https://www.wattpad.com/api/v3/lists/{list_id}/stories` - Stories in a reading list (paginated)
 - `https://www.wattpad.com/api/v3/parts/{part_id}/comments` - Chapter comments (paginated, supports inline and end-of-chapter)
-- Token bucket implementation in `RateLimitedClient` (`wattpad_crawler/client.py`)
+- Token bucket implementation in `RateLimitedClient` (`local_story_archive/client.py`)
 - Default: 2.0 requests/sec (configurable)
 - Implements exponential backoff (up to 16s) for 5xx errors
 - Respects HTTP 429 (Too Many Requests) with Retry-After header parsing
@@ -109,7 +109,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - Tool: `ruff` with `ruff check`
 - Rules selected: `["E", "F", "I", "UP", "W"]`
 - Order: Standard library → Third-party → First-party (configured in `pyproject.toml`)
-- First-party known modules: `wattpad_crawler`
+- First-party known modules: `local_story_archive`
 - Grouped logically with blank lines between groups
 - Imports at module level, not inside functions (except async context manager imports in `web/routes.py`)
 ## Type Hints
@@ -118,10 +118,10 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - Optional values expressed as `T | None` not `Optional[T]`
 - Return types always specified
 - Use `Callable[[ArgTypes], ReturnType]` from `collections.abc`
-- See `JobDeps` dataclass in `wattpad_crawler/jobs.py` for dependency injection pattern
+- See `JobDeps` dataclass in `local_story_archive/jobs.py` for dependency injection pattern
 ## Error Handling
 - Define custom exception classes that inherit from `Exception`
-- Example: `ConfigError` in `wattpad_crawler/config.py`, `ResolveError` in `wattpad_crawler/jobs.py`
+- Example: `ConfigError` in `local_story_archive/config.py`, `ResolveError` in `local_story_archive/jobs.py`
 - Custom exceptions used for domain-specific errors (config parsing, story resolution)
 - Eager validation at boundaries (config loading, API response parsing)
 - Raise `ValueError` for invalid API responses with descriptive messages
@@ -131,7 +131,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - Use `logger.warning()` for recoverable failures (cover fetch failure, 429 rate limit)
 - Use `logger.exception()` for unhandled exceptions (logs traceback automatically)
 - Format: `"%(asctime)s %(levelname)s %(name)s: %(message)s"`
-- Set in `wattpad_crawler/cli.py` via `logging.basicConfig()`
+- Set in `local_story_archive/cli.py` via `logging.basicConfig()`
 - Verbosity controlled by `--verbose` flag (DEBUG vs INFO)
 ## Comments
 - Document non-obvious behavior: "Per-process, per-thread tmp filename — avoids collisions..."
@@ -142,7 +142,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - Full docstrings for classes and complex methods
 - Docstrings on public API only
 ## Async vs Sync
-- `wattpad_crawler/web/routes.py`: FastAPI route handlers are async (required by FastAPI)
+- `local_story_archive/web/routes.py`: FastAPI route handlers are async (required by FastAPI)
 - Async patterns include form parsing: `form = await request.form()`
 - Async request disconnection checks: `if await request.is_disconnected()`
 - Thread-to-asyncio bridging: `await asyncio.sleep(0.25)` for polling integration
@@ -157,7 +157,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - Field defaults via `default_factory` for mutable defaults
 ## Testing Interfaces
 - Use dataclass wrappers for testable dependencies
-- See `JobDeps` in `wattpad_crawler/jobs.py`
+- See `JobDeps` in `local_story_archive/jobs.py`
 - Allows tests to inject mocks without monkeypatching
 - Default implementation provided by `_default_deps()`
 ## Path Handling
@@ -177,47 +177,47 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - **Append-only archive:** Files are never deleted, only added or updated; atomically written to prevent corruption
 ## Layers
 - Purpose: Command parsing and HTTP routing; entry points for user interaction
-- Location: `wattpad_crawler/cli.py`, `wattpad_crawler/web/app.py`, `wattpad_crawler/web/routes.py`
+- Location: `local_story_archive/cli.py`, `local_story_archive/web/app.py`, `local_story_archive/web/routes.py`
 - Contains: Argument parser, FastAPI route handlers, template rendering
 - Depends on: Config, JobManager/JobRunner (web only), archive jobs
 - Used by: End users via terminal or browser
 - Purpose: Job lifecycle management, library browsing, and live progress streaming
-- Location: `wattpad_crawler/web/runner.py`, `wattpad_crawler/web/library_browser.py`
+- Location: `local_story_archive/web/runner.py`, `local_story_archive/web/library_browser.py`
 - Contains: JobManager (in-memory job registry), JobRunner (thread pool), LibraryEntry scanner
 - Depends on: Archive store, Manifest for reading
 - Used by: Web route handlers
 - Purpose: Execute the core fetch → parse → store → render workflow
-- Location: `wattpad_crawler/jobs.py`
+- Location: `local_story_archive/jobs.py`
 - Contains: `archive_story()`, `archive_many()`, story/URL resolution, progress callbacks
 - Depends on: API clients, Manifest, Store, Render modules
 - Used by: CLI (main thread), Web (background threads via JobRunner)
 - Purpose: Fetch story metadata, chapters, comments from Wattpad's unofficial API
-- Location: `wattpad_crawler/api/story.py`, `wattpad_crawler/api/user.py`, `wattpad_crawler/api/comments.py`
+- Location: `local_story_archive/api/story.py`, `local_story_archive/api/user.py`, `local_story_archive/api/comments.py`
 - Contains: HTTP fetch + response parsing for Wattpad API v3 endpoints
 - Depends on: RateLimitedClient
 - Used by: Archive pipeline
 - Purpose: Rate-limited HTTP requests with session cookie auth
-- Location: `wattpad_crawler/client.py`
+- Location: `local_story_archive/client.py`
 - Contains: RateLimitedClient (token bucket rate limiter) wrapping httpx
 - Depends on: Config (for cookie, rate limit settings), httpx library
 - Used by: API layer, archive jobs
 - Purpose: Load and validate runtime settings from `_config.toml`
-- Location: `wattpad_crawler/config.py`
+- Location: `local_story_archive/config.py`
 - Contains: Config dataclass, TOML parsing, defaults
 - Depends on: tomllib (stdlib), Path
 - Used by: CLI, Web app initialization
 - Purpose: Type-safe representations of domain objects
-- Location: `wattpad_crawler/models.py`
+- Location: `local_story_archive/models.py`
 - Contains: Story, Part, Comment dataclasses with Literal status types
 - Depends on: stdlib only
 - Used by: API parsers, archive pipeline, storage layer
 - Purpose: Persistent tracking and file I/O for archived content
-- Location: `wattpad_crawler/archive/state.py` (Manifest), `wattpad_crawler/archive/store.py`
+- Location: `local_story_archive/archive/state.py` (Manifest), `local_story_archive/archive/store.py`
 - Contains: Manifest (SQLite CRUD), atomic file write utilities, story directory layout
 - Depends on: sqlite3, models
 - Used by: Archive pipeline, web library scanner
 - Purpose: Parse chapter HTML, extract text, generate EPUB/HTML/TXT artifacts
-- Location: `wattpad_crawler/scrape/chapter_html.py`, `wattpad_crawler/render/*.py`
+- Location: `local_story_archive/scrape/chapter_html.py`, `local_story_archive/render/*.py`
 - Contains: BeautifulSoup extraction (paragraph IDs, images, text), EbookLib EPUB generation, HTML/TXT renderers
 - Depends on: beautifulsoup4, lxml, ebooklib, json
 - Used by: Archive pipeline
@@ -261,7 +261,7 @@ A personal Python tool for archiving Wattpad stories — fetches metadata, chapt
 - Pattern: @dataclass extracted from metadata.json + filesystem checks
 ## Entry Points
 - Location: `cli.py:main()`
-- Triggers: User runs `wattpad-crawler [subcommand]`
+- Triggers: User runs `local-story-archive [subcommand]`
 - Responsibilities:
 - Location: `web/app.py:build_app()` → `cli.py` calls uvicorn.run()
 - Triggers: User navigates to http://127.0.0.1:8000/

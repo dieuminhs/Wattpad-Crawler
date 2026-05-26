@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import platform
@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-BACKEND_NAME = "wattpad-crawler-desktop-backend"
+BACKEND_NAME = "local-story-archive-desktop-backend"
 
 
 def _exe_name(name: str = BACKEND_NAME) -> str:
@@ -16,7 +16,7 @@ def _exe_name(name: str = BACKEND_NAME) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build the Wattpad Crawler desktop backend executable with PyInstaller.",
+        description="Build the Local Story Archive desktop backend executable with PyInstaller.",
     )
     parser.add_argument(
         "--dist-dir",
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     build_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     entrypoint.write_text(
-        "from wattpad_crawler.desktop import main\n"
+        "from local_story_archive.desktop import main\n"
         "raise SystemExit(main())\n",
         encoding="utf-8",
     )
@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         "--specpath",
         str(build_dir),
         "--collect-data",
-        "wattpad_crawler",
+        "local_story_archive",
         "--collect-submodules",
         "uvicorn",
         "--collect-submodules",

@@ -1,4 +1,4 @@
-# Wattpad Crawler — Design Spec
+# Local Story Archive — Design Spec
 
 **Date:** 2026-05-02
 **Status:** Approved (pending user spec review)
@@ -31,7 +31,7 @@ The archive must be:
 ### 3.1 Module layout
 
 ```
-wattpad_crawler/
+local_story_archive/
 ├── cli.py              # argparse entry; subcommands: library, list, story, url, status
 ├── config.py           # loads <output-dir>/_config.toml (cookie, paths, rate limits)
 ├── client.py           # HTTP session: cookie auth, rate-limit, retry, user-agent
@@ -205,7 +205,7 @@ Default = incremental:
 ### 7.4 User-visible error surfaces
 
 - **Web UI** — per-story status badges (✓ done, ⟳ in progress, ⚠ partial, ✗ failed, 🚫 gone). Click failed → last error + "retry just this one" button.
-- **CLI** — `wattpad-crawler status` shows the same data.
+- **CLI** — `local-story-archive status` shows the same data.
 - **Logs** — `_logs/<timestamp>.log`, every error tagged with `story_id` and `part_id` for grep.
 
 ## 8. Testing

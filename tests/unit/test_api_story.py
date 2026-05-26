@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from wattpad_crawler.api.story import parse_part_page_story_id, parse_part_story_id, parse_story
+from local_story_archive.api.story import parse_part_page_story_id, parse_part_story_id, parse_story
 
 
 def test_parse_story_basic(fixtures_dir: Path):

@@ -19,63 +19,63 @@ The codebase follows a **layered architecture** with a clear separation between 
 
 **CLI / Web Interface Layer:**
 - Purpose: Command parsing and HTTP routing; entry points for user interaction
-- Location: `wattpad_crawler/cli.py`, `wattpad_crawler/web/app.py`, `wattpad_crawler/web/routes.py`
+- Location: `local_story_archive/cli.py`, `local_story_archive/web/app.py`, `local_story_archive/web/routes.py`
 - Contains: Argument parser, FastAPI route handlers, template rendering
 - Depends on: Config, JobManager/JobRunner (web only), archive jobs
 - Used by: End users via terminal or browser
 
 **Web-Specific Components:**
 - Purpose: Job lifecycle management, library browsing, and live progress streaming
-- Location: `wattpad_crawler/web/runner.py`, `wattpad_crawler/web/library_browser.py`
+- Location: `local_story_archive/web/runner.py`, `local_story_archive/web/library_browser.py`
 - Contains: JobManager (in-memory job registry), JobRunner (thread pool), LibraryEntry scanner
 - Depends on: Archive store, Manifest for reading
 - Used by: Web route handlers
 
 **Archive Pipeline Layer:**
 - Purpose: Execute the core fetch → parse → store → render workflow
-- Location: `wattpad_crawler/jobs.py`
+- Location: `local_story_archive/jobs.py`
 - Contains: `archive_story()`, `archive_many()`, story/URL resolution, progress callbacks
 - Depends on: API clients, Manifest, Store, Render modules
 - Used by: CLI (main thread), Web (background threads via JobRunner)
 
 **External API Layer:**
 - Purpose: Fetch story metadata, chapters, comments from Wattpad's unofficial API
-- Location: `wattpad_crawler/api/story.py`, `wattpad_crawler/api/user.py`, `wattpad_crawler/api/comments.py`
+- Location: `local_story_archive/api/story.py`, `local_story_archive/api/user.py`, `local_story_archive/api/comments.py`
 - Contains: HTTP fetch + response parsing for Wattpad API v3 endpoints
 - Depends on: RateLimitedClient
 - Used by: Archive pipeline
 
 **HTTP Client Layer:**
 - Purpose: Rate-limited HTTP requests with session cookie auth
-- Location: `wattpad_crawler/client.py`
+- Location: `local_story_archive/client.py`
 - Contains: RateLimitedClient (token bucket rate limiter) wrapping httpx
 - Depends on: Config (for cookie, rate limit settings), httpx library
 - Used by: API layer, archive jobs
 
 **Configuration Layer:**
 - Purpose: Load and validate runtime settings from `_config.toml`
-- Location: `wattpad_crawler/config.py`
+- Location: `local_story_archive/config.py`
 - Contains: Config dataclass, TOML parsing, defaults
 - Depends on: tomllib (stdlib), Path
 - Used by: CLI, Web app initialization
 
 **Data Models:**
 - Purpose: Type-safe representations of domain objects
-- Location: `wattpad_crawler/models.py`
+- Location: `local_story_archive/models.py`
 - Contains: Story, Part, Comment dataclasses with Literal status types
 - Depends on: stdlib only
 - Used by: API parsers, archive pipeline, storage layer
 
 **Archive State & Storage Layer:**
 - Purpose: Persistent tracking and file I/O for archived content
-- Location: `wattpad_crawler/archive/state.py` (Manifest), `wattpad_crawler/archive/store.py`
+- Location: `local_story_archive/archive/state.py` (Manifest), `local_story_archive/archive/store.py`
 - Contains: Manifest (SQLite CRUD), atomic file write utilities, story directory layout
 - Depends on: sqlite3, models
 - Used by: Archive pipeline, web library scanner
 
 **Content Extraction & Rendering:**
 - Purpose: Parse chapter HTML, extract text, generate EPUB/HTML/TXT artifacts
-- Location: `wattpad_crawler/scrape/chapter_html.py`, `wattpad_crawler/render/*.py`
+- Location: `local_story_archive/scrape/chapter_html.py`, `local_story_archive/render/*.py`
 - Contains: BeautifulSoup extraction (paragraph IDs, images, text), EbookLib EPUB generation, HTML/TXT renderers
 - Depends on: beautifulsoup4, lxml, ebooklib, json
 - Used by: Archive pipeline
@@ -235,9 +235,9 @@ The codebase follows a **layered architecture** with a clear separation between 
 
 ## Entry Points
 
-**CLI (wattpad-crawler):**
+**CLI (local-story-archive):**
 - Location: `cli.py:main()`
-- Triggers: User runs `wattpad-crawler [subcommand]`
+- Triggers: User runs `local-story-archive [subcommand]`
 - Responsibilities:
   - Parse arguments via argparse
   - Load config from `_config.toml`

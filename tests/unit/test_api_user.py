@@ -3,15 +3,15 @@ from pathlib import Path
 
 import httpx
 
-from wattpad_crawler.api.user import (
+from local_story_archive.api.user import (
     _paginate,
     fetch_library,
     parse_library,
     parse_list_stories,
     parse_reading_lists,
 )
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import Config
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.config import Config
 
 
 def test_parse_library_returns_story_ids(fixtures_dir: Path):

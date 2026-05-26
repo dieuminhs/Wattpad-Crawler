@@ -34,26 +34,26 @@ overrides_applied: 0
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `wattpad_crawler/auth.py` | AuthError, AuthFailedError, validate_cookie, _PROBE_URL | VERIFIED | 113 lines, all symbols present. _PROBE_URL correct. TYPE_CHECKING import cycle-break present. |
+| `local_story_archive/auth.py` | AuthError, AuthFailedError, validate_cookie, _PROBE_URL | VERIFIED | 113 lines, all symbols present. _PROBE_URL correct. TYPE_CHECKING import cycle-break present. |
 | `tests/unit/test_auth.py` | 7 unit tests covering 401/403/redirect/200/network/blank/400-PermissionDenied | VERIFIED | All 7 test functions present and passing. |
-| `wattpad_crawler/client.py` | 401/403/400-PermissionDenied fast-fail branch in get() | VERIFIED | Branch at lines 80-118, before 429 at line 120. Deferred import inside get(). |
+| `local_story_archive/client.py` | 401/403/400-PermissionDenied fast-fail branch in get() | VERIFIED | Branch at lines 80-118, before 429 at line 120. Deferred import inside get(). |
 | `tests/unit/test_client.py` | 5 new AUTH-04 tests | VERIFIED | test_get_does_not_retry_on_401, test_get_raises_on_403, test_auth_failed_error_payload, test_get_raises_on_400_permission_denied, test_get_does_not_intercept_400_invalid_endpoint all present. |
-| `wattpad_crawler/cli.py` | _require_auth helper + 4 per-branch calls + AuthError catch in main() | VERIFIED | _require_auth at line 73, called 4 times (lines 94/98/102/107), except AuthError at line 124. |
-| `tests/unit/test_cli.py` | 4 AUTH-02 tests + 4 pre-existing tests migrated with validate_cookie bypass | VERIFIED | All 4 new tests present. All 4 pre-existing archive-branch tests have monkeypatch.setattr("wattpad_crawler.cli.validate_cookie", lambda client: None) as first statement. |
-| `wattpad_crawler/jobs.py` | except AuthFailedError branch + auth.failed emit + D-18 comment in archive_many | VERIFIED | except AuthFailedError at line 145, emit at line 158, bare raise at line 164. D-18 comment at line 269 in archive_many. |
+| `local_story_archive/cli.py` | _require_auth helper + 4 per-branch calls + AuthError catch in main() | VERIFIED | _require_auth at line 73, called 4 times (lines 94/98/102/107), except AuthError at line 124. |
+| `tests/unit/test_cli.py` | 4 AUTH-02 tests + 4 pre-existing tests migrated with validate_cookie bypass | VERIFIED | All 4 new tests present. All 4 pre-existing archive-branch tests have monkeypatch.setattr("local_story_archive.cli.validate_cookie", lambda client: None) as first statement. |
+| `local_story_archive/jobs.py` | except AuthFailedError branch + auth.failed emit + D-18 comment in archive_many | VERIFIED | except AuthFailedError at line 145, emit at line 158, bare raise at line 164. D-18 comment at line 269 in archive_many. |
 | `tests/unit/test_jobs.py` | 2 AUTH-04 tests | VERIFIED | test_archive_story_propagates_auth_failed (line 510), test_archive_story_emits_auth_failed_event (line 535) both present. |
 | `tests/unit/test_runner.py` | 1 integration test for JobRunner failing on AuthFailedError | VERIFIED | test_runner_marks_failed_on_auth_failure at line 358, uses enum comparison (no .value), no hasattr guard. |
-| `wattpad_crawler/web/routes.py` | setup_post rewrite with validate-before-save + _save_cookie atomic write | VERIFIED | setup_post at line 92 with response_model=None. _save_cookie at lines 27-68 with atomic write. |
-| `wattpad_crawler/web/templates/setup.html` | Error banner with 3 categories + attempted_cookie_masked fallback in input | VERIFIED | {% if error_kind %} at line 13, auth/network/else at lines 15/17/19, attempted_cookie_masked or current_cookie_masked at line 31. No |safe filter used. |
+| `local_story_archive/web/routes.py` | setup_post rewrite with validate-before-save + _save_cookie atomic write | VERIFIED | setup_post at line 92 with response_model=None. _save_cookie at lines 27-68 with atomic write. |
+| `local_story_archive/web/templates/setup.html` | Error banner with 3 categories + attempted_cookie_masked fallback in input | VERIFIED | {% if error_kind %} at line 13, auth/network/else at lines 15/17/19, attempted_cookie_masked or current_cookie_masked at line 31. No |safe filter used. |
 | `tests/unit/test_web_routes.py` | 7 new tests (3 atomic save + 4 /setup UX) | VERIFIED | All 7 tests present at lines 502-663. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| auth.py:validate_cookie | client.RateLimitedClient | TYPE_CHECKING import string forward ref | WIRED | auth.py:12-13 `if TYPE_CHECKING: from wattpad_crawler.client import RateLimitedClient` |
+| auth.py:validate_cookie | client.RateLimitedClient | TYPE_CHECKING import string forward ref | WIRED | auth.py:12-13 `if TYPE_CHECKING: from local_story_archive.client import RateLimitedClient` |
 | auth.py:validate_cookie | client.get(_PROBE_URL, max_attempts=1, follow_redirects=False) | per-call follow_redirects=False kwarg | WIRED | auth.py:64 `resp = client.get(_PROBE_URL, max_attempts=1, follow_redirects=False)` |
-| client.py:RateLimitedClient.get | auth.AuthFailedError | deferred function-scope import inside get() | WIRED | client.py:81 `from wattpad_crawler.auth import AuthFailedError` (and line 108) |
+| client.py:RateLimitedClient.get | auth.AuthFailedError | deferred function-scope import inside get() | WIRED | client.py:81 `from local_story_archive.auth import AuthFailedError` (and line 108) |
 | cli.py:main | auth.validate_cookie | _require_auth helper invoked at start of each archive branch | WIRED | cli.py:9 module-level import; _require_auth called lines 94/98/102/107 |
 | cli.py:main except block | sys.stderr / sys.exit(2) | except AuthError around dispatch block | WIRED | cli.py:124-131 `except AuthError as e: print(..., file=sys.stderr); return 2` |
 | jobs.py:archive_story per-part try | AuthFailedError handler before broad except | dedicated except branch | WIRED | jobs.py:145 `except AuthFailedError as e:` before line 165 `except Exception as e:` |
@@ -97,10 +97,10 @@ No orphaned requirements: REQUIREMENTS.md maps AUTH-01 through AUTH-05 exclusive
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| wattpad_crawler/web/routes.py | 45 | `line.lstrip().startswith("cookie ")` — fragile startswith, requires space | Warning | Hand-edited config without space would append duplicate cookie key. Noted in code review WR-03. Real-world impact: low (tool generates the config). |
-| wattpad_crawler/web/routes.py | 46,51,56 | Raw f-string interpolation of cookie into TOML | Warning | Cookie containing `"` or `\` would produce malformed TOML. Wattpad tokens are alphanumeric so user-impact probability low. Noted in code review WR-01. |
-| wattpad_crawler/auth.py | 50 | `getattr(client._client, "cookies", None)` — private attribute reach-in | Warning | Fragile coupling to RateLimitedClient internals; degrades gracefully (raises AuthError on rename) but loses short-circuit intent. Noted in code review WR-02. |
-| wattpad_crawler/cli.py | 118-119 | serve branch closes manifest/client, then finally closes them again | Warning | Double-close; idempotent in CPython today but relies on undocumented behavior. Noted in code review WR-04. |
+| local_story_archive/web/routes.py | 45 | `line.lstrip().startswith("cookie ")` — fragile startswith, requires space | Warning | Hand-edited config without space would append duplicate cookie key. Noted in code review WR-03. Real-world impact: low (tool generates the config). |
+| local_story_archive/web/routes.py | 46,51,56 | Raw f-string interpolation of cookie into TOML | Warning | Cookie containing `"` or `\` would produce malformed TOML. Wattpad tokens are alphanumeric so user-impact probability low. Noted in code review WR-01. |
+| local_story_archive/auth.py | 50 | `getattr(client._client, "cookies", None)` — private attribute reach-in | Warning | Fragile coupling to RateLimitedClient internals; degrades gracefully (raises AuthError on rename) but loses short-circuit intent. Noted in code review WR-02. |
+| local_story_archive/cli.py | 118-119 | serve branch closes manifest/client, then finally closes them again | Warning | Double-close; idempotent in CPython today but relies on undocumented behavior. Noted in code review WR-04. |
 
 All four anti-patterns were identified by the code reviewer in 02-REVIEW.md. None are blockers — they are warnings that could affect robustness in edge cases. No stubs, no TODO/placeholder patterns, no hardcoded empty data in user-facing paths were found.
 

@@ -109,11 +109,11 @@ with ThreadPoolExecutor(max_workers=cfg.workers_per_story) as pool:
 
 ### 2. Cookie Validation
 
-**Where it lives:** A new module `wattpad_crawler/auth.py` with a single public function `validate_cookie(client: RateLimitedClient) -> None` (raises `AuthError` on failure). This is not part of `RateLimitedClient` itself — the client's job is transport, not auth-level semantics. It is not in `api/story.py` — validation is a startup concern, not a per-request concern.
+**Where it lives:** A new module `local_story_archive/auth.py` with a single public function `validate_cookie(client: RateLimitedClient) -> None` (raises `AuthError` on failure). This is not part of `RateLimitedClient` itself — the client's job is transport, not auth-level semantics. It is not in `api/story.py` — validation is a startup concern, not a per-request concern.
 
 **New module shape:**
 ```python
-# wattpad_crawler/auth.py
+# local_story_archive/auth.py
 class AuthError(Exception):
     pass
 
@@ -136,7 +136,7 @@ def validate_cookie(client: RateLimitedClient) -> None:
 
 **Auth failure mid-job detection:** Mid-job 401/403 responses come back through `RateLimitedClient.get()`, which currently calls `resp.raise_for_status()` after exhausting retries. That raises `httpx.HTTPStatusError`. The part pipeline catches all exceptions with `except Exception as e` and marks the part "failed". This surfaces as `part.failed` events in the SSE stream. No new mechanism needed for mid-job detection — it already fails loudly at the part level. The circuit-breaker (item 3 below) will amplify this signal to abort the whole job.
 
-**Files added/changed:** New `wattpad_crawler/auth.py`. Changes to `cli.py`, `web/routes.py`.
+**Files added/changed:** New `local_story_archive/auth.py`. Changes to `cli.py`, `web/routes.py`.
 
 ---
 
@@ -617,18 +617,18 @@ Rationale: Streaming rendering is independent but the integration test should re
 
 All findings are derived from direct inspection of the codebase files listed below. No external sources were consulted for this architecture dimension — the question is "how do new things integrate into existing code," which is answered entirely from reading that code.
 
-- `wattpad_crawler/jobs.py` — pipeline orchestrator and DI
-- `wattpad_crawler/client.py` — `RateLimitedClient`, `TokenBucket`
-- `wattpad_crawler/api/comments.py` — recursive comment parsing
-- `wattpad_crawler/scrape/chapter_html.py` — `extract_chapter`, `ChapterContent`
-- `wattpad_crawler/archive/store.py` — atomic I/O, path layout
-- `wattpad_crawler/archive/state.py` — `Manifest` (inspected via architecture doc)
-- `wattpad_crawler/web/runner.py` — `JobManager`, `JobRunner`, `Job`
-- `wattpad_crawler/render/{txt,html,epub}.py` — renderer internals
+- `local_story_archive/jobs.py` — pipeline orchestrator and DI
+- `local_story_archive/client.py` — `RateLimitedClient`, `TokenBucket`
+- `local_story_archive/api/comments.py` — recursive comment parsing
+- `local_story_archive/scrape/chapter_html.py` — `extract_chapter`, `ChapterContent`
+- `local_story_archive/archive/store.py` — atomic I/O, path layout
+- `local_story_archive/archive/state.py` — `Manifest` (inspected via architecture doc)
+- `local_story_archive/web/runner.py` — `JobManager`, `JobRunner`, `Job`
+- `local_story_archive/render/{txt,html,epub}.py` — renderer internals
 - `.planning/codebase/ARCHITECTURE.md` — existing architecture audit
 - `.planning/codebase/CONCERNS.md` — concerns audit
 
 ---
 
-*Architecture research for: Wattpad Crawler hardening milestone*
+*Architecture research for: Local Story Archive hardening milestone*
 *Researched: 2026-05-03*

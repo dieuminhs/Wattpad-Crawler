@@ -1,4 +1,4 @@
-# Wattpad Crawler — Core + CLI Implementation Plan (Plan 1 of 2)
+# Local Story Archive — Core + CLI Implementation Plan (Plan 1 of 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -15,7 +15,7 @@
 ## File Structure
 
 ```
-wattpad_crawler/
+local_story_archive/
 ├── __init__.py                     # version
 ├── cli.py                          # argparse entry; calls jobs.py
 ├── config.py                       # loads <output-dir>/_config.toml
@@ -77,7 +77,7 @@ README.md
 **Files:**
 - Create: `pyproject.toml`
 - Create: `.gitignore`
-- Create: `wattpad_crawler/__init__.py`
+- Create: `local_story_archive/__init__.py`
 - Create: `tests/__init__.py`
 - Create: `tests/conftest.py`
 
@@ -89,7 +89,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "wattpad-crawler"
+name = "local-story-archive"
 version = "0.1.0"
 description = "Archive Wattpad stories locally before they're removed"
 requires-python = ">=3.11"
@@ -109,7 +109,7 @@ dev = [
 ]
 
 [project.scripts]
-wattpad-crawler = "wattpad_crawler.cli:main"
+local-story-archive = "local_story_archive.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -136,7 +136,7 @@ wattpad-archive/
 .vcr_*
 ```
 
-- [ ] **Step 3: Create `wattpad_crawler/__init__.py`**
+- [ ] **Step 3: Create `local_story_archive/__init__.py`**
 
 ```python
 __version__ = "0.1.0"
@@ -177,7 +177,7 @@ Expected: `collected 0 items` (no tests yet, but no import errors).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add pyproject.toml .gitignore wattpad_crawler/__init__.py tests/__init__.py tests/conftest.py
+git add pyproject.toml .gitignore local_story_archive/__init__.py tests/__init__.py tests/conftest.py
 git commit -m "chore: project skeleton + deps"
 ```
 
@@ -188,7 +188,7 @@ git commit -m "chore: project skeleton + deps"
 ### Task 2: Config loader
 
 **Files:**
-- Create: `wattpad_crawler/config.py`
+- Create: `local_story_archive/config.py`
 - Create: `tests/unit/test_config.py`
 - Create: `tests/unit/__init__.py` (empty)
 
@@ -197,7 +197,7 @@ git commit -m "chore: project skeleton + deps"
 ```python
 from pathlib import Path
 import pytest
-from wattpad_crawler.config import Config, load_config, ConfigError
+from local_story_archive.config import Config, load_config, ConfigError
 
 
 def test_load_config_creates_default_when_missing(output_dir: Path):
@@ -234,9 +234,9 @@ def test_load_config_rejects_bad_toml(output_dir: Path):
 pytest tests/unit/test_config.py -v
 ```
 
-Expected: FAIL — `ModuleNotFoundError: No module named 'wattpad_crawler.config'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'local_story_archive.config'`.
 
-- [ ] **Step 3: Implement `wattpad_crawler/config.py`**
+- [ ] **Step 3: Implement `local_story_archive/config.py`**
 
 ```python
 from dataclasses import dataclass
@@ -254,7 +254,7 @@ class Config:
     cookie: str = ""
     rate_limit_per_sec: float = 2.0
     workers_per_story: int = 3
-    user_agent: str = "wattpad-crawler/0.1 (+local archive tool)"
+    user_agent: str = "local-story-archive/0.1 (+local archive tool)"
 
 
 _DEFAULT_TOML = (
@@ -293,7 +293,7 @@ Expected: 3 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/config.py tests/unit/test_config.py tests/unit/__init__.py
+git add local_story_archive/config.py tests/unit/test_config.py tests/unit/__init__.py
 git commit -m "feat(config): TOML config loader with sensible defaults"
 ```
 
@@ -302,14 +302,14 @@ git commit -m "feat(config): TOML config loader with sensible defaults"
 ### Task 3: HTTP client — auth + user agent
 
 **Files:**
-- Create: `wattpad_crawler/client.py`
+- Create: `local_story_archive/client.py`
 - Create: `tests/unit/test_client.py`
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
-from wattpad_crawler.client import build_client
-from wattpad_crawler.config import Config
+from local_story_archive.client import build_client
+from local_story_archive.config import Config
 from pathlib import Path
 
 
@@ -342,11 +342,11 @@ def test_client_no_cookie_when_empty(tmp_path: Path):
 
 - [ ] **Step 2: Run test — should fail** (no module).
 
-- [ ] **Step 3: Implement `wattpad_crawler/client.py`**
+- [ ] **Step 3: Implement `local_story_archive/client.py`**
 
 ```python
 import httpx
-from wattpad_crawler.config import Config
+from local_story_archive.config import Config
 
 
 def build_client(cfg: Config) -> httpx.Client:
@@ -366,7 +366,7 @@ def build_client(cfg: Config) -> httpx.Client:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/client.py tests/unit/test_client.py
+git add local_story_archive/client.py tests/unit/test_client.py
 git commit -m "feat(client): httpx client with cookie auth"
 ```
 
@@ -375,14 +375,14 @@ git commit -m "feat(client): httpx client with cookie auth"
 ### Task 4: Rate limiter (token bucket)
 
 **Files:**
-- Modify: `wattpad_crawler/client.py`
+- Modify: `local_story_archive/client.py`
 - Modify: `tests/unit/test_client.py`
 
 - [ ] **Step 1: Add the failing test** to `tests/unit/test_client.py`
 
 ```python
 import time
-from wattpad_crawler.client import TokenBucket
+from local_story_archive.client import TokenBucket
 
 
 def test_token_bucket_blocks_when_empty():
@@ -406,7 +406,7 @@ def test_token_bucket_does_not_block_when_full():
 
 - [ ] **Step 2: Run — should fail** (no `TokenBucket`).
 
-- [ ] **Step 3: Add `TokenBucket` to `wattpad_crawler/client.py`**
+- [ ] **Step 3: Add `TokenBucket` to `local_story_archive/client.py`**
 
 Append to `client.py`:
 
@@ -448,7 +448,7 @@ class TokenBucket:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/client.py tests/unit/test_client.py
+git add local_story_archive/client.py tests/unit/test_client.py
 git commit -m "feat(client): token-bucket rate limiter"
 ```
 
@@ -457,7 +457,7 @@ git commit -m "feat(client): token-bucket rate limiter"
 ### Task 5: Retry-aware GET wrapper
 
 **Files:**
-- Modify: `wattpad_crawler/client.py`
+- Modify: `local_story_archive/client.py`
 - Modify: `tests/unit/test_client.py`
 
 - [ ] **Step 1: Add failing tests**
@@ -465,8 +465,8 @@ git commit -m "feat(client): token-bucket rate limiter"
 ```python
 import httpx
 import pytest
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.config import Config
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.config import Config
 
 
 def make_client(tmp_path, transport):
@@ -522,7 +522,7 @@ def test_client_honors_retry_after_on_429(tmp_path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `RateLimitedClient`** — append to `wattpad_crawler/client.py`
+- [ ] **Step 3: Implement `RateLimitedClient`** — append to `local_story_archive/client.py`
 
 ```python
 import logging
@@ -573,7 +573,7 @@ class RateLimitedClient:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/client.py tests/unit/test_client.py
+git add local_story_archive/client.py tests/unit/test_client.py
 git commit -m "feat(client): retry on 5xx, honor Retry-After on 429"
 ```
 
@@ -584,11 +584,11 @@ git commit -m "feat(client): retry on 5xx, honor Retry-After on 429"
 ### Task 6: Dataclass models
 
 **Files:**
-- Create: `wattpad_crawler/models.py`
+- Create: `local_story_archive/models.py`
 
 This task has no test of its own — models are exercised by every later test. Just define them.
 
-- [ ] **Step 1: Create `wattpad_crawler/models.py`**
+- [ ] **Step 1: Create `local_story_archive/models.py`**
 
 ```python
 from dataclasses import dataclass, field
@@ -641,7 +641,7 @@ class Comment:
 - [ ] **Step 2: Smoke check**
 
 ```bash
-python -c "from wattpad_crawler.models import Story, Part, Comment; print('ok')"
+python -c "from local_story_archive.models import Story, Part, Comment; print('ok')"
 ```
 
 Expected: `ok`.
@@ -649,7 +649,7 @@ Expected: `ok`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add wattpad_crawler/models.py
+git add local_story_archive/models.py
 git commit -m "feat(models): Story/Part/Comment dataclasses"
 ```
 
@@ -658,15 +658,15 @@ git commit -m "feat(models): Story/Part/Comment dataclasses"
 ### Task 7: SQLite manifest schema + connect
 
 **Files:**
-- Create: `wattpad_crawler/archive/__init__.py` (empty)
-- Create: `wattpad_crawler/archive/state.py`
+- Create: `local_story_archive/archive/__init__.py` (empty)
+- Create: `local_story_archive/archive/state.py`
 - Create: `tests/unit/test_state.py`
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
 from pathlib import Path
-from wattpad_crawler.archive.state import Manifest
+from local_story_archive.archive.state import Manifest
 
 
 def test_manifest_creates_schema(output_dir: Path):
@@ -694,7 +694,7 @@ def test_manifest_db_lives_at_expected_path(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/archive/state.py`**
+- [ ] **Step 3: Implement `local_story_archive/archive/state.py`**
 
 ```python
 import sqlite3
@@ -762,7 +762,7 @@ class Manifest:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/archive/__init__.py wattpad_crawler/archive/state.py tests/unit/test_state.py
+git add local_story_archive/archive/__init__.py local_story_archive/archive/state.py tests/unit/test_state.py
 git commit -m "feat(state): SQLite manifest schema"
 ```
 
@@ -771,13 +771,13 @@ git commit -m "feat(state): SQLite manifest schema"
 ### Task 8: Manifest — story & part status CRUD
 
 **Files:**
-- Modify: `wattpad_crawler/archive/state.py`
+- Modify: `local_story_archive/archive/state.py`
 - Modify: `tests/unit/test_state.py`
 
 - [ ] **Step 1: Add failing tests**
 
 ```python
-from wattpad_crawler.models import Story, Part
+from local_story_archive.models import Story, Part
 
 
 def make_story(story_id="s1") -> Story:
@@ -836,7 +836,7 @@ def test_pending_parts_query(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append CRUD methods to `Manifest`** in `wattpad_crawler/archive/state.py`
+- [ ] **Step 3: Append CRUD methods to `Manifest`** in `local_story_archive/archive/state.py`
 
 ```python
     # --- story / part CRUD ---
@@ -925,7 +925,7 @@ def test_pending_parts_query(output_dir: Path):
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/archive/state.py tests/unit/test_state.py
+git add local_story_archive/archive/state.py tests/unit/test_state.py
 git commit -m "feat(state): story/part upsert + status transitions"
 ```
 
@@ -936,8 +936,8 @@ git commit -m "feat(state): story/part upsert + status transitions"
 ### Task 9: API — story metadata + parts list
 
 **Files:**
-- Create: `wattpad_crawler/api/__init__.py` (empty)
-- Create: `wattpad_crawler/api/story.py`
+- Create: `local_story_archive/api/__init__.py` (empty)
+- Create: `local_story_archive/api/story.py`
 - Create: `tests/fixtures/api_responses/story_metadata.json`
 - Create: `tests/unit/test_api_story.py`
 
@@ -977,7 +977,7 @@ git commit -m "feat(state): story/part upsert + status transitions"
 ```python
 import json
 from pathlib import Path
-from wattpad_crawler.api.story import parse_story
+from local_story_archive.api.story import parse_story
 
 
 def test_parse_story_basic(fixtures_dir: Path):
@@ -998,12 +998,12 @@ def test_parse_story_basic(fixtures_dir: Path):
 
 - [ ] **Step 3: Run — should fail.**
 
-- [ ] **Step 4: Implement `wattpad_crawler/api/story.py`**
+- [ ] **Step 4: Implement `local_story_archive/api/story.py`**
 
 ```python
 from typing import Any
-from wattpad_crawler.models import Story, Part
-from wattpad_crawler.client import RateLimitedClient
+from local_story_archive.models import Story, Part
+from local_story_archive.client import RateLimitedClient
 
 
 STORY_FIELDS = (
@@ -1049,7 +1049,7 @@ def fetch_story(client: RateLimitedClient, story_id: str) -> Story:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/api/__init__.py wattpad_crawler/api/story.py tests/fixtures/api_responses/story_metadata.json tests/unit/test_api_story.py
+git add local_story_archive/api/__init__.py local_story_archive/api/story.py tests/fixtures/api_responses/story_metadata.json tests/unit/test_api_story.py
 git commit -m "feat(api): story metadata fetch + parser"
 ```
 
@@ -1058,7 +1058,7 @@ git commit -m "feat(api): story metadata fetch + parser"
 ### Task 10: API — user library, lists, favorites
 
 **Files:**
-- Create: `wattpad_crawler/api/user.py`
+- Create: `local_story_archive/api/user.py`
 - Create: `tests/fixtures/api_responses/library.json`
 - Create: `tests/fixtures/api_responses/reading_lists.json`
 - Create: `tests/unit/test_api_user.py`
@@ -1092,7 +1092,7 @@ git commit -m "feat(api): story metadata fetch + parser"
 ```python
 import json
 from pathlib import Path
-from wattpad_crawler.api.user import parse_library, parse_reading_lists
+from local_story_archive.api.user import parse_library, parse_reading_lists
 
 
 def test_parse_library_returns_story_ids(fixtures_dir: Path):
@@ -1111,11 +1111,11 @@ def test_parse_reading_lists(fixtures_dir: Path):
 
 - [ ] **Step 4: Run — should fail.**
 
-- [ ] **Step 5: Implement `wattpad_crawler/api/user.py`**
+- [ ] **Step 5: Implement `local_story_archive/api/user.py`**
 
 ```python
 from typing import Any
-from wattpad_crawler.client import RateLimitedClient
+from local_story_archive.client import RateLimitedClient
 
 
 LIBRARY_URL = "https://www.wattpad.com/api/v3/users/{username}/library?limit=200"
@@ -1163,7 +1163,7 @@ def fetch_list_story_ids(client: RateLimitedClient, list_id: str) -> list[str]:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wattpad_crawler/api/user.py tests/fixtures/api_responses/*.json tests/unit/test_api_user.py
+git add local_story_archive/api/user.py tests/fixtures/api_responses/*.json tests/unit/test_api_user.py
 git commit -m "feat(api): library + reading lists endpoints"
 ```
 
@@ -1172,7 +1172,7 @@ git commit -m "feat(api): library + reading lists endpoints"
 ### Task 11: API — comments (inline + end-of-part)
 
 **Files:**
-- Create: `wattpad_crawler/api/comments.py`
+- Create: `local_story_archive/api/comments.py`
 - Create: `tests/fixtures/api_responses/comments_page.json`
 - Create: `tests/unit/test_api_comments.py`
 
@@ -1216,7 +1216,7 @@ git commit -m "feat(api): library + reading lists endpoints"
 ```python
 import json
 from pathlib import Path
-from wattpad_crawler.api.comments import parse_comments_page
+from local_story_archive.api.comments import parse_comments_page
 
 
 def test_parse_comments_page(fixtures_dir: Path):
@@ -1233,12 +1233,12 @@ def test_parse_comments_page(fixtures_dir: Path):
 
 - [ ] **Step 3: Run — should fail.**
 
-- [ ] **Step 4: Implement `wattpad_crawler/api/comments.py`**
+- [ ] **Step 4: Implement `local_story_archive/api/comments.py`**
 
 ```python
 from typing import Any
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.models import Comment
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.models import Comment
 
 
 INLINE_URL = "https://www.wattpad.com/api/v3/parts/{part_id}/comments?limit=100"
@@ -1284,7 +1284,7 @@ def fetch_end_comments(client: RateLimitedClient, part_id: str) -> list[Comment]
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/api/comments.py tests/fixtures/api_responses/comments_page.json tests/unit/test_api_comments.py
+git add local_story_archive/api/comments.py tests/fixtures/api_responses/comments_page.json tests/unit/test_api_comments.py
 git commit -m "feat(api): paginated comments fetcher"
 ```
 
@@ -1295,8 +1295,8 @@ git commit -m "feat(api): paginated comments fetcher"
 ### Task 12: Parse chapter HTML for body + image refs
 
 **Files:**
-- Create: `wattpad_crawler/scrape/__init__.py` (empty)
-- Create: `wattpad_crawler/scrape/chapter_html.py`
+- Create: `local_story_archive/scrape/__init__.py` (empty)
+- Create: `local_story_archive/scrape/chapter_html.py`
 - Create: `tests/fixtures/html_chapters/chapter_with_images.html`
 - Create: `tests/unit/test_chapter_html.py`
 
@@ -1320,7 +1320,7 @@ git commit -m "feat(api): paginated comments fetcher"
 
 ```python
 from pathlib import Path
-from wattpad_crawler.scrape.chapter_html import extract_chapter
+from local_story_archive.scrape.chapter_html import extract_chapter
 
 
 def test_extract_chapter_body_text(fixtures_dir: Path):
@@ -1348,7 +1348,7 @@ def test_extract_chapter_images(fixtures_dir: Path):
 
 - [ ] **Step 3: Run — should fail.**
 
-- [ ] **Step 4: Implement `wattpad_crawler/scrape/chapter_html.py`**
+- [ ] **Step 4: Implement `local_story_archive/scrape/chapter_html.py`**
 
 ```python
 from dataclasses import dataclass
@@ -1387,7 +1387,7 @@ def extract_chapter(html: str) -> ChapterContent:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add wattpad_crawler/scrape/__init__.py wattpad_crawler/scrape/chapter_html.py tests/fixtures/html_chapters/chapter_with_images.html tests/unit/test_chapter_html.py
+git add local_story_archive/scrape/__init__.py local_story_archive/scrape/chapter_html.py tests/fixtures/html_chapters/chapter_with_images.html tests/unit/test_chapter_html.py
 git commit -m "feat(scrape): parse chapter HTML body + images"
 ```
 
@@ -1398,17 +1398,17 @@ git commit -m "feat(scrape): parse chapter HTML body + images"
 ### Task 13: Atomic write helper + directory layout
 
 **Files:**
-- Create: `wattpad_crawler/archive/store.py`
+- Create: `local_story_archive/archive/store.py`
 - Create: `tests/unit/test_store.py`
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
 from pathlib import Path
-from wattpad_crawler.archive.store import (
+from local_story_archive.archive.store import (
     atomic_write_text, atomic_write_bytes, story_dir, slugify,
 )
-from wattpad_crawler.models import Story
+from local_story_archive.models import Story
 
 
 def test_slugify_basic():
@@ -1438,13 +1438,13 @@ def test_story_dir_layout(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/archive/store.py`**
+- [ ] **Step 3: Implement `local_story_archive/archive/store.py`**
 
 ```python
 import os
 import re
 from pathlib import Path
-from wattpad_crawler.models import Story
+from local_story_archive.models import Story
 
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -1479,7 +1479,7 @@ def story_dir(output_dir: Path, story: Story) -> Path:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/archive/store.py tests/unit/test_store.py
+git add local_story_archive/archive/store.py tests/unit/test_store.py
 git commit -m "feat(store): atomic writes + slugified story dir"
 ```
 
@@ -1488,16 +1488,16 @@ git commit -m "feat(store): atomic writes + slugified story dir"
 ### Task 14: Write part files (json/html/txt + comments)
 
 **Files:**
-- Modify: `wattpad_crawler/archive/store.py`
+- Modify: `local_story_archive/archive/store.py`
 - Modify: `tests/unit/test_store.py`
 
 - [ ] **Step 1: Add failing tests**
 
 ```python
 from dataclasses import asdict
-from wattpad_crawler.archive.store import write_part_files
-from wattpad_crawler.models import Story, Part, Comment
-from wattpad_crawler.scrape.chapter_html import ChapterContent
+from local_story_archive.archive.store import write_part_files
+from local_story_archive.models import Story, Part, Comment
+from local_story_archive.scrape.chapter_html import ChapterContent
 
 
 def test_write_part_files_creates_all_artifacts(output_dir: Path):
@@ -1527,13 +1527,13 @@ def test_write_part_files_creates_all_artifacts(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append to `wattpad_crawler/archive/store.py`**
+- [ ] **Step 3: Append to `local_story_archive/archive/store.py`**
 
 ```python
 import json
 from dataclasses import asdict
-from wattpad_crawler.models import Comment, Part
-from wattpad_crawler.scrape.chapter_html import ChapterContent
+from local_story_archive.models import Comment, Part
+from local_story_archive.scrape.chapter_html import ChapterContent
 
 
 def _part_basename(part: Part) -> str:
@@ -1593,7 +1593,7 @@ def _comment_to_dict(c: Comment) -> dict:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/archive/store.py tests/unit/test_store.py
+git add local_story_archive/archive/store.py tests/unit/test_store.py
 git commit -m "feat(store): write per-part json/html/txt + comments"
 ```
 
@@ -1602,14 +1602,14 @@ git commit -m "feat(store): write per-part json/html/txt + comments"
 ### Task 15: Write story metadata + cover
 
 **Files:**
-- Modify: `wattpad_crawler/archive/store.py`
+- Modify: `local_story_archive/archive/store.py`
 - Modify: `tests/unit/test_store.py`
 
 - [ ] **Step 1: Add failing tests**
 
 ```python
 def test_write_story_metadata(output_dir: Path):
-    from wattpad_crawler.archive.store import write_story_metadata
+    from local_story_archive.archive.store import write_story_metadata
     s = Story(
         story_id="42",
         title="Hi There",
@@ -1626,7 +1626,7 @@ def test_write_story_metadata(output_dir: Path):
 
 
 def test_write_cover_bytes(output_dir: Path):
-    from wattpad_crawler.archive.store import write_cover
+    from local_story_archive.archive.store import write_cover
     s = Story(story_id="42", title="Hi There", author_username="bob")
     write_cover(output_dir, s, b"FAKEJPGBYTES")
     p = output_dir / "stories" / "bob" / "42_hi-there" / "cover.jpg"
@@ -1635,7 +1635,7 @@ def test_write_cover_bytes(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append to `wattpad_crawler/archive/store.py`**
+- [ ] **Step 3: Append to `local_story_archive/archive/store.py`**
 
 ```python
 def write_story_metadata(output_dir: Path, story: Story) -> None:
@@ -1673,7 +1673,7 @@ def write_cover(output_dir: Path, story: Story, data: bytes) -> None:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/archive/store.py tests/unit/test_store.py
+git add local_story_archive/archive/store.py tests/unit/test_store.py
 git commit -m "feat(store): write story metadata.json + cover.jpg"
 ```
 
@@ -1684,8 +1684,8 @@ git commit -m "feat(store): write story metadata.json + cover.jpg"
 ### Task 16: TXT renderer
 
 **Files:**
-- Create: `wattpad_crawler/render/__init__.py` (empty)
-- Create: `wattpad_crawler/render/txt.py`
+- Create: `local_story_archive/render/__init__.py` (empty)
+- Create: `local_story_archive/render/txt.py`
 - Create: `tests/unit/test_render_txt.py`
 
 - [ ] **Step 1: Write failing test**
@@ -1693,7 +1693,7 @@ git commit -m "feat(store): write story metadata.json + cover.jpg"
 ```python
 from pathlib import Path
 import json
-from wattpad_crawler.render.txt import render_txt
+from local_story_archive.render.txt import render_txt
 
 
 def test_render_txt_concatenates_chapters_in_order(output_dir: Path):
@@ -1717,7 +1717,7 @@ def test_render_txt_concatenates_chapters_in_order(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/render/txt.py`**
+- [ ] **Step 3: Implement `local_story_archive/render/txt.py`**
 
 ```python
 import json
@@ -1749,7 +1749,7 @@ def render_txt(story_dir_path: Path) -> str:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/render/__init__.py wattpad_crawler/render/txt.py tests/unit/test_render_txt.py
+git add local_story_archive/render/__init__.py local_story_archive/render/txt.py tests/unit/test_render_txt.py
 git commit -m "feat(render): plain text renderer"
 ```
 
@@ -1758,7 +1758,7 @@ git commit -m "feat(render): plain text renderer"
 ### Task 17: HTML renderer
 
 **Files:**
-- Create: `wattpad_crawler/render/html.py`
+- Create: `local_story_archive/render/html.py`
 - Create: `tests/unit/test_render_html.py`
 
 - [ ] **Step 1: Write failing test**
@@ -1766,7 +1766,7 @@ git commit -m "feat(render): plain text renderer"
 ```python
 from pathlib import Path
 import json
-from wattpad_crawler.render.html import render_html
+from local_story_archive.render.html import render_html
 
 
 def test_render_html_single_file(output_dir: Path):
@@ -1788,7 +1788,7 @@ def test_render_html_single_file(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/render/html.py`**
+- [ ] **Step 3: Implement `local_story_archive/render/html.py`**
 
 ```python
 import html
@@ -1835,7 +1835,7 @@ def render_html(story_dir_path: Path) -> str:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/render/html.py tests/unit/test_render_html.py
+git add local_story_archive/render/html.py tests/unit/test_render_html.py
 git commit -m "feat(render): single-file standalone HTML renderer"
 ```
 
@@ -1844,7 +1844,7 @@ git commit -m "feat(render): single-file standalone HTML renderer"
 ### Task 18: EPUB renderer
 
 **Files:**
-- Create: `wattpad_crawler/render/epub.py`
+- Create: `local_story_archive/render/epub.py`
 - Create: `tests/unit/test_render_epub.py`
 
 - [ ] **Step 1: Write failing test**
@@ -1852,7 +1852,7 @@ git commit -m "feat(render): single-file standalone HTML renderer"
 ```python
 from pathlib import Path
 import json
-from wattpad_crawler.render.epub import render_epub
+from local_story_archive.render.epub import render_epub
 
 
 def test_render_epub_creates_file(output_dir: Path):
@@ -1876,7 +1876,7 @@ def test_render_epub_creates_file(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/render/epub.py`**
+- [ ] **Step 3: Implement `local_story_archive/render/epub.py`**
 
 ```python
 import json
@@ -1931,7 +1931,7 @@ def render_epub(story_dir_path: Path) -> Path:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/render/epub.py tests/unit/test_render_epub.py
+git add local_story_archive/render/epub.py tests/unit/test_render_epub.py
 git commit -m "feat(render): EPUB renderer via EbookLib"
 ```
 
@@ -1942,7 +1942,7 @@ git commit -m "feat(render): EPUB renderer via EbookLib"
 ### Task 19: Single-story archive job
 
 **Files:**
-- Create: `wattpad_crawler/jobs.py`
+- Create: `local_story_archive/jobs.py`
 - Create: `tests/unit/test_jobs.py`
 
 - [ ] **Step 1: Write failing test (uses fakes; no network)**
@@ -1950,11 +1950,11 @@ git commit -m "feat(render): EPUB renderer via EbookLib"
 ```python
 from pathlib import Path
 from unittest.mock import MagicMock
-from wattpad_crawler.jobs import archive_story
-from wattpad_crawler.models import Story, Part, Comment
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.scrape.chapter_html import ChapterContent
-from wattpad_crawler.config import Config
+from local_story_archive.jobs import archive_story
+from local_story_archive.models import Story, Part, Comment
+from local_story_archive.archive.state import Manifest
+from local_story_archive.scrape.chapter_html import ChapterContent
+from local_story_archive.config import Config
 
 
 def test_archive_story_writes_all_artifacts(output_dir: Path):
@@ -1993,7 +1993,7 @@ def test_archive_story_writes_all_artifacts(output_dir: Path):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement `wattpad_crawler/jobs.py`**
+- [ ] **Step 3: Implement `local_story_archive/jobs.py`**
 
 ```python
 import hashlib
@@ -2002,17 +2002,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from wattpad_crawler.config import Config
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.archive import store
-from wattpad_crawler.models import Story
-from wattpad_crawler.scrape.chapter_html import extract_chapter, ChapterContent
-from wattpad_crawler.api import story as api_story
-from wattpad_crawler.api import comments as api_comments
-from wattpad_crawler.render import txt as render_txt
-from wattpad_crawler.render import html as render_html
-from wattpad_crawler.render import epub as render_epub
+from local_story_archive.config import Config
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.archive.state import Manifest
+from local_story_archive.archive import store
+from local_story_archive.models import Story
+from local_story_archive.scrape.chapter_html import extract_chapter, ChapterContent
+from local_story_archive.api import story as api_story
+from local_story_archive.api import comments as api_comments
+from local_story_archive.render import txt as render_txt
+from local_story_archive.render import html as render_html
+from local_story_archive.render import epub as render_epub
 
 logger = logging.getLogger(__name__)
 
@@ -2108,7 +2108,7 @@ def archive_story(
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/jobs.py tests/unit/test_jobs.py
+git add local_story_archive/jobs.py tests/unit/test_jobs.py
 git commit -m "feat(jobs): single-story archive orchestrator"
 ```
 
@@ -2117,14 +2117,14 @@ git commit -m "feat(jobs): single-story archive orchestrator"
 ### Task 20: URL/username resolver + multi-story job
 
 **Files:**
-- Modify: `wattpad_crawler/jobs.py`
+- Modify: `local_story_archive/jobs.py`
 - Modify: `tests/unit/test_jobs.py`
 
 - [ ] **Step 1: Add failing tests**
 
 ```python
 import pytest
-from wattpad_crawler.jobs import resolve_story_id, ResolveError
+from local_story_archive.jobs import resolve_story_id, ResolveError
 
 
 def test_resolve_numeric_id():
@@ -2143,7 +2143,7 @@ def test_resolve_part_url_to_story_requires_lookup():
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Append to `wattpad_crawler/jobs.py`**
+- [ ] **Step 3: Append to `local_story_archive/jobs.py`**
 
 ```python
 import re
@@ -2195,7 +2195,7 @@ def archive_many(
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/jobs.py tests/unit/test_jobs.py
+git add local_story_archive/jobs.py tests/unit/test_jobs.py
 git commit -m "feat(jobs): URL → story_id resolver + batch runner"
 ```
 
@@ -2206,14 +2206,14 @@ git commit -m "feat(jobs): URL → story_id resolver + batch runner"
 ### Task 21: CLI skeleton with subcommands
 
 **Files:**
-- Create: `wattpad_crawler/cli.py`
+- Create: `local_story_archive/cli.py`
 - Create: `tests/unit/test_cli.py`
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
 import pytest
-from wattpad_crawler.cli import build_parser
+from local_story_archive.cli import build_parser
 
 
 def test_parser_has_expected_subcommands():
@@ -2244,7 +2244,7 @@ def test_parser_requires_subcommand():
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Implement skeleton in `wattpad_crawler/cli.py`**
+- [ ] **Step 3: Implement skeleton in `local_story_archive/cli.py`**
 
 ```python
 import argparse
@@ -2253,7 +2253,7 @@ from pathlib import Path
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="wattpad-crawler",
+        prog="local-story-archive",
         description="Archive Wattpad stories locally.",
     )
     p.add_argument(
@@ -2284,7 +2284,7 @@ def build_parser() -> argparse.ArgumentParser:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/cli.py tests/unit/test_cli.py
+git add local_story_archive/cli.py tests/unit/test_cli.py
 git commit -m "feat(cli): argparse skeleton with subcommands"
 ```
 
@@ -2293,14 +2293,14 @@ git commit -m "feat(cli): argparse skeleton with subcommands"
 ### Task 22: Wire `story` and `url` commands
 
 **Files:**
-- Modify: `wattpad_crawler/cli.py`
+- Modify: `local_story_archive/cli.py`
 - Modify: `tests/unit/test_cli.py`
 
 - [ ] **Step 1: Add failing test (mocks the job runner; doesn't hit network)**
 
 ```python
 from unittest.mock import patch
-from wattpad_crawler.cli import main
+from local_story_archive.cli import main
 
 
 def test_main_story_calls_archive_story(output_dir, monkeypatch):
@@ -2308,7 +2308,7 @@ def test_main_story_calls_archive_story(output_dir, monkeypatch):
     def fake_archive_story(cfg, client, manifest, sid, deps=None):
         captured["sid"] = sid
         captured["out"] = cfg.output_dir
-    monkeypatch.setattr("wattpad_crawler.cli.archive_story", fake_archive_story)
+    monkeypatch.setattr("local_story_archive.cli.archive_story", fake_archive_story)
     rc = main(["--output", str(output_dir), "story", "123456"])
     assert rc == 0
     assert captured["sid"] == "123456"
@@ -2317,7 +2317,7 @@ def test_main_story_calls_archive_story(output_dir, monkeypatch):
 
 - [ ] **Step 2: Run — should fail.**
 
-- [ ] **Step 3: Replace body of `wattpad_crawler/cli.py`** (keep `build_parser`, add `main`)
+- [ ] **Step 3: Replace body of `local_story_archive/cli.py`** (keep `build_parser`, add `main`)
 
 ```python
 import argparse
@@ -2325,15 +2325,15 @@ import logging
 import sys
 from pathlib import Path
 
-from wattpad_crawler.config import load_config
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.jobs import archive_story, archive_many, resolve_story_id
+from local_story_archive.config import load_config
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.archive.state import Manifest
+from local_story_archive.jobs import archive_story, archive_many, resolve_story_id
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="wattpad-crawler",
+        prog="local-story-archive",
         description="Archive Wattpad stories locally.",
     )
     p.add_argument("--output", type=Path, default=Path("./wattpad-archive"))
@@ -2377,11 +2377,11 @@ def main(argv: list[str] | None = None) -> int:
             sid = resolve_story_id(args.target)
             archive_story(cfg, client, manifest, sid)
         elif args.cmd == "library":
-            from wattpad_crawler.api.user import fetch_library
+            from local_story_archive.api.user import fetch_library
             ids = fetch_library(client, args.user)
             archive_many(cfg, client, manifest, ids)
         elif args.cmd == "list":
-            from wattpad_crawler.api.user import fetch_list_story_ids
+            from local_story_archive.api.user import fetch_list_story_ids
             ids = fetch_list_story_ids(client, args.list_id)
             archive_many(cfg, client, manifest, ids)
         elif args.cmd == "status":
@@ -2416,7 +2416,7 @@ if __name__ == "__main__":
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wattpad_crawler/cli.py tests/unit/test_cli.py
+git add local_story_archive/cli.py tests/unit/test_cli.py
 git commit -m "feat(cli): wire subcommands to job runner"
 ```
 
@@ -2436,10 +2436,10 @@ git commit -m "feat(cli): wire subcommands to job runner"
 ```python
 import pytest
 from pathlib import Path
-from wattpad_crawler.config import Config
-from wattpad_crawler.client import RateLimitedClient
-from wattpad_crawler.archive.state import Manifest
-from wattpad_crawler.jobs import archive_story
+from local_story_archive.config import Config
+from local_story_archive.client import RateLimitedClient
+from local_story_archive.archive.state import Manifest
+from local_story_archive.jobs import archive_story
 
 
 @pytest.mark.vcr(cassette_library_dir="tests/integration/cassettes")
@@ -2499,7 +2499,7 @@ git commit -m "test(integration): vcrpy end-to-end skeleton (cassette pending)"
 - [ ] **Step 1: Write `README.md`**
 
 ```markdown
-# Wattpad Crawler
+# Local Story Archive
 
 Archive Wattpad stories — chapters, inline images, and all comments — to a local
 append-only folder before they get removed.
@@ -2508,7 +2508,7 @@ append-only folder before they get removed.
 
 ```bash
 git clone <this-repo>
-cd "Wattpad Crawler"
+cd "Local Story Archive"
 python -m venv .venv
 .venv/Scripts/activate     # Windows; on Linux/Mac use: source .venv/bin/activate
 pip install -e .
@@ -2518,7 +2518,7 @@ pip install -e .
 
 1. Run the tool once to create a default config:
    ```bash
-   wattpad-crawler --output ./wattpad-archive status
+   local-story-archive --output ./wattpad-archive status
    ```
 2. Open `./wattpad-archive/_config.toml` in a text editor.
 3. Get your Wattpad session cookie:
@@ -2532,17 +2532,17 @@ pip install -e .
 
 ```bash
 # Archive everything in your library
-wattpad-crawler library --user yourusername
+local-story-archive library --user yourusername
 
 # Archive a reading list
-wattpad-crawler list <list-id-or-url>
+local-story-archive list <list-id-or-url>
 
 # Archive one story
-wattpad-crawler story 123456789
-wattpad-crawler url https://www.wattpad.com/story/123456-some-title
+local-story-archive story 123456789
+local-story-archive url https://www.wattpad.com/story/123456-some-title
 
 # Show status
-wattpad-crawler status
+local-story-archive status
 ```
 
 ## Output
@@ -2596,7 +2596,7 @@ Expected: all tests pass except the integration test (skipped pending cassette).
 - [ ] **Step 2: Run ruff lint**
 
 ```bash
-ruff check wattpad_crawler tests
+ruff check local_story_archive tests
 ```
 
 Expected: no errors. Fix anything that's reported.
@@ -2604,8 +2604,8 @@ Expected: no errors. Fix anything that's reported.
 - [ ] **Step 3: Verify the CLI runs end-to-end against the help screen**
 
 ```bash
-wattpad-crawler --help
-wattpad-crawler story --help
+local-story-archive --help
+local-story-archive story --help
 ```
 
 Expected: help text printed for each.

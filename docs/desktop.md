@@ -1,6 +1,6 @@
 # Desktop App Packaging
 
-This directory contains the Tauri desktop wrapper for Wattpad Crawler. The desktop app keeps the existing Python/FastAPI crawler as the backend and opens it in a native desktop window.
+This directory contains the Tauri desktop wrapper for Local Story Archive. The desktop app keeps the existing Python/FastAPI crawler as the backend and opens it in a native desktop window.
 
 ## Product positioning
 
@@ -27,7 +27,7 @@ npm install
 Run the backend by itself:
 
 ```bash
-wattpad-crawler-desktop-backend
+local-story-archive-desktop-backend
 ```
 
 Run the native shell against the editable Python backend:
@@ -40,11 +40,11 @@ npm run desktop:dev
 
 The desktop backend uses a native per-user archive directory by default instead of `./wattpad-archive`:
 
-- Windows: `%LOCALAPPDATA%\Wattpad Crawler\wattpad-archive`
-- macOS: `~/Library/Application Support/Wattpad Crawler/wattpad-archive`
-- Linux: `$XDG_DATA_HOME/wattpad-crawler/wattpad-archive` or `~/.local/share/wattpad-crawler/wattpad-archive`
+- Windows: `%LOCALAPPDATA%\Local Story Archive\wattpad-archive`
+- macOS: `~/Library/Application Support/Local Story Archive/wattpad-archive`
+- Linux: `$XDG_DATA_HOME/local-story-archive/wattpad-archive` or `~/.local/share/local-story-archive/wattpad-archive`
 
-Set `WATTPAD_CRAWLER_BACKEND` to point Tauri at a custom backend executable. If that variable is not set, Tauri checks for a bundled backend next to the app, then `src-tauri/bin/`, then falls back to `wattpad-crawler-desktop-backend` on `PATH`.
+Set `LOCAL_STORY_ARCHIVE_BACKEND` to point Tauri at a custom backend executable. If that variable is not set, Tauri checks for a bundled backend next to the app, then `src-tauri/bin/`, then falls back to `local-story-archive-desktop-backend` on `PATH`.
 
 ## Build the backend executable
 
@@ -52,7 +52,7 @@ Set `WATTPAD_CRAWLER_BACKEND` to point Tauri at a custom backend executable. If 
 npm run desktop:backend -- --clean
 ```
 
-This runs `scripts/build_desktop_backend.py`, which creates a PyInstaller one-file executable at `src-tauri/bin/wattpad-crawler-desktop-backend.exe` on Windows or `src-tauri/bin/wattpad-crawler-desktop-backend` on macOS/Linux.
+This runs `scripts/build_desktop_backend.py`, which creates a PyInstaller one-file executable at `src-tauri/bin/local-story-archive-desktop-backend.exe` on Windows or `src-tauri/bin/local-story-archive-desktop-backend` on macOS/Linux.
 
 ## Build the desktop app
 
@@ -69,20 +69,20 @@ The current build command first rebuilds the Python backend executable and then 
 
 The packaged desktop backend does not open a command prompt. It writes rotating logs to the native app data folder instead:
 
-- Windows: `%LOCALAPPDATA%\Wattpad Crawler\logs\backend.log`
-- macOS: `~/Library/Application Support/Wattpad Crawler/logs/backend.log`
-- Linux: `$XDG_DATA_HOME/wattpad-crawler/logs/backend.log` or `~/.local/share/wattpad-crawler/logs/backend.log`
+- Windows: `%LOCALAPPDATA%\Local Story Archive\logs\backend.log`
+- macOS: `~/Library/Application Support/Local Story Archive/logs/backend.log`
+- Linux: `$XDG_DATA_HOME/local-story-archive/logs/backend.log` or `~/.local/share/local-story-archive/logs/backend.log`
 
 ## Switching archive folders
 
 The desktop app can point at an existing archive without copying it:
 
-1. Open Wattpad Crawler.
+1. Open Local Story Archive.
 2. Go to **Settings**.
 3. In **Archive location**, paste the full path to the existing `wattpad-archive` folder.
 4. Click **Use this archive folder**.
 
-Close other Wattpad Crawler windows before switching. The app writes this desktop-only pointer to the native app data folder and keeps story data in the selected archive folder.
+Close other Local Story Archive windows before switching. The app writes this desktop-only pointer to the native app data folder and keeps story data in the selected archive folder.
 
 ## GitHub Actions builds
 

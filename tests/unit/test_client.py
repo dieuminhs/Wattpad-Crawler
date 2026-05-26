@@ -5,9 +5,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from wattpad_crawler.auth import AuthFailedError
-from wattpad_crawler.client import RateLimitedClient, TokenBucket, build_client
-from wattpad_crawler.config import Config
+from local_story_archive.auth import AuthFailedError
+from local_story_archive.client import RateLimitedClient, TokenBucket, build_client
+from local_story_archive.config import Config
 
 
 def test_client_sets_user_agent(tmp_path: Path):
@@ -103,7 +103,7 @@ def test_client_logs_api_get_attempts(tmp_path, caplog):
     transport = httpx.MockTransport(lambda req: httpx.Response(200, json={"ok": True}))
     rlc = make_client(tmp_path, transport)
 
-    with caplog.at_level("INFO", logger="wattpad_crawler.client"):
+    with caplog.at_level("INFO", logger="local_story_archive.client"):
         r = rlc.get("https://example.com/v4/parts/1/comments")
 
     assert r.status_code == 200
@@ -186,7 +186,7 @@ def test_client_handles_unparseable_retry_after(tmp_path):
     rlc = make_client(tmp_path, transport)
     # Use small max_attempts so we don't actually wait 60s; we'll patch the sleep
     import unittest.mock
-    with unittest.mock.patch("wattpad_crawler.client.time.sleep") as sleep_mock:
+    with unittest.mock.patch("local_story_archive.client.time.sleep") as sleep_mock:
         r = rlc.get("https://example.com/x")
     assert r.status_code == 200
     # Confirm the sleep was called with the fallback 60s, not crashed

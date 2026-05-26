@@ -1,6 +1,6 @@
-﻿from pathlib import Path
+from pathlib import Path
 
-from wattpad_crawler import desktop
+from local_story_archive import desktop
 
 
 def test_default_app_data_dir_uses_localappdata_on_windows(monkeypatch):
@@ -9,9 +9,9 @@ def test_default_app_data_dir_uses_localappdata_on_windows(monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\Tester\AppData\Local")
     monkeypatch.delenv("APPDATA", raising=False)
 
-    assert desktop.default_app_data_dir() == Path(r"C:\Users\Tester\AppData\Local") / "Wattpad Crawler"
+    assert desktop.default_app_data_dir() == Path(r"C:\Users\Tester\AppData\Local") / "Local Story Archive"
     assert desktop.default_archive_dir() == (
-        Path(r"C:\Users\Tester\AppData\Local") / "Wattpad Crawler" / "wattpad-archive"
+        Path(r"C:\Users\Tester\AppData\Local") / "Local Story Archive" / "wattpad-archive"
     )
 
 
