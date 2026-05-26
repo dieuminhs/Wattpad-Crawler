@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 
 from local_story_archive.archive.repository import ArchiveRepository
-from local_story_archive.models import Story
+from local_story_archive.models import Part, Story
+from local_story_archive.scrape.chapter_html import ChapterContent
 from local_story_archive.web.library_browser import LibraryEntry, scan_library
 
 
@@ -46,6 +47,29 @@ def test_scan_library_prefers_archive_database(output_dir: Path):
     assert out[0].story_id == "42"
     assert out[0].title == "My Tale"
     assert out[0].dir_name == "42_my-tale"
+
+def test_scan_library_database_archive_does_not_require_legacy_part_files(output_dir: Path):
+    repo = ArchiveRepository(output_dir).connect()
+    story = Story(
+        story_id="42",
+        title="My Tale",
+        author_username="alice",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://example.invalid/1")],
+    )
+    content = ChapterContent(
+        text="chapter text",
+        paragraphs=[{"id": "p1", "text": "chapter text", "html": "<p>chapter text</p>"}],
+        images=[],
+    )
+    with repo.transaction():
+        repo.upsert_story(story)
+        repo.upsert_part(story.story_id, story.parts[0], content, "<p>chapter text</p>", [], [])
+    repo.close()
+
+    [entry] = scan_library(output_dir)
+
+    assert entry.health_status != "broken"
+    assert not any("parts folder is missing" in issue for issue in entry.health_issues or [])
 
 
 def test_scan_library_detects_cover(output_dir: Path):

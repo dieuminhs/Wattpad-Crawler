@@ -25,7 +25,12 @@ def _comments_stem(part: dict[str, Any]) -> str:
     return f"{ordinal:02d}_{part_id}"
 
 
-def check_story_archive(story_dir: Path, metadata: dict[str, Any]) -> ArchiveHealth:
+def check_story_archive(
+    story_dir: Path,
+    metadata: dict[str, Any],
+    *,
+    require_part_files: bool = True,
+) -> ArchiveHealth:
     """Check whether an archived story has its expected local files."""
     issues: list[str] = []
     warnings: list[str] = []
@@ -35,8 +40,8 @@ def check_story_archive(story_dir: Path, metadata: dict[str, Any]) -> ArchiveHea
         issues.append("metadata has no chapters")
 
     parts_dir = story_dir / "parts"
-    check_part_files = parts_dir.exists()
-    if parts and not check_part_files:
+    check_part_files = require_part_files and parts_dir.exists()
+    if parts and require_part_files and not check_part_files:
         issues.append("parts folder is missing")
 
     expected_suffixes = (".json", ".html", ".txt")

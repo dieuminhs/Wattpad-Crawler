@@ -450,6 +450,7 @@ class ArchiveRepository:
             story = self.get_story(row["story_id"])
             if story is None:
                 continue
+            story["parts"] = self.list_parts(story["story_id"])
             story_path = story_dir(
                 self.output_dir,
                 Story(
@@ -458,7 +459,7 @@ class ArchiveRepository:
                     author_username=story["author_username"],
                 ),
             )
-            health = check_story_archive(story_path, story)
+            health = check_story_archive(story_path, story, require_part_files=False)
             entries.append(
                 LibraryEntry(
                     story_id=story["story_id"],

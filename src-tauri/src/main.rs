@@ -2,6 +2,7 @@
 
 use std::env;
 use std::fs;
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -67,7 +68,12 @@ fn candidate_backend_paths() -> Vec<PathBuf> {
     }
 
     if let Ok(project_dir) = env::current_dir() {
-        paths.push(project_dir.join("src-tauri").join("bin").join(backend_exe_name()));
+        paths.push(
+            project_dir
+                .join("src-tauri")
+                .join("bin")
+                .join(backend_exe_name()),
+        );
     }
 
     paths
@@ -111,6 +117,43 @@ fn read_startup_url(path: &PathBuf, deadline: Instant) -> Result<String, String>
     Err("backend did not report a startup URL".to_string())
 }
 
+fn backend_socket_addrs(url: &str) -> Result<Vec<SocketAddr>, String> {
+    let without_scheme = url
+        .strip_prefix("http://")
+        .ok_or_else(|| format!("unsupported backend URL: {url}"))?;
+    let authority = without_scheme.split('/').next().unwrap_or(without_scheme);
+    let (host, port) = authority
+        .rsplit_once(':')
+        .ok_or_else(|| format!("backend URL is missing a port: {url}"))?;
+    let port = port
+        .parse::<u16>()
+        .map_err(|err| format!("backend URL has an invalid port: {err}"))?;
+    let addrs = (host, port)
+        .to_socket_addrs()
+        .map_err(|err| format!("backend URL has an invalid socket address: {err}"))?
+        .collect::<Vec<_>>();
+    if addrs.is_empty() {
+        return Err(format!(
+            "backend URL did not resolve to a socket address: {url}"
+        ));
+    }
+    Ok(addrs)
+}
+
+fn wait_for_backend(url: &str, deadline: Instant) -> Result<(), String> {
+    let addrs = backend_socket_addrs(url)?;
+    while Instant::now() <= deadline {
+        if addrs
+            .iter()
+            .any(|addr| TcpStream::connect_timeout(addr, Duration::from_millis(250)).is_ok())
+        {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Err(format!("backend did not start listening at {url}"))
+}
+
 fn start_backend() -> Result<(String, BackendProcess), String> {
     let startup_url_file = startup_url_file();
     let mut command = backend_command();
@@ -126,6 +169,7 @@ fn start_backend() -> Result<(String, BackendProcess), String> {
     let deadline = Instant::now() + Duration::from_secs(20);
     match read_startup_url(&startup_url_file, deadline) {
         Ok(url) => {
+            wait_for_backend(&url, Instant::now() + Duration::from_secs(20))?;
             let process = BackendProcess(Arc::new(Mutex::new(Some(child))));
             Ok((url, process))
         }

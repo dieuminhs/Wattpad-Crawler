@@ -545,6 +545,7 @@ def test_library_lists_stories(output_dir: Path):
 def test_library_health_summary_counts_archives(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     complete = output_dir / "stories" / "alice" / "42_complete"
+    warning = output_dir / "stories" / "beth" / "55_warning"
     broken = output_dir / "stories" / "bob" / "77_broken"
     complete_parts = complete / "parts"
     complete_output = complete / "output"
@@ -563,6 +564,24 @@ def test_library_health_summary_counts_archives(output_dir: Path):
     (complete_parts / "01_100_comments-inline.json").write_text("[]", encoding="utf-8")
     (complete_parts / "01_100_comments-end.json").write_text("[]", encoding="utf-8")
     (complete_output / "Complete.epub").write_bytes(b"epub")
+    warning_parts = warning / "parts"
+    warning_output = warning / "output"
+    warning_parts.mkdir(parents=True)
+    warning_output.mkdir()
+    (warning / "metadata.json").write_text(json.dumps({
+        "story_id": "55",
+        "title": "Warning",
+        "author_username": "beth",
+        "tags": [],
+        "description": "",
+        "cover_url": "https://example.invalid/cover.jpg",
+        "parts": [{"part_id": "300", "ordinal": 1, "title": "One"}],
+    }))
+    for suffix in ("json", "html", "txt"):
+        (warning_parts / f"01_300_one.{suffix}").write_text("ok", encoding="utf-8")
+    (warning_parts / "01_300_comments-inline.json").write_text("[]", encoding="utf-8")
+    (warning_parts / "01_300_comments-end.json").write_text("[]", encoding="utf-8")
+    (warning_output / "Warning.epub").write_bytes(b"epub")
     broken.mkdir(parents=True)
     (broken / "metadata.json").write_text(json.dumps({
         "story_id": "77",
@@ -584,6 +603,7 @@ def test_library_health_summary_counts_archives(output_dir: Path):
     assert ">1</strong>" in r.text
     repair_page = client.get("/library?filter=needs_repair")
     assert '<div class="title">Broken</div>' in repair_page.text
+    assert '<div class="title">Warning</div>' not in repair_page.text
     assert '<div class="title">Complete</div>' not in repair_page.text
 
 def test_library_story_cards_show_read_actions(output_dir: Path):

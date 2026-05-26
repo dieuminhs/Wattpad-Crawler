@@ -41,7 +41,7 @@ def _library_health_summary(entries) -> dict[str, int]:
     for entry in entries:
         status = entry.health_status if entry.health_status in summary else "unknown"
         summary[status] += 1
-        if status in {"warning", "broken"}:
+        if status == "broken":
             summary["needs_repair"] += 1
     return summary
 
@@ -73,7 +73,7 @@ def _entry_matches_filter(entry, filter_name: str) -> bool:
     if filter_name == "no_cover":
         return not entry.has_cover
     if filter_name == "needs_repair":
-        return entry.health_status in {"broken", "warning"}
+        return entry.health_status == "broken"
     return True
 
 
