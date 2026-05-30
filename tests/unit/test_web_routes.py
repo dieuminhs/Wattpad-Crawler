@@ -34,6 +34,43 @@ def test_static_css_served(output_dir: Path):
     assert r.status_code == 200
     assert "text/css" in r.headers["content-type"]
 
+def test_library_cards_have_equal_height_and_clean_selection_overlay(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    r = client.get("/static/style.css")
+
+    assert r.status_code == 200
+    assert ".library-item" in r.text
+    assert "display: flex;" in r.text
+    assert "height: 100%;" in r.text
+    assert "-webkit-line-clamp: 2;" in r.text
+    assert "top: -0.55rem;" in r.text
+    assert "left: -0.55rem;" in r.text
+
+def test_library_bulk_selection_shows_selected_count(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42",
+        "title": "My Tale",
+        "author_username": "alice",
+        "tags": [],
+        "description": "",
+        "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library")
+
+    assert r.status_code == 200
+    assert 'id="library-selected-count"' in r.text
+    assert "0 selected" in r.text
+    assert "updateSelectedCount" in r.text
+    assert "selectAll.indeterminate" in r.text
+
 
 def test_reader_comment_button_hover_scales_without_dropping(output_dir: Path):
     cfg = Config(output_dir=output_dir)
@@ -315,6 +352,37 @@ def test_library_marks_topbar_active(output_dir: Path):
     assert r.status_code == 200
     assert 'class="topbar-link is-active" href="/library"' in r.text
 
+def test_dashboard_public_mode_copy_and_current_user_actions(output_dir: Path):
+    cfg = Config(output_dir=output_dir, cookie="")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/")
+
+    assert r.status_code == 200
+    assert "Public mode" in r.text
+    assert "currently signed-in Wattpad account" in r.text
+    assert "your Wattpad username" not in r.text
+    assert 'href="/reading-lists"' in r.text
+
+def test_reading_lists_page_uses_current_user(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    monkeypatch.setattr("local_story_archive.web.routes.fetch_current_username", lambda _client: "alice")
+    monkeypatch.setattr(
+        "local_story_archive.web.routes.fetch_reading_lists",
+        lambda _client, username: [{"id": "L1", "name": f"{username}'s Favorites", "num_stories": 3}],
+    )
+
+    r = client.get("/reading-lists")
+
+    assert r.status_code == 200
+    assert "Signed in as alice" in r.text
+    assert "alice&#39;s Favorites" in r.text
+    assert 'name="list_id" value="L1"' in r.text
+
 
 def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir, cookie="tok")
@@ -338,6 +406,29 @@ def test_post_jobs_story_creates_and_starts(output_dir: Path, monkeypatch):
     while job.status.value in ("pending", "running"):
         if time.monotonic() > deadline:
             raise AssertionError(f"job stuck at {job.status}")
+        time.sleep(0.01)
+    assert captured["sid"] == "12345"
+
+def test_post_jobs_story_allows_public_mode_without_cookie(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="")
+    app = build_app(cfg)
+    client = TestClient(app)
+    captured = {}
+
+    def fake_archive_story(cfg_arg, _client, _manifest, sid, *, deps=None, progress=None):
+        captured["sid"] = sid
+
+    monkeypatch.setattr("local_story_archive.web.routes.archive_story", fake_archive_story)
+
+    r = client.post("/jobs", data={"kind": "story", "target": "12345"}, follow_redirects=False)
+
+    assert r.status_code == 303
+    job_id = r.headers["location"].split("=", 1)[1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
         time.sleep(0.01)
     assert captured["sid"] == "12345"
 
@@ -398,6 +489,42 @@ def test_post_jobs_repair_story_uses_existing_story_id(output_dir: Path, monkeyp
             raise AssertionError("job stuck")
         time.sleep(0.01)
     assert captured["sid"] == "42"
+
+def test_post_jobs_library_resolves_current_username(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+    captured = {}
+
+    monkeypatch.setattr("local_story_archive.web.routes.fetch_current_username", lambda _client: "alice")
+
+    def fake_fetch_library(_client, username):
+        captured["username"] = username
+        return []
+
+    monkeypatch.setattr("local_story_archive.web.routes.fetch_library", fake_fetch_library)
+
+    r = client.post("/jobs", data={"kind": "library", "username": ""}, follow_redirects=False)
+
+    assert r.status_code == 303
+    job_id = r.headers["location"].split("=", 1)[1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
+        time.sleep(0.01)
+    assert captured["username"] == "alice"
+
+def test_post_jobs_library_requires_cookie_for_current_user(output_dir: Path):
+    cfg = Config(output_dir=output_dir, cookie="")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.post("/jobs", data={"kind": "library", "username": ""}, follow_redirects=False)
+
+    assert r.status_code == 400
+    assert "cookie" in r.text.lower()
 def test_post_jobs_invalid_kind_returns_400(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)

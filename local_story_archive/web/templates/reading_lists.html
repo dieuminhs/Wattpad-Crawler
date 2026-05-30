@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Reading Lists — Local Story Archive{% endblock %}
+{% block content %}
+  <h1>Reading Lists</h1>
+  <p class="muted">Signed in as {{ username }}. Choose a list to archive.</p>
+
+  {% if lists %}
+    <div class="reading-list-grid">
+      {% for list in lists %}
+        <form method="post" action="/jobs" class="card archive-card">
+          <h3>{{ list.name or "Untitled list" }}</h3>
+          <p class="muted">{{ list.num_stories }} stories</p>
+          <input type="hidden" name="kind" value="list">
+          <input type="hidden" name="list_id" value="{{ list.id }}">
+          <button type="submit">Archive this list</button>
+        </form>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No reading lists were found for this account.</p>
+  {% endif %}
+{% endblock %}

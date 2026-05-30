@@ -16,6 +16,7 @@
     <div class="topbar-links" aria-label="Primary navigation">
       <a class="topbar-link{% if request.url.path == '/' %} is-active{% endif %}" href="/">Dashboard</a>
       <a class="topbar-link{% if request.url.path.startswith('/library') or request.url.path.startswith('/read') %} is-active{% endif %}" href="/library">Library</a>
+      <a class="topbar-link{% if request.url.path.startswith('/history') %} is-active{% endif %}" href="/history">History</a>
       <a class="topbar-link{% if request.url.path.startswith('/setup') %} is-active{% endif %}" href="/setup">Setup</a>
       <a class="topbar-link{% if request.url.path.startswith('/config') %} is-active{% endif %}" href="/config">Config</a>
     </div>

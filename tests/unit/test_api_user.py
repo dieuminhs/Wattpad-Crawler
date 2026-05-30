@@ -6,6 +6,7 @@ import httpx
 from local_story_archive.api.user import (
     _paginate,
     fetch_library,
+    parse_current_username,
     parse_library,
     parse_list_stories,
     parse_reading_lists,
@@ -53,6 +54,12 @@ def test_parse_list_stories():
 def test_parse_list_stories_filters_null():
     raw = {"stories": [{"id": "S1"}, {"id": None}, "garbage"]}
     assert parse_list_stories(raw) == ["S1"]
+
+def test_parse_current_username_prefers_username():
+    assert parse_current_username({"username": "alice", "name": "Alice Display"}) == "alice"
+
+def test_parse_current_username_falls_back_to_name():
+    assert parse_current_username({"name": "alice"}) == "alice"
 
 
 def _mock_client(tmp_path: Path, handler):

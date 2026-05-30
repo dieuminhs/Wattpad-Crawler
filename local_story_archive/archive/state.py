@@ -1,4 +1,6 @@
+import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Self
 
@@ -39,6 +41,7 @@ CREATE TABLE IF NOT EXISTS runs (
     summary_json        TEXT
 );
 """
+
 
 
 class Manifest:
@@ -152,6 +155,61 @@ class Manifest:
                 (story_id,),
             )
         return True
+
+    def reset_failed_story_work(self, story_id: str) -> int:
+        """Mark only failed parts pending so the next archive run retries them."""
+        with self.db:
+            cur = self.db.execute(
+                """
+                UPDATE parts
+                SET status = 'pending', last_error = NULL
+                WHERE story_id = ? AND status = 'failed'
+                """,
+                (story_id,),
+            )
+            if cur.rowcount:
+                self.db.execute(
+                    "UPDATE stories SET status = 'pending' WHERE story_id = ?",
+                    (story_id,),
+                )
+        return cur.rowcount
+
+    def start_run(self, summary: dict | None = None) -> int:
+        """Record the start of an archive run and return its id."""
+        started_at = datetime.now(UTC).isoformat()
+        cur = self.db.execute(
+            "INSERT INTO runs(started_at, summary_json) VALUES (?, ?)",
+            (started_at, json.dumps(summary or {})),
+        )
+        self.db.commit()
+        return int(cur.lastrowid)
+
+    def finish_run(self, run_id: int, summary: dict) -> None:
+        """Record the end time and final summary for an archive run."""
+        ended_at = datetime.now(UTC).isoformat()
+        self.db.execute(
+            "UPDATE runs SET ended_at = ?, summary_json = ? WHERE run_id = ?",
+            (ended_at, json.dumps(summary), run_id),
+        )
+        self.db.commit()
+
+    def list_runs(self, limit: int = 50) -> list[dict]:
+        """Return recent archive runs with parsed summary data."""
+        rows = self.db.execute(
+            """
+            SELECT run_id, started_at, ended_at, summary_json
+            FROM runs
+            ORDER BY run_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        runs = []
+        for row in rows:
+            item = dict(row)
+            item["summary"] = json.loads(item.pop("summary_json") or "{}")
+            runs.append(item)
+        return runs
 
     def get_story(self, story_id: str) -> dict | None:
         row = self.db.execute(

@@ -14,7 +14,12 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
-from local_story_archive.api.user import fetch_library, fetch_list_story_ids
+from local_story_archive.api.user import (
+    fetch_current_username,
+    fetch_library,
+    fetch_list_story_ids,
+    fetch_reading_lists,
+)
 from local_story_archive.archive import store
 from local_story_archive.archive.backup import BackupError, create_backup, restore_backup
 from local_story_archive.archive.repository import ArchiveRepository
@@ -33,7 +38,15 @@ from local_story_archive.web.library_browser import scan_library
 
 router = APIRouter()
 _LIBRARY_PAGE_SIZE = 25
-_LIBRARY_FILTERS = {"all", "bookmarked", "has_cover", "no_cover", "needs_repair"}
+_LIBRARY_FILTERS = {
+    "all",
+    "bookmarked",
+    "complete",
+    "incomplete",
+    "has_cover",
+    "no_cover",
+    "needs_repair",
+}
 
 
 def _library_health_summary(entries) -> dict[str, int]:
@@ -59,6 +72,8 @@ def _entry_matches_query(entry, query: str) -> bool:
             entry.title,
             entry.author,
             entry.description,
+            entry.health_status,
+            entry.last_archived,
             " ".join(entry.tags),
         ]
     )
@@ -68,6 +83,10 @@ def _entry_matches_query(entry, query: str) -> bool:
 def _entry_matches_filter(entry, filter_name: str) -> bool:
     if filter_name == "bookmarked":
         return entry.bookmarked
+    if filter_name == "complete":
+        return entry.health_status == "ok"
+    if filter_name == "incomplete":
+        return entry.health_status != "ok"
     if filter_name == "has_cover":
         return entry.has_cover
     if filter_name == "no_cover":
@@ -87,6 +106,27 @@ def _library_page_url(page: int, query: str, filter_name: str) -> str:
     if not params:
         return "/library"
     return "/library?" + urlencode(params)
+
+def _validate_cookie_before_job(cfg, *, required: bool = False) -> None:
+    if required and not cfg.cookie:
+        raise HTTPException(
+            status_code=400,
+            detail="This action needs a Wattpad cookie. Add one in Setup first.",
+        )
+    if not cfg.cookie:
+        return
+    try:
+        with RateLimitedClient(cfg) as client:
+            validate_cookie(client)
+    except AuthError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Wattpad cookie validation failed before starting job: {e}",
+        ) from e
+    except httpx.RequestError as e:
+        # Do not block offline/local testing or transient network outages. Actual
+        # auth failures still stop the job before it wastes a long archive run.
+        return
 
 
 def _toml_string(value: str) -> str:
@@ -297,22 +337,44 @@ def _build_work(cfg, kind: str, args: dict):
     def work(emit):
         client = RateLimitedClient(cfg)
         manifest = Manifest(cfg.output_dir).connect()
+        run_id = manifest.start_run({"kind": kind, "args": args, "status": "running"})
+        counts = {"stories": 0, "parts_done": 0, "failures": 0}
+
+        def tracked_emit(event_kind: str, data: dict) -> None:
+            if event_kind == "story.done":
+                counts["stories"] += 1
+            elif event_kind in {"part.done", "comments.refresh.done"}:
+                counts["parts_done"] += 1
+            elif event_kind.endswith(".failed") or event_kind == "auth.failed":
+                counts["failures"] += 1
+            emit(event_kind, data)
+
         try:
             if kind == "story":
-                archive_story(cfg, client, manifest, args["story_id"], progress=emit)
+                archive_story(cfg, client, manifest, args["story_id"], progress=tracked_emit)
             elif kind == "library":
                 ids = fetch_library(client, args["username"])
-                archive_many(cfg, client, manifest, ids, progress=emit)
+                archive_many(cfg, client, manifest, ids, progress=tracked_emit)
             elif kind == "list":
                 ids = fetch_list_story_ids(client, args["list_id"])
-                archive_many(cfg, client, manifest, ids, progress=emit)
+                archive_many(cfg, client, manifest, ids, progress=tracked_emit)
             elif kind == "comments":
-                refresh_story_comments(cfg, client, args["story_id"], progress=emit)
+                refresh_story_comments(cfg, client, args["story_id"], progress=tracked_emit)
             elif kind == "comments_many":
                 for story_id in args["story_ids"]:
-                    refresh_story_comments(cfg, client, story_id, progress=emit)
+                    refresh_story_comments(cfg, client, story_id, progress=tracked_emit)
             elif kind == "stories_many":
-                archive_many(cfg, client, manifest, args["story_ids"], progress=emit)
+                archive_many(cfg, client, manifest, args["story_ids"], progress=tracked_emit)
+            manifest.finish_run(
+                run_id,
+                {"kind": kind, "args": args, "status": "done", **counts},
+            )
+        except Exception as e:
+            manifest.finish_run(
+                run_id,
+                {"kind": kind, "args": args, "status": "failed", "error": str(e), **counts},
+            )
+            raise
         finally:
             manifest.close()
             client.close()
@@ -328,6 +390,11 @@ async def submit_job(request: Request) -> RedirectResponse:
     mgr = request.app.state.job_manager
     runner = request.app.state.job_runner
 
+    if kind in {"library", "list", "comments", "repair_story", "retry_failed"}:
+        _validate_cookie_before_job(cfg, required=True)
+    elif kind == "story":
+        _validate_cookie_before_job(cfg)
+
     if kind == "story":
         target = form.get("target", "").strip()
         try:
@@ -340,7 +407,8 @@ async def submit_job(request: Request) -> RedirectResponse:
     elif kind == "library":
         username = form.get("username", "").strip()
         if not username:
-            raise HTTPException(status_code=400, detail="username required")
+            with RateLimitedClient(cfg) as client:
+                username = fetch_current_username(client)
         job = mgr.create("archive_library", {"username": username})
         runner.submit(job, _build_work(cfg, "library", {"username": username}))
     elif kind == "list":
@@ -361,6 +429,16 @@ async def submit_job(request: Request) -> RedirectResponse:
             raise HTTPException(status_code=400, detail="story_id required")
         job = mgr.create("repair_story", {"story_id": story_id})
         runner.submit(job, _build_work(cfg, "story", {"story_id": story_id}))
+    elif kind == "retry_failed":
+        story_id = form.get("story_id", "").strip()
+        if not story_id:
+            raise HTTPException(status_code=400, detail="story_id required")
+        with Manifest(cfg.output_dir) as manifest:
+            reset_count = manifest.reset_failed_story_work(story_id)
+        if reset_count == 0:
+            raise HTTPException(status_code=400, detail="no failed chapters to retry")
+        job = mgr.create("retry_failed", {"story_id": story_id, "parts": reset_count})
+        runner.submit(job, _build_work(cfg, "story", {"story_id": story_id}))
     else:
         raise HTTPException(status_code=400, detail=f"unknown kind: {kind}")
 
@@ -376,6 +454,24 @@ async def library_bulk(request: Request) -> RedirectResponse:
         raise HTTPException(status_code=400, detail="select at least one story")
 
     cfg = request.app.state.cfg
+    if action in {"refresh_comments", "repair", "retry_failed"}:
+        _validate_cookie_before_job(cfg, required=True)
+
+    if action == "retry_failed":
+        retry_ids = []
+        with Manifest(cfg.output_dir) as manifest:
+            for story_id in story_ids:
+                if manifest.reset_failed_story_work(story_id):
+                    retry_ids.append(story_id)
+        if not retry_ids:
+            raise HTTPException(status_code=400, detail="no failed chapters to retry")
+        job = request.app.state.job_manager.create("retry_failed", {"story_ids": retry_ids})
+        request.app.state.job_runner.submit(
+            job,
+            _build_work(cfg, "stories_many", {"story_ids": retry_ids}),
+        )
+        return RedirectResponse(url=f"/?job_id={job.job_id}", status_code=303)
+
     if action == "refresh_comments":
         job = request.app.state.job_manager.create("refresh_comments", {"story_ids": story_ids})
         request.app.state.job_runner.submit(
@@ -538,6 +634,8 @@ def library(request: Request) -> HTMLResponse:
             "filter_options": [
                 ("all", "All", _library_page_url(1, query, "all")),
                 ("bookmarked", "Bookmarked", _library_page_url(1, query, "bookmarked")),
+                ("complete", "Complete", _library_page_url(1, query, "complete")),
+                ("incomplete", "Incomplete", _library_page_url(1, query, "incomplete")),
                 ("has_cover", "Has cover", _library_page_url(1, query, "has_cover")),
                 ("no_cover", "No cover", _library_page_url(1, query, "no_cover")),
                 ("needs_repair", "Needs repair", _library_page_url(1, query, "needs_repair")),
@@ -569,6 +667,30 @@ def job_summary(request: Request, job_id: str) -> JSONResponse:
         }
     )
 
+
+@router.get("/history", response_class=HTMLResponse)
+def job_history(request: Request) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    with Manifest(cfg.output_dir) as manifest:
+        runs = manifest.list_runs()
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="history.html",
+        context={"runs": runs},
+    )
+
+@router.get("/reading-lists", response_class=HTMLResponse)
+def reading_lists(request: Request) -> HTMLResponse:
+    cfg = request.app.state.cfg
+    _validate_cookie_before_job(cfg, required=True)
+    with RateLimitedClient(cfg) as client:
+        username = fetch_current_username(client)
+        lists = fetch_reading_lists(client, username)
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="reading_lists.html",
+        context={"username": username, "lists": lists},
+    )
 
 @router.get("/config", response_class=HTMLResponse)
 def config_get(request: Request) -> HTMLResponse:

@@ -168,3 +168,35 @@ def test_get_missing_part_returns_none(output_dir: Path):
     m = Manifest(output_dir).connect()
     assert m.get_part("s1", "p1") is None
     m.close()
+
+def test_reset_failed_story_work_only_resets_failed_parts(output_dir: Path):
+    m = Manifest(output_dir).connect()
+    s = make_story()
+    m.upsert_story(s)
+    m.upsert_parts(s)
+    m.set_part_status("s1", "p1", "done", body_hash="abc")
+    m.set_part_status("s1", "p2", "failed", last_error="connection reset")
+
+    assert m.reset_failed_story_work("s1") == 1
+
+    assert m.get_part("s1", "p1")["status"] == "done"
+    assert m.get_part("s1", "p1")["body_hash"] == "abc"
+    assert m.get_part("s1", "p2")["status"] == "pending"
+    assert m.get_part("s1", "p2")["last_error"] is None
+    m.close()
+
+def test_run_history_round_trips_summary(output_dir: Path):
+    m = Manifest(output_dir).connect()
+    run_id = m.start_run({"kind": "story", "status": "running"})
+    m.finish_run(
+        run_id,
+        {"kind": "story", "status": "done", "stories": 1, "failures": 0},
+    )
+
+    runs = m.list_runs()
+
+    assert runs[0]["run_id"] == run_id
+    assert runs[0]["ended_at"]
+    assert runs[0]["summary"]["kind"] == "story"
+    assert runs[0]["summary"]["stories"] == 1
+    m.close()

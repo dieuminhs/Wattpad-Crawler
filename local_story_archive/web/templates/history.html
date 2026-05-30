@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Job History — Local Story Archive{% endblock %}
+{% block content %}
+  <h1>Job History</h1>
+  <p class="muted">Recent archive runs recorded in <code>_state.sqlite</code>.</p>
+
+  {% if runs %}
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Started</th>
+          <th>Ended</th>
+          <th>Kind</th>
+          <th>Status</th>
+          <th>Stories</th>
+          <th>Chapters</th>
+          <th>Failures</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+          <tr>
+            <td>#{{ run.run_id }}</td>
+            <td>{{ run.started_at }}</td>
+            <td>{{ run.ended_at or "Running" }}</td>
+            <td>{{ run.summary.kind or "unknown" }}</td>
+            <td>{{ run.summary.status or "unknown" }}</td>
+            <td>{{ run.summary.stories or 0 }}</td>
+            <td>{{ run.summary.parts_done or 0 }}</td>
+            <td>{{ run.summary.failures or 0 }}</td>
+          </tr>
+          {% if run.summary.error %}
+            <tr><td colspan="8" class="status-error">{{ run.summary.error }}</td></tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No archive runs have been recorded yet.</p>
+  {% endif %}
+{% endblock %}

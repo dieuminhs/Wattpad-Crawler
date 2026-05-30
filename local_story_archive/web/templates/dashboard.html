@@ -24,9 +24,9 @@
   {% endif %}
 
   {% if not has_cookie %}
-    <div class="card status-failed">
-      <strong>No cookie configured.</strong> You need to <a href="/setup">paste your Wattpad cookie</a> first
-      to archive your library or login-required stories.
+    <div class="card status-done">
+      <strong>Public mode.</strong> You can archive public stories by URL or ID without a cookie.
+      Add a <a href="/setup">Wattpad cookie</a> only for your library, reading lists, or login-required stories.
     </div>
   {% endif %}
 
@@ -41,15 +41,13 @@
     <form method="post" action="/jobs" class="card archive-card archive-card-featured">
       <span class="archive-icon">★</span>
       <h3>My library</h3>
-      <p>Archive everything you've added on Wattpad.</p>
-      <p>
-        <input type="text" name="username" placeholder="your Wattpad username" required>
-      </p>
+      <p>Archive everything from the currently signed-in Wattpad account.</p>
       <input type="hidden" name="kind" value="library">
+      <input type="hidden" name="username" value="">
       <button type="submit">Archive library</button>
     </form>
 
-    <form method="post" action="/jobs" class="card archive-card">
+    <div class="card archive-card">
       <span class="archive-icon">➜</span>
       <h3>One story</h3>
       <p>Archive a single story by ID or URL.</p>
@@ -63,13 +61,11 @@
     <form method="post" action="/jobs" class="card archive-card">
       <span class="archive-icon">≡</span>
       <h3>Reading list</h3>
-      <p>Archive all stories in a reading list.</p>
+      <p>Pick from the currently signed-in Wattpad account's reading lists.</p>
       <p>
-        <input type="text" name="list_id" placeholder="reading list ID" required>
+        <a class="btn" href="/reading-lists">Choose reading list</a>
       </p>
-      <input type="hidden" name="kind" value="list">
-      <button type="submit">Archive list</button>
-    </form>
+    </div>
   </div>
 
   <div class="section-heading">

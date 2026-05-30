@@ -13,6 +13,7 @@ from local_story_archive.client import RateLimitedClient
 LIBRARY_URL = "https://www.wattpad.com/api/v3/users/{username}/library?limit=200"
 READING_LISTS_URL = "https://www.wattpad.com/api/v3/users/{username}/lists"
 LIST_STORIES_URL = "https://www.wattpad.com/api/v3/lists/{list_id}/stories?limit=500"
+CURRENT_USER_URL = "https://www.wattpad.com/api/v3/users/me"
 
 # Hard cap on pagination loops to prevent runaway requests if the server
 # misbehaves and returns the same nextUrl forever.
@@ -41,6 +42,12 @@ def parse_list_stories(raw: dict[str, Any]) -> list[str]:
     stories = raw.get("stories") or []
     return [str(s["id"]) for s in stories if isinstance(s, dict) and s.get("id") is not None]
 
+def parse_current_username(raw: dict[str, Any]) -> str:
+    username = raw.get("username") or raw.get("name")
+    if not isinstance(username, str) or not username.strip():
+        raise ValueError("Wattpad current-user response did not include a username")
+    return username.strip()
+
 
 def _paginate(client: RateLimitedClient, start_url: str) -> list[dict[str, Any]]:
     """Walk the nextUrl/nextPage chain, with cycle and max-page guards."""
@@ -61,6 +68,9 @@ def fetch_library(client: RateLimitedClient, username: str) -> list[str]:
     for page in _paginate(client, start):
         ids.extend(parse_library(page))
     return ids
+
+def fetch_current_username(client: RateLimitedClient) -> str:
+    return parse_current_username(client.get(CURRENT_USER_URL).json())
 
 
 def fetch_reading_lists(

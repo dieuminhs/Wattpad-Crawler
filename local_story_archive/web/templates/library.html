@@ -68,9 +68,11 @@
         <input id="library-select-all" type="checkbox">
         Select all
       </label>
+      <span class="library-selected-count" id="library-selected-count" aria-live="polite">0 selected</span>
       <form class="library-bulk-actions" id="library-bulk-form" method="post" action="/library/bulk">
         <select name="bulk_action" aria-label="Bulk action">
           <option value="repair">Repair archive</option>
+          <option value="retry_failed">Retry failed only</option>
           <option value="refresh_comments">Refresh comments</option>
           <option value="remove">Remove from archive</option>
         </select>
@@ -98,6 +100,7 @@
             {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
             <div class="title">{{ e.title }}</div>
             <div class="author">by {{ e.author }}</div>
+            {% if e.last_archived %}<div class="muted">Last archived {{ e.last_archived }}</div>{% endif %}
             <div class="library-health library-health--{{ e.health_status }}">
               <span>{{ e.health_summary }}</span>
             </div>
@@ -126,6 +129,11 @@
                 <button type="submit">Repair archive</button>
               </form>
               <form method="post" action="/jobs">
+                <input type="hidden" name="kind" value="retry_failed">
+                <input type="hidden" name="story_id" value="{{ e.story_id }}">
+                <button type="submit">Retry failed only</button>
+              </form>
+              <form method="post" action="/jobs">
                 <input type="hidden" name="kind" value="comments">
                 <input type="hidden" name="story_id" value="{{ e.story_id }}">
                 <button type="submit">Refresh comments</button>
@@ -149,15 +157,22 @@
       (function () {
         const selectAll = document.getElementById('library-select-all');
         if (!selectAll) return;
+        const selectedCount = document.getElementById('library-selected-count');
         const boxes = Array.from(document.querySelectorAll('input[name="story_ids"]'));
+        const updateSelectedCount = () => {
+          const count = boxes.filter((box) => box.checked).length;
+          if (selectedCount) selectedCount.textContent = `${count} selected`;
+          selectAll.checked = boxes.length > 0 && count === boxes.length;
+          selectAll.indeterminate = count > 0 && count < boxes.length;
+        };
         selectAll.addEventListener('change', () => {
           boxes.forEach((box) => { box.checked = selectAll.checked; });
+          updateSelectedCount();
         });
         boxes.forEach((box) => {
-          box.addEventListener('change', () => {
-            selectAll.checked = boxes.length > 0 && boxes.every((item) => item.checked);
-          });
+          box.addEventListener('change', updateSelectedCount);
         });
+        updateSelectedCount();
       })();
     </script>
     <script>

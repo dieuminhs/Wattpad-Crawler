@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 from local_story_archive.archive.health import check_story_archive
@@ -64,6 +65,9 @@ def scan_library(output_dir: Path) -> list[LibraryEntry]:
                         storage_path=story_dir,
                         first_ordinal=min(ordinals) if ordinals else None,
                         last_ordinal=max(ordinals) if ordinals else None,
+                        last_archived=datetime.fromtimestamp(
+                            meta_path.stat().st_mtime
+                        ).strftime("%Y-%m-%d %H:%M"),
                     ),
                     meta,
                 )

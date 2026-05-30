@@ -19,3 +19,4 @@ class LibraryEntry:
     health_status: str = "unknown"
     health_summary: str = "Not checked"
     health_issues: list[str] | None = None
+    last_archived: str = ""
