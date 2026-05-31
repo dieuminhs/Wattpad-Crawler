@@ -2,6 +2,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from local_story_archive.cookie_crypto import CookieCryptoError, decrypt_cookie
+
 
 class ConfigError(Exception):
     pass
@@ -23,8 +25,9 @@ class Config:
 
 
 _DEFAULT_TOML = (
-    '# Paste your Wattpad session cookie here (the value of the "token" cookie)\n'
+    '# Wattpad session cookie. Saved through the web UI as encrypted cookie_encrypted.\n'
     'cookie = ""\n'
+    'cookie_encrypted = ""\n'
     "rate_limit_per_sec = 2.0\n"
     "workers_per_story = 3\n"
     "compact_after_archive = true\n"
@@ -68,9 +71,17 @@ def load_config(output_dir: Path) -> Config:
         raise ConfigError(f"rate_limit_per_sec must be > 0 (got {rate}) in {config_path}")
     if workers < 1:
         raise ConfigError(f"workers_per_story must be >= 1 (got {workers}) in {config_path}")
+    encrypted_cookie = str(data.get("cookie_encrypted", ""))
+    if encrypted_cookie:
+        try:
+            cookie = decrypt_cookie(encrypted_cookie)
+        except CookieCryptoError as e:
+            raise ConfigError(f"Could not decrypt cookie in {config_path}: {e}") from e
+    else:
+        cookie = str(data.get("cookie", ""))
     return Config(
         output_dir=output_dir,
-        cookie=data.get("cookie", ""),
+        cookie=cookie,
         rate_limit_per_sec=rate,
         workers_per_story=workers,
         compact_after_archive=compact_after_archive,

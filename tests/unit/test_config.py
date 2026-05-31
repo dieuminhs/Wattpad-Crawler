@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from local_story_archive.config import Config, ConfigError, load_config
+from local_story_archive.cookie_crypto import encrypt_cookie
 
 
 def test_load_config_creates_default_when_missing(output_dir: Path):
@@ -31,6 +32,22 @@ def test_load_config_reads_existing(output_dir: Path):
     assert cfg.workers_per_story == 5
     assert cfg.compact_after_archive is False
     assert cfg.export_preset == "cozy"
+
+def test_load_config_reads_encrypted_cookie(output_dir: Path, monkeypatch):
+    key_path = output_dir / "cookie.key"
+    monkeypatch.setenv("LOCAL_STORY_ARCHIVE_COOKIE_KEY", str(key_path))
+    encrypted = encrypt_cookie("secret-token")
+    (output_dir / "_config.toml").write_text(
+        'cookie = ""\n'
+        f'cookie_encrypted = "{encrypted}"\n'
+        "rate_limit_per_sec = 2.0\n"
+        "workers_per_story = 3\n",
+        encoding="utf-8",
+    )
+
+    cfg = load_config(output_dir)
+
+    assert cfg.cookie == "secret-token"
 
 def test_load_config_defaults_compact_after_archive_when_missing(output_dir: Path):
     (output_dir / "_config.toml").write_text('cookie = "abc123"\n')

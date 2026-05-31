@@ -27,6 +27,7 @@ from local_story_archive.archive.state import Manifest
 from local_story_archive.auth import AuthError, validate_cookie
 from local_story_archive.client import RateLimitedClient
 from local_story_archive.config import EXPORT_PRESETS
+from local_story_archive.cookie_crypto import encrypt_cookie
 from local_story_archive.jobs import (
     ResolveError,
     archive_many,
@@ -140,6 +141,13 @@ def _validate_cookie_before_job(cfg, *, required: bool = False) -> None:
         return
 
 
+def _setup_auth_redirect(exc: HTTPException) -> RedirectResponse:
+    return RedirectResponse(
+        url="/setup?" + urlencode({"error_kind": "auth", "error_message": str(exc.detail)}),
+        status_code=303,
+    )
+
+
 def _toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
@@ -156,24 +164,31 @@ def _save_cookie(output_dir: Path, cookie: str) -> None:
     """
     config_path = output_dir / "_config.toml"
     cookie = cookie.strip()
+    encrypted_cookie = encrypt_cookie(cookie)
     if config_path.exists():
         text = config_path.read_text(encoding="utf-8")
         lines = text.splitlines()
+        handled_cookie = False
+        handled_encrypted = False
         new_lines = []
-        replaced = False
         for line in lines:
             if line.lstrip().startswith("cookie "):
-                new_lines.append(f"cookie = {_toml_string(cookie)}")
-                replaced = True
+                new_lines.append('cookie = ""')
+                handled_cookie = True
+            elif line.lstrip().startswith("cookie_encrypted "):
+                new_lines.append(f"cookie_encrypted = {_toml_string(encrypted_cookie)}")
+                handled_encrypted = True
             else:
                 new_lines.append(line)
-        if not replaced:
-            new_lines.append(f"cookie = {_toml_string(cookie)}")
+        if not handled_cookie:
+            new_lines.append('cookie = ""')
+        if not handled_encrypted:
+            new_lines.append(f"cookie_encrypted = {_toml_string(encrypted_cookie)}")
         new_text = "\n".join(new_lines) + "\n"
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         new_text = (
-            f"cookie = {_toml_string(cookie)}\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\nexport_preset = \"classic\"\n"
+            f"cookie = \"\"\ncookie_encrypted = {_toml_string(encrypted_cookie)}\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\nexport_preset = \"classic\"\n"
         )
     # Atomic write: same-directory tmp + os.replace. PID/TID suffix avoids
     # collision if two writers race on the same target. Cleanup on exception
@@ -212,7 +227,8 @@ def _save_runtime_config(
     export_preset: str,
 ) -> None:
     text = (
-        f"cookie = {_toml_string(cookie)}\n"
+        "cookie = \"\"\n"
+        f"cookie_encrypted = {_toml_string(encrypt_cookie(cookie))}\n"
         f"rate_limit_per_sec = {rate_limit_per_sec}\n"
         f"workers_per_story = {workers_per_story}\n"
         f"compact_after_archive = {str(compact_after_archive).lower()}\n"
@@ -263,6 +279,9 @@ def setup_get(request: Request) -> HTMLResponse:
             "current_cookie_masked": _mask(cfg.cookie),
             "output_dir": str(cfg.output_dir),
             "saved": request.query_params.get("saved") == "1",
+            "removed": request.query_params.get("removed") == "1",
+            "error_kind": request.query_params.get("error_kind"),
+            "error_message": request.query_params.get("error_message", ""),
         },
     )
 
@@ -316,6 +335,16 @@ def setup_post(
 
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
+
+
+@router.post("/setup/remove-cookie")
+def setup_remove_cookie(request: Request) -> RedirectResponse:
+    cfg = request.app.state.cfg
+    _save_cookie(cfg.output_dir, "")
+    from local_story_archive.config import load_config
+
+    request.app.state.cfg = load_config(cfg.output_dir)
+    return RedirectResponse(url="/setup?removed=1", status_code=303)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -408,10 +437,13 @@ async def submit_job(request: Request) -> RedirectResponse:
     mgr = request.app.state.job_manager
     runner = request.app.state.job_runner
 
-    if kind in {"library", "list", "comments", "repair_story", "retry_failed"}:
-        _validate_cookie_before_job(cfg, required=True)
-    elif kind == "story":
-        _validate_cookie_before_job(cfg)
+    try:
+        if kind in {"library", "list", "comments", "repair_story", "retry_failed"}:
+            _validate_cookie_before_job(cfg, required=True)
+        elif kind == "story":
+            _validate_cookie_before_job(cfg)
+    except HTTPException as exc:
+        return _setup_auth_redirect(exc)
 
     if kind == "story":
         target = form.get("target", "").strip()
@@ -484,7 +516,10 @@ async def library_bulk(request: Request) -> RedirectResponse:
         )
 
     if action in {"refresh_comments", "repair", "retry_failed"}:
-        _validate_cookie_before_job(cfg, required=True)
+        try:
+            _validate_cookie_before_job(cfg, required=True)
+        except HTTPException as exc:
+            return _setup_auth_redirect(exc)
 
     if action == "retry_failed":
         retry_ids = []

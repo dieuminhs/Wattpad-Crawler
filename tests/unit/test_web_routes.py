@@ -277,7 +277,10 @@ def test_setup_post_saves_cookie(output_dir: Path, monkeypatch):
     r = client.post("/setup", data={"cookie": "tok-abc-123"}, follow_redirects=False)
     assert r.status_code in (200, 303)
     text = (output_dir / "_config.toml").read_text()
-    assert "tok-abc-123" in text
+    assert "tok-abc-123" not in text
+    assert 'cookie = ""' in text
+    assert 'cookie_encrypted = "lsa1:' in text
+    assert load_config(output_dir).cookie == "tok-abc-123"
 
 
 def test_setup_post_strips_whitespace(output_dir: Path, monkeypatch):
@@ -287,7 +290,8 @@ def test_setup_post_strips_whitespace(output_dir: Path, monkeypatch):
     monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda c: None)
     client.post("/setup", data={"cookie": "  tok-abc-123  \n"}, follow_redirects=False)
     text = (output_dir / "_config.toml").read_text()
-    assert 'cookie = "tok-abc-123"' in text
+    assert "tok-abc-123" not in text
+    assert load_config(output_dir).cookie == "tok-abc-123"
 
 
 def test_save_cookie_escapes_toml_sensitive_characters(output_dir: Path):
@@ -533,8 +537,13 @@ def test_post_jobs_library_requires_cookie_for_current_user(output_dir: Path):
 
     r = client.post("/jobs", data={"kind": "library", "username": ""}, follow_redirects=False)
 
-    assert r.status_code == 400
-    assert "cookie" in r.text.lower()
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/setup?error_kind=auth")
+    follow = client.get(r.headers["location"])
+    assert follow.status_code == 200
+    assert "This action needs a Wattpad cookie" in follow.text
+
+
 def test_post_jobs_invalid_kind_returns_400(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
@@ -1763,8 +1772,10 @@ def test_setup_post_valid_cookie_saves(output_dir: Path, monkeypatch):
     assert resp.status_code == 303
     assert "/setup?saved=1" in resp.headers.get("location", "")
     after = config_path.read_text(encoding="utf-8")
-    assert 'cookie = "new-good-cookie"' in after, \
-        f"Cookie was not saved; file contents: {after!r}"
+    assert 'cookie = ""' in after, f"Plaintext cookie was not cleared: {after!r}"
+    assert 'cookie_encrypted = "lsa1:' in after, f"Encrypted cookie was not saved: {after!r}"
+    assert "new-good-cookie" not in after
+    assert load_config(output_dir).cookie == "new-good-cookie"
 
 
 def test_setup_post_network_error(output_dir: Path, monkeypatch):
@@ -1803,6 +1814,47 @@ def test_setup_post_shows_masked_attempted(output_dir: Path, monkeypatch):
     expected_mask = "AbCd…5678"
     assert expected_mask in resp.text, \
         f"Expected masked cookie {expected_mask!r} in response body; got: {resp.text[:500]!r}"
+
+
+def test_setup_remove_cookie_enables_offline_mode(output_dir: Path):
+    cfg = Config(output_dir=output_dir, cookie="old-cookie-value")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "_config.toml").write_text(
+        'cookie = "old-cookie-value"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n',
+        encoding="utf-8",
+    )
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    resp = client.post("/setup/remove-cookie", follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/setup?removed=1"
+    assert app.state.cfg.cookie == ""
+    assert 'cookie = ""' in (output_dir / "_config.toml").read_text(encoding="utf-8")
+
+    follow = client.get(resp.headers["location"])
+    assert follow.status_code == 200
+    assert "Offline/public mode is active" in follow.text
+
+
+def test_job_invalid_cookie_redirects_to_setup_instead_of_json(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="expired-cookie")
+    app = build_app(cfg)
+    client = TestClient(app)
+    monkeypatch.setattr(
+        "local_story_archive.web.routes.validate_cookie",
+        lambda _client: (_ for _ in ()).throw(AuthError("cookie likely expired")),
+    )
+
+    resp = client.post("/jobs", data={"kind": "library", "username": "alice"}, follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/setup?error_kind=auth")
+    follow = client.get(resp.headers["location"])
+    assert follow.status_code == 200
+    assert "Cookie rejected by Wattpad" in follow.text
+    assert "cookie likely expired" in follow.text
 
 
 def test_config_backup_downloads_zip_in_web_mode(output_dir: Path):

@@ -3,6 +3,7 @@
 {% block content %}
   <h1>Setup</h1>
   <p>Paste your Wattpad session cookie here. The tool uses it to access your library and any login-required stories.</p>
+  <p class="muted">Offline/public mode works without a cookie. Remove the cookie if it expires or blocks public-story archiving.</p>
 
   <section class="card acceptable-use-card" aria-label="Acceptable use">
     <p class="eyebrow">Local personal archive</p>
@@ -21,7 +22,8 @@
   {% if error_kind %}
     <div class="error-banner error-banner--{{ error_kind }}" role="alert">
       {% if error_kind == "auth" %}
-        <strong>Cookie rejected by Wattpad.</strong> Re-copy from your browser.
+        <strong>Cookie rejected by Wattpad.</strong> Re-copy from your browser or remove it to use offline/public mode.
+        {% if error_message %}<p class="muted">{{ error_message }}</p>{% endif %}
       {% elif error_kind == "network" %}
         <strong>Could not reach Wattpad.</strong> Check your connection and retry.
       {% else %}
@@ -43,8 +45,21 @@
     </p>
   </form>
 
+  {% if current_cookie_masked %}
+    <form method="post" action="/setup/remove-cookie" class="card setup-offline-card">
+      <h2>Offline/public mode</h2>
+      <p class="muted">Remove the saved Wattpad cookie. Public story URLs can still be archived, but library, reading list, private-story, comment-refresh, and repair actions will ask for a valid cookie.</p>
+      <button type="submit" class="btn btn-light">Remove cookie and use offline mode</button>
+    </form>
+  {% else %}
+    <p class="status-done">Offline/public mode is active. No Wattpad cookie is saved.</p>
+  {% endif %}
+
   {% if saved %}
     <p class="status-done">Saved! You can now <a href="/">archive a story</a>.</p>
+  {% endif %}
+  {% if removed %}
+    <p class="status-done">Cookie removed. Offline/public mode is active.</p>
   {% endif %}
 
   <p class="muted">Output directory: <code>{{ output_dir }}</code></p>
