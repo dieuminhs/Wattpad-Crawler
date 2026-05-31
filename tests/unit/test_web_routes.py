@@ -17,6 +17,12 @@ from local_story_archive.web.app import build_app
 from local_story_archive.web.routes import _save_cookie
 
 
+@pytest.fixture(autouse=True)
+def _disable_live_cookie_probe_for_route_tests(monkeypatch, request):
+    if request.node.name.startswith("test_setup_post"):
+        return
+    monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda _client: None)
+
 def test_app_health_endpoint(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
