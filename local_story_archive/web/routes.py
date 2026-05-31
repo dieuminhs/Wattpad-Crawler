@@ -107,6 +107,17 @@ def _library_page_url(page: int, query: str, filter_name: str) -> str:
         return "/library"
     return "/library?" + urlencode(params)
 
+def _library_filtered_entries(output_dir: Path, query: str, filter_name: str):
+    all_entries = scan_library(output_dir)
+    if filter_name not in _LIBRARY_FILTERS:
+        filter_name = "all"
+    return [
+        entry
+        for entry in all_entries
+        if _entry_matches_filter(entry, filter_name)
+        and (not query or _entry_matches_query(entry, query))
+    ]
+
 def _validate_cookie_before_job(cfg, *, required: bool = False) -> None:
     if required and not cfg.cookie:
         raise HTTPException(
@@ -456,14 +467,22 @@ async def submit_job(request: Request) -> RedirectResponse:
 async def library_bulk(request: Request) -> RedirectResponse:
     form = await request.form()
     action = str(form.get("bulk_action") or "")
-    story_ids = [str(value).strip() for value in form.getlist("story_ids") if str(value).strip()]
+    cfg = request.app.state.cfg
+    selection_scope = str(form.get("selection_scope") or "page")
+    if selection_scope == "filtered":
+        query = str(form.get("q") or "").strip()
+        filter_name = str(form.get("filter") or "all")
+        story_ids = [
+            entry.story_id for entry in _library_filtered_entries(cfg.output_dir, query, filter_name)
+        ]
+    else:
+        story_ids = [str(value).strip() for value in form.getlist("story_ids") if str(value).strip()]
     if not story_ids:
         return RedirectResponse(
             url="/library?" + urlencode({"bulk_error": "select_at_least_one"}),
             status_code=303,
         )
 
-    cfg = request.app.state.cfg
     if action in {"refresh_comments", "repair", "retry_failed"}:
         _validate_cookie_before_job(cfg, required=True)
 
@@ -603,7 +622,6 @@ async def job_stream(request: Request, job_id: str, after_seq: int = 0):
 @router.get("/library", response_class=HTMLResponse)
 def library(request: Request) -> HTMLResponse:
     cfg = request.app.state.cfg
-    all_entries = scan_library(cfg.output_dir)
     query = request.query_params.get("q", "").strip()
     filter_name = request.query_params.get("filter", "all")
     if filter_name not in _LIBRARY_FILTERS:
@@ -613,6 +631,7 @@ def library(request: Request) -> HTMLResponse:
     except ValueError:
         page = 1
 
+    all_entries = scan_library(cfg.output_dir)
     filtered_entries = [
         entry
         for entry in all_entries

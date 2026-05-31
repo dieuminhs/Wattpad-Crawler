@@ -678,7 +678,7 @@ def test_library_lists_stories(output_dir: Path):
     assert 'value="repair_story"' in r.text
     assert "Refresh comments" in r.text
     assert 'id="library-select-all"' in r.text
-    assert "Select all" in r.text
+    assert "Select page" in r.text
     assert 'class="sr-only"' in r.text
     assert ">Select</label>" not in r.text
     assert "library-bulk-card" in r.text
@@ -838,6 +838,51 @@ def test_library_bulk_repair_starts_archive_many_job(output_dir: Path, monkeypat
             raise AssertionError("job stuck")
         time.sleep(0.01)
     assert captured == ["42", "77"]
+
+
+def test_library_bulk_repair_can_select_all_matching_across_pages(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    for story_id in range(30):
+        story_dir = output_dir / "stories" / "alice" / f"{story_id}_story"
+        story_dir.mkdir(parents=True)
+        (story_dir / "metadata.json").write_text(json.dumps({
+            "story_id": str(story_id),
+            "title": "Paged Match",
+            "author_username": "alice",
+            "tags": [],
+            "description": "",
+            "parts": [],
+        }), encoding="utf-8")
+    app = build_app(cfg)
+    client = TestClient(app)
+    captured: list[str] = []
+
+    def fake_archive_many(cfg_arg, _client, _manifest, story_ids, *, deps=None, progress=None):
+        captured.extend(story_ids)
+        if progress:
+            progress("batch.done", {"results": {story_id: "ok" for story_id in story_ids}})
+
+    monkeypatch.setattr("local_story_archive.web.routes.archive_many", fake_archive_many)
+
+    library_page = client.get("/library?q=Paged")
+    assert library_page.status_code == 200
+    assert "Select all 30 matching stories" in library_page.text
+
+    r = client.post(
+        "/library/bulk",
+        data={"bulk_action": "repair", "selection_scope": "filtered", "q": "Paged"},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    job_id = r.headers["location"].split("=", 1)[1]
+    deadline = time.monotonic() + 2.0
+    job = app.state.job_manager.get(job_id)
+    while job.status.value in ("pending", "running"):
+        if time.monotonic() > deadline:
+            raise AssertionError("job stuck")
+        time.sleep(0.01)
+    assert sorted(captured, key=int) == [str(story_id) for story_id in range(30)]
 
 
 def test_library_bulk_repair_without_selection_redirects_to_library_error(output_dir: Path):

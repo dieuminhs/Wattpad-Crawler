@@ -69,10 +69,18 @@
     <div class="library-bulk-card">
       <label class="library-select-all">
         <input id="library-select-all" type="checkbox">
-        Select all
+        Select page
       </label>
+      {% if total_filtered > entries|length %}
+        <label class="library-select-all library-select-filtered">
+          <input id="library-select-filtered" form="library-bulk-form" type="checkbox" name="selection_scope" value="filtered">
+          Select all {{ total_filtered }} matching stories
+        </label>
+      {% endif %}
       <span class="library-selected-count" id="library-selected-count" aria-live="polite">0 selected</span>
       <form class="library-bulk-actions" id="library-bulk-form" method="post" action="/library/bulk">
+        <input type="hidden" name="q" value="{{ query }}">
+        <input type="hidden" name="filter" value="{{ filter_name }}">
         <select name="bulk_action" aria-label="Bulk action">
           <option value="repair">Repair archive</option>
           <option value="retry_failed">Retry failed only</option>
@@ -160,29 +168,46 @@
       (function () {
         const selectAll = document.getElementById('library-select-all');
         if (!selectAll) return;
+        const selectFiltered = document.getElementById('library-select-filtered');
         const selectedCount = document.getElementById('library-selected-count');
         const bulkForm = document.getElementById('library-bulk-form');
         const boxes = Array.from(document.querySelectorAll('input[name="story_ids"]'));
         const updateSelectedCount = () => {
           const count = boxes.filter((box) => box.checked).length;
           if (selectedCount) {
-            selectedCount.textContent = `${count} selected`;
+            if (selectFiltered && selectFiltered.checked) {
+              selectedCount.textContent = `${selectFiltered.closest('label').textContent.trim().replace(/^Select /, '')} selected`;
+            } else {
+              selectedCount.textContent = `${count} selected`;
+            }
             selectedCount.classList.remove('library-selected-count--warning');
           }
           selectAll.checked = boxes.length > 0 && count === boxes.length;
           selectAll.indeterminate = count > 0 && count < boxes.length;
         };
         selectAll.addEventListener('change', () => {
+          if (selectFiltered) selectFiltered.checked = false;
           boxes.forEach((box) => { box.checked = selectAll.checked; });
           updateSelectedCount();
         });
         boxes.forEach((box) => {
-          box.addEventListener('change', updateSelectedCount);
+          box.addEventListener('change', () => {
+            if (selectFiltered) selectFiltered.checked = false;
+            updateSelectedCount();
+          });
         });
+        if (selectFiltered) {
+          selectFiltered.addEventListener('change', () => {
+            if (selectFiltered.checked) {
+              boxes.forEach((box) => { box.checked = true; });
+            }
+            updateSelectedCount();
+          });
+        }
         if (bulkForm) {
           bulkForm.addEventListener('submit', (event) => {
             const count = boxes.filter((box) => box.checked).length;
-            if (count > 0) return;
+            if (count > 0 || (selectFiltered && selectFiltered.checked)) return;
             event.preventDefault();
             if (selectedCount) {
               selectedCount.textContent = 'Select at least one story';

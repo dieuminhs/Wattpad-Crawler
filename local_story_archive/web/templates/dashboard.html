@@ -7,7 +7,7 @@
       <h1>Save stories before they disappear.</h1>
       <p class="hero-copy">Fetch chapters, comments, covers, and output files from one calm dashboard.</p>
     </div>
-    <a class="btn btn-light" href="/library">View library</a>
+    <a class="btn btn-light hero-cta" href="/library">View library</a>
   </section>
 
   {% if show_welcome_cta %}
@@ -39,32 +39,40 @@
 
   <div class="three-buttons archive-grid">
     <form method="post" action="/jobs" class="card archive-card archive-card-featured">
-      <span class="archive-icon">★</span>
-      <h3>My library</h3>
-      <p>Archive everything from the currently signed-in Wattpad account.</p>
+      <div class="archive-card-body">
+        <span class="archive-icon">★</span>
+        <h3>My library</h3>
+        <p>Archive everything from the currently signed-in Wattpad account.</p>
+      </div>
       <input type="hidden" name="kind" value="library">
       <input type="hidden" name="username" value="">
-      <button type="submit">Archive library</button>
+      <div class="archive-card-action">
+        <button type="submit">Archive library</button>
+      </div>
     </form>
 
     <form method="post" action="/jobs" class="card archive-card">
-      <span class="archive-icon">➜</span>
-      <h3>One story</h3>
-      <p>Archive a single story by ID or URL.</p>
-      <p>
+      <div class="archive-card-body">
+        <span class="archive-icon">➜</span>
+        <h3>One story</h3>
+        <p>Archive a single story by ID or URL.</p>
         <input type="text" name="target" placeholder="story ID or wattpad.com URL" required>
-      </p>
+      </div>
       <input type="hidden" name="kind" value="story">
-      <button type="submit">Archive story</button>
+      <div class="archive-card-action">
+        <button type="submit">Archive story</button>
+      </div>
     </form>
 
     <div class="card archive-card">
-      <span class="archive-icon">≡</span>
-      <h3>Reading list</h3>
-      <p>Pick from the currently signed-in Wattpad account's reading lists.</p>
-      <p>
+      <div class="archive-card-body">
+        <span class="archive-icon">≡</span>
+        <h3>Reading list</h3>
+        <p>Pick from the currently signed-in Wattpad account's reading lists.</p>
+      </div>
+      <div class="archive-card-action">
         <a class="btn" href="/reading-lists">Archive list</a>
-      </p>
+      </div>
     </div>
   </div>
 

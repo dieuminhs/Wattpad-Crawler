@@ -206,6 +206,24 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .hero-card h1 { max-width: 11.5em; font-size: clamp(2.5rem, 6vw, 4.8rem); }
 .hero-copy { max-width: 42rem; color: rgb(255 255 255 / 88%); font-size: 1.1rem; }
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 8.75rem;
+  min-height: 3.6rem;
+  padding: 0.9rem 1.35rem;
+  border: 1px solid rgb(255 255 255 / 50%);
+  background: rgb(255 255 255 / 92%);
+  color: var(--accent-dark);
+  line-height: 1.1;
+  text-align: center;
+  box-shadow: 0 18px 36px rgb(35 16 11 / 22%);
+}
+.hero-cta:hover {
+  background: #fff;
+  box-shadow: 0 22px 42px rgb(35 16 11 / 28%);
+}
 .eyebrow {
   margin: 0 0 0.5rem;
   color: var(--accent-dark);
@@ -277,7 +295,14 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .three-buttons,
 .archive-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-.archive-card { position: relative; overflow: hidden; min-height: 18rem; text-align: left; }
+.archive-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 18rem;
+  text-align: left;
+}
 .archive-card::after {
   content: "";
   position: absolute;
@@ -290,6 +315,21 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .archive-card > * { position: relative; z-index: 1; }
 .archive-card-featured { border-color: rgb(255 97 34 / 35%); }
+.archive-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+.archive-card-body p { margin-bottom: 1rem; }
+.archive-card-body input[type=text] { margin-top: auto; }
+.archive-card-action {
+  display: flex;
+  align-items: center;
+  min-height: 3.55rem;
+  margin-top: 1rem;
+}
+.archive-card-action .btn,
+.archive-card-action button { min-width: 9.6rem; text-align: center; }
 .archive-icon {
   display: grid;
   place-items: center;
