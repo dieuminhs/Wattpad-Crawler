@@ -32,12 +32,18 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     project_root = Path(__file__).resolve().parents[1]
     build_dir = project_root / "build" / "desktop-backend"
+    tauri_bundle_dir = project_root / "src-tauri" / "target" / "release" / "bundle"
     pyinstaller_dist = build_dir / "dist"
     entrypoint = build_dir / "desktop_backend_entry.py"
     output_dir = (project_root / args.dist_dir).resolve()
 
     if args.clean:
         shutil.rmtree(build_dir, ignore_errors=True)
+        shutil.rmtree(tauri_bundle_dir, ignore_errors=True)
+        release_dir = project_root / "src-tauri" / "target" / "release"
+        for pattern in ("wattpad-crawler-desktop*", "wattpad_crawler_desktop*"):
+            for stale_path in release_dir.glob(pattern):
+                stale_path.unlink(missing_ok=True)
 
     build_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
