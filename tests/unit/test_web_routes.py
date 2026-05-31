@@ -2,6 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -97,7 +98,10 @@ def test_reader_chapter_body_uses_vietnamese_safe_font_stack(output_dir: Path):
 
     assert r.status_code == 200
     assert ".reader .chapter-body" in r.text
-    assert 'font-family: system-ui, -apple-system, "Segoe UI", sans-serif;' in r.text
+    assert (
+        'font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, '
+        '"Helvetica Neue", Arial, sans-serif;'
+    ) in r.text
     assert "font-family: Georgia, serif" not in r.text
 
 
@@ -834,6 +838,28 @@ def test_library_bulk_repair_starts_archive_many_job(output_dir: Path, monkeypat
             raise AssertionError("job stuck")
         time.sleep(0.01)
     assert captured == ["42", "77"]
+
+
+def test_library_bulk_repair_without_selection_redirects_to_library_error(output_dir: Path):
+    cfg = Config(output_dir=output_dir, cookie="tok")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.post(
+        "/library/bulk",
+        data={"bulk_action": "repair"},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/library?bulk_error=select_at_least_one"
+    assert app.state.job_manager.list_jobs() == []
+
+    follow = client.get(r.headers["location"])
+    assert follow.status_code == 200
+    assert "Select at least one story before applying a bulk action." in follow.text
+
+
 def test_library_bulk_remove_deletes_selected_stories(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     for story_id in ("42", "77"):
@@ -1732,3 +1758,44 @@ def test_setup_post_shows_masked_attempted(output_dir: Path, monkeypatch):
     expected_mask = "AbCd…5678"
     assert expected_mask in resp.text, \
         f"Expected masked cookie {expected_mask!r} in response body; got: {resp.text[:500]!r}"
+
+
+def test_config_backup_downloads_zip_in_web_mode(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story_dir = output_dir / "stories" / "alice" / "42_story"
+    story_dir.mkdir(parents=True)
+    (story_dir / "metadata.json").write_text('{"story_id":"42"}', encoding="utf-8")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    resp = client.post("/config/backup")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/zip"
+    assert "local-story-archive-backup" in resp.headers["content-disposition"]
+    assert resp.content.startswith(b"PK")
+
+
+def test_config_backup_desktop_saves_to_download_dir_and_shows_message(output_dir: Path, tmp_path: Path):
+    cfg = Config(output_dir=output_dir)
+    story_dir = output_dir / "stories" / "alice" / "42_story"
+    story_dir.mkdir(parents=True)
+    (story_dir / "metadata.json").write_text('{"story_id":"42"}', encoding="utf-8")
+    app = build_app(cfg)
+    app.state.desktop_settings_path = tmp_path / "desktop.toml"
+    app.state.backup_download_dir = tmp_path / "Downloads"
+    client = TestClient(app)
+
+    resp = client.post("/config/backup", follow_redirects=False)
+
+    assert resp.status_code == 303
+    location = resp.headers["location"]
+    assert location.startswith("/config?backup_saved=")
+    saved_path = Path(parse_qs(urlsplit(location).query)["backup_saved"][0])
+    assert saved_path.exists()
+    assert saved_path.name.startswith("local-story-archive-backup-")
+    assert saved_path.suffix == ".zip"
+
+    follow = client.get(location)
+    assert follow.status_code == 200
+    assert "Backup saved to" in follow.text

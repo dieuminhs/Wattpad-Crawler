@@ -233,6 +233,13 @@ def _save_desktop_archive_dir(settings_path: Path, archive_dir: Path) -> None:
 def _desktop_settings_path(request: Request) -> Path | None:
     return getattr(request.app.state, "desktop_settings_path", None)
 
+def _backup_download_dir(request: Request) -> Path:
+    override = getattr(request.app.state, "backup_download_dir", None)
+    if override is not None:
+        return Path(override)
+    downloads = Path.home() / "Downloads"
+    return downloads if downloads.exists() else Path.home()
+
 
 @router.get("/setup", response_class=HTMLResponse)
 def setup_get(request: Request) -> HTMLResponse:
@@ -451,7 +458,10 @@ async def library_bulk(request: Request) -> RedirectResponse:
     action = str(form.get("bulk_action") or "")
     story_ids = [str(value).strip() for value in form.getlist("story_ids") if str(value).strip()]
     if not story_ids:
-        raise HTTPException(status_code=400, detail="select at least one story")
+        return RedirectResponse(
+            url="/library?" + urlencode({"bulk_error": "select_at_least_one"}),
+            status_code=303,
+        )
 
     cfg = request.app.state.cfg
     if action in {"refresh_comments", "repair", "retry_failed"}:
@@ -643,6 +653,7 @@ def library(request: Request) -> HTMLResponse:
             "reset_story_id": request.query_params.get("reset"),
             "removed_story_id": request.query_params.get("removed"),
             "bookmarked_story_id": request.query_params.get("bookmarked"),
+            "bulk_error": request.query_params.get("bulk_error"),
         },
     )
 
@@ -1143,6 +1154,21 @@ def config_backup(request: Request):
     except OSError as exc:
         return RedirectResponse(
             url="/config?" + urlencode({"backup_error": str(exc)}),
+            status_code=303,
+        )
+    if _desktop_settings_path(request) is not None:
+        try:
+            download_dir = _backup_download_dir(request)
+            download_dir.mkdir(parents=True, exist_ok=True)
+            destination = download_dir / backup_path.name
+            shutil.copy2(backup_path, destination)
+        except OSError as exc:
+            return RedirectResponse(
+                url="/config?" + urlencode({"backup_error": str(exc)}),
+                status_code=303,
+            )
+        return RedirectResponse(
+            url="/config?" + urlencode({"backup_saved": str(destination)}),
             status_code=303,
         )
     return FileResponse(

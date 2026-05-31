@@ -47,7 +47,7 @@
       <button type="submit">Archive library</button>
     </form>
 
-    <div class="card archive-card">
+    <form method="post" action="/jobs" class="card archive-card">
       <span class="archive-icon">➜</span>
       <h3>One story</h3>
       <p>Archive a single story by ID or URL.</p>
@@ -58,7 +58,7 @@
       <button type="submit">Archive story</button>
     </form>
 
-    <form method="post" action="/jobs" class="card archive-card">
+    <div class="card archive-card">
       <span class="archive-icon">≡</span>
       <h3>Reading list</h3>
       <p>Pick from the currently signed-in Wattpad account's reading lists.</p>
@@ -68,13 +68,13 @@
     </div>
   </div>
 
-  <div class="section-heading">
-    <div>
-      <p class="eyebrow">Background work</p>
-      <h2>Recent jobs</h2>
-    </div>
-  </div>
   {% if recent_jobs %}
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Background work</p>
+        <h2>Recent jobs</h2>
+      </div>
+    </div>
     <ul class="job-list">
       {% for job in recent_jobs %}
         <li class="job-list-item">
@@ -86,7 +86,5 @@
         </li>
       {% endfor %}
     </ul>
-  {% else %}
-    <p class="muted">No jobs yet.</p>
   {% endif %}
 {% endblock %}

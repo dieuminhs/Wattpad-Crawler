@@ -309,7 +309,7 @@
           form.addEventListener('submit', async (event) => {
             event.preventDefault();
             if (button) button.disabled = true;
-            if (status) status.textContent = 'Refreshing commentsâ€¦';
+            if (status) status.textContent = 'Refreshing comments...';
             try {
               const response = await fetch(form.action, {
                 method: form.method || 'post',

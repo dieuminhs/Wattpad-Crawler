@@ -22,7 +22,7 @@ body {
     radial-gradient(circle at top left, rgb(255 97 34 / 14%), transparent 24rem),
     linear-gradient(180deg, #fffaf6 0, var(--bg) 26rem, #fff 100%);
   color: var(--fg);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
 }
 .app-shell { min-height: calc(100vh - 4.25rem); }
@@ -95,8 +95,8 @@ nav.topbar a { text-decoration: none; }
   background: rgb(255 255 255 / 62%);
   padding: 0.25rem;
 }
-h1, h2, h3 { letter-spacing: -0.035em; line-height: 1.12; }
-h1 { font-size: clamp(2.2rem, 5vw, 4.6rem); margin: 0 0 1rem; }
+h1, h2, h3 { letter-spacing: -0.03em; line-height: 1.12; }
+h1 { font-size: clamp(2rem, 4.4vw, 4.1rem); margin: 0 0 1rem; }
 h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin: 0; }
 h3 { font-size: 1.25rem; margin: 0 0 0.5rem; }
 .library-title { font-size: clamp(1.85rem, 3.3vw, 2.75rem); margin-bottom: 0.75rem; }
@@ -194,7 +194,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  min-height: 18rem;
+  min-height: 16rem;
   margin-bottom: 2rem;
   padding: clamp(1.5rem, 4vw, 3rem);
   color: #fff;
@@ -204,6 +204,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   border-radius: 34px;
   box-shadow: var(--shadow);
 }
+.hero-card h1 { max-width: 11.5em; font-size: clamp(2.5rem, 6vw, 4.8rem); }
 .hero-copy { max-width: 42rem; color: rgb(255 255 255 / 88%); font-size: 1.1rem; }
 .eyebrow {
   margin: 0 0 0.5rem;
@@ -390,13 +391,19 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   flex: 1;
   min-width: 0;
   width: 100%;
-  padding: 0.25rem 0;
+  padding: 0.25rem 0.2rem 0.25rem 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--fg);
   font: inherit;
   font-size: 0.98rem;
+}
+.library-search-box input[type=search]::-webkit-search-cancel-button {
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-left: 0.35rem;
+  cursor: pointer;
 }
 .library-search-button,
 .library-clear-button {
@@ -561,6 +568,10 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
     font-size: 0.84rem;
     font-weight: 800;
   }
+.library-selected-count--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
 .library-select-story {
     position: absolute;
     z-index: 4;
@@ -769,6 +780,11 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   padding: clamp(1rem, 3vw, 2.5rem);
   box-shadow: var(--shadow-soft);
 }
+.reader h1 {
+  max-width: 100%;
+  font-size: clamp(2.1rem, 5vw, 3.6rem);
+  overflow-wrap: anywhere;
+}
 .reader[data-theme="sepia"] {
   background: #fbf0dc;
   color: #3a2a1d;
@@ -782,12 +798,12 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 .reader[data-theme="dark"] .muted,
 .reader[data-theme="dark"] .author { color: #c9bfb5; }
 .reader[data-theme="dark"] a { color: #ffb18f; }
-.reader[data-font-scale="small"] .chapter-body { font-size: 1.02em; }
-.reader[data-font-scale="default"] .chapter-body { font-size: 1.16em; }
-.reader[data-font-scale="large"] .chapter-body { font-size: 1.32em; }
-.reader[data-line-height="compact"] .chapter-body { line-height: 1.55; }
-.reader[data-line-height="default"] .chapter-body { line-height: 1.82; }
-.reader[data-line-height="relaxed"] .chapter-body { line-height: 2.08; }
+.reader[data-font-scale="small"] .chapter-body { font-size: 1rem; }
+.reader[data-font-scale="default"] .chapter-body { font-size: 1.08rem; }
+.reader[data-font-scale="large"] .chapter-body { font-size: 1.2rem; }
+.reader[data-line-height="compact"] .chapter-body { line-height: 1.5; }
+.reader[data-line-height="default"] .chapter-body { line-height: 1.7; }
+.reader[data-line-height="relaxed"] .chapter-body { line-height: 1.9; }
 .reader-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -837,9 +853,9 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .reader-reset-settings { margin-left: auto; }
 .reader .chapter-body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 1.16em;
-  line-height: 1.82;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.08rem;
+  line-height: 1.7;
 }
 .reader-action-form { margin: 0 0 1.25rem; }
 .reader .chapter-body pre { white-space: pre-wrap; font-family: inherit; margin: 1em 0; }

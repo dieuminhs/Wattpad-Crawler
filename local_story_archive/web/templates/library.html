@@ -11,6 +11,9 @@
   {% if removed_story_id %}
     <p class="status-done">Removed story {{ removed_story_id }} from the archive.</p>
   {% endif %}
+  {% if bulk_error == "select_at_least_one" %}
+    <p class="status-warning">Select at least one story before applying a bulk action.</p>
+  {% endif %}
 
   <section class="library-search-panel" aria-label="Search and filter library">
     <form class="library-search-form" method="get" action="/library">
@@ -158,10 +161,14 @@
         const selectAll = document.getElementById('library-select-all');
         if (!selectAll) return;
         const selectedCount = document.getElementById('library-selected-count');
+        const bulkForm = document.getElementById('library-bulk-form');
         const boxes = Array.from(document.querySelectorAll('input[name="story_ids"]'));
         const updateSelectedCount = () => {
           const count = boxes.filter((box) => box.checked).length;
-          if (selectedCount) selectedCount.textContent = `${count} selected`;
+          if (selectedCount) {
+            selectedCount.textContent = `${count} selected`;
+            selectedCount.classList.remove('library-selected-count--warning');
+          }
           selectAll.checked = boxes.length > 0 && count === boxes.length;
           selectAll.indeterminate = count > 0 && count < boxes.length;
         };
@@ -172,6 +179,17 @@
         boxes.forEach((box) => {
           box.addEventListener('change', updateSelectedCount);
         });
+        if (bulkForm) {
+          bulkForm.addEventListener('submit', (event) => {
+            const count = boxes.filter((box) => box.checked).length;
+            if (count > 0) return;
+            event.preventDefault();
+            if (selectedCount) {
+              selectedCount.textContent = 'Select at least one story';
+              selectedCount.classList.add('library-selected-count--warning');
+            }
+          });
+        }
         updateSelectedCount();
       })();
     </script>
