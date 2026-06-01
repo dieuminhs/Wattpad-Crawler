@@ -1272,6 +1272,39 @@ def test_reader_story_toc(output_dir: Path):
     assert 'data-continue-story="42"' in r.text
 
 
+def test_reader_story_toc_marks_bookmarked_story(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    repo = ArchiveRepository(output_dir).connect()
+    try:
+        with repo.transaction():
+            repo.upsert_story(Story(
+                story_id="42",
+                title="My Tale",
+                author_username="alice",
+                description="",
+                cover_url="",
+                tags=[],
+                parts=[],
+            ))
+            repo.set_bookmarked("42", True)
+    finally:
+        repo.close()
+    sd = output_dir / "stories" / "alice" / "42_my-tale"
+    sd.mkdir(parents=True)
+    (sd / "metadata.json").write_text(json.dumps({
+        "story_id": "42", "title": "My Tale", "author_username": "alice",
+        "tags": [], "description": "", "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/read/alice/42_my-tale")
+
+    assert r.status_code == 200
+    assert 'class="bookmark-badge"' in r.text
+    assert 'title="Bookmarked"' in r.text
+
+
 def test_reader_chapter_view(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     sd = output_dir / "stories" / "alice" / "42_my-tale"

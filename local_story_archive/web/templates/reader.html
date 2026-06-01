@@ -3,7 +3,10 @@
 {% block content %}
   <div class="reader">
     {% if not chapter %}
-      <h1>{{ meta.title }}</h1>
+      <h1>
+        {{ meta.title }}
+        {% if meta.bookmarked %}<span class="bookmark-badge" aria-label="Bookmarked" title="Bookmarked">★</span>{% endif %}
+      </h1>
       <p class="muted">by {{ meta.author_username }}</p>
       {% if meta.description %}<p>{{ meta.description }}</p>{% endif %}
       {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
@@ -23,14 +26,6 @@
           </li>
         {% endfor %}
       </ol>
-      <p>
-        <a class="btn btn-light" href="/library">&larr; Library</a>
-        <span class="muted">&middot;</span>
-        Other formats:
-        {% if has_epub %}<a href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
-        {% if has_html %}<a href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
-        {% if has_txt %}<a href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
-      </p>
     {% else %}
       <p class="reader-nav-actions">
         <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">&larr; {{ meta.title }}</a>
@@ -56,7 +51,10 @@
         </div>
         <button type="button" class="btn btn-light reader-reset-settings" data-reader-reset>Reset reading settings</button>
       </section>
-      <h1>{{ chapter.title }}</h1>
+      <h1>
+        {{ chapter.title }}
+        {% if meta.bookmarked %}<span class="bookmark-badge" aria-label="Bookmarked" title="Bookmarked">★</span>{% endif %}
+      </h1>
       <form method="post" action="/jobs" class="reader-action-form" data-stay-put-form>
         <input type="hidden" name="kind" value="comments">
         <input type="hidden" name="story_id" value="{{ meta.story_id }}">
