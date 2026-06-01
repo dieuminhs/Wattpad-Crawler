@@ -2,7 +2,7 @@
 
 ## 0.2.1 - Speed, Storage, And Desktop Release Fixes
 
-This patch release improves long-story archive performance, reduces local SQLite storage growth, and improves desktop distribution readiness.
+This patch release improves long-story archive performance, reduces local SQLite storage growth, improves desktop distribution readiness, and polishes library/remove flows.
 
 ### Highlights
 
@@ -11,11 +11,18 @@ This patch release improves long-story archive performance, reduces local SQLite
 - Reduced duplicate SQLite paragraph storage and expanded archive compaction to reclaim existing duplicate paragraph text.
 - Made EPUB output optional for archive health, so missing EPUB files no longer mark stories as warnings or repair-needed.
 - Simplified Library story cards to a single cover overlay Continue button.
-- Added macOS signing/notarization support in the desktop build workflow when Apple Developer secrets are configured.
+- Added an obvious **Bookmarked** badge on Library story cards so saved stories are visible outside the bookmarked filter.
+- Replaced the browser-native remove confirmation with an in-app dialog that matches the app UI.
+- Fixed removing a story so both archive databases are cleaned up; re-archiving a removed story now refetches chapter content instead of skipping stale `done` parts and producing empty chapters.
+- Hardened archive skip logic so chapters are only skipped when existing DB or file content is actually present.
+- Improved cookie/setup handling with encrypted saved cookies, clearer cookie removal, and better offline behavior.
+- Added macOS signing/notarization support in the desktop build workflow when Apple Developer secrets are configured, including temporary keychain certificate import and release-time secret checks.
+- Signed the bundled macOS desktop backend helper before packaging so installed apps can launch after Gatekeeper verification.
+- Stopped uploading the intermediate macOS `.app` bundle; macOS release artifacts now publish the `.dmg` installer only.
 
 ### Validation
 
-- Full unit suite passed: `371 passed`.
+- Full unit suite passed: `392 passed`.
 
 ## 0.2.0 - Local Story Archive
 

@@ -47,13 +47,11 @@ jobs:
             artifact_name: local-story-archive-macos-aarch64
             artifact_paths: |
               src-tauri/target/release/bundle/dmg/*.dmg
-              src-tauri/target/release/bundle/macos/*.app
           - name: macOS Intel
             os: macos-13
             artifact_name: local-story-archive-macos-x64
             artifact_paths: |
               src-tauri/target/release/bundle/dmg/*.dmg
-              src-tauri/target/release/bundle/macos/*.app
 
     steps:
       - name: Checkout
@@ -117,31 +115,84 @@ jobs:
           path.write_text(json.dumps(data, indent=2) + "\n")
           PY
 
-      - name: Build desktop app
+      - name: Prepare macOS signing certificate
+        if: runner.os == 'macOS'
         shell: bash
         env:
-          MACOS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          MACOS_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          MACOS_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          MACOS_APPLE_ID: ${{ secrets.APPLE_ID }}
-          MACOS_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          MACOS_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::warning::macOS signing secret $name is missing."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+              echo "::error::Tagged macOS releases must be signed and notarized. Add the Apple signing secrets and rerun."
+              exit 1
+            fi
+            echo "Skipping macOS signing setup for this non-release build."
+            exit 0
+          fi
+
+          certificate_path="$RUNNER_TEMP/developer-id-application.p12"
+          keychain_path="$RUNNER_TEMP/local-story-archive-signing.keychain-db"
+          keychain_password="$(openssl rand -base64 24)"
+
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/[\" ]//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+
+          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            APPLE_SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)".*/\1/p' | head -n 1)"
+          fi
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "::error::Could not find a Developer ID Application signing identity in the imported certificate."
+            exit 1
+          fi
+
+          add_env() {
+            local name="$1"
+            local value="$2"
+            local delimiter="EOF_${name}_$(openssl rand -hex 8)"
+            {
+              echo "$name<<$delimiter"
+              echo "$value"
+              echo "$delimiter"
+            } >> "$GITHUB_ENV"
+          }
+          add_env APPLE_CERTIFICATE "$APPLE_CERTIFICATE"
+          add_env APPLE_CERTIFICATE_PASSWORD "$APPLE_CERTIFICATE_PASSWORD"
+          add_env APPLE_SIGNING_IDENTITY "$APPLE_SIGNING_IDENTITY"
+          add_env APPLE_ID "$APPLE_ID"
+          add_env APPLE_PASSWORD "$APPLE_PASSWORD"
+          add_env APPLE_TEAM_ID "$APPLE_TEAM_ID"
+          echo "macOS signing identity: $APPLE_SIGNING_IDENTITY"
+
+      - name: Build desktop app
+        shell: bash
         run: |
           set +e
           if [ "${{ runner.os }}" = "macOS" ]; then
-            if [ -n "$MACOS_APPLE_CERTIFICATE" ] && [ -n "$MACOS_APPLE_CERTIFICATE_PASSWORD" ] && [ -n "$MACOS_APPLE_SIGNING_IDENTITY" ]; then
-              export APPLE_CERTIFICATE="$MACOS_APPLE_CERTIFICATE"
-              export APPLE_CERTIFICATE_PASSWORD="$MACOS_APPLE_CERTIFICATE_PASSWORD"
-              export APPLE_SIGNING_IDENTITY="$MACOS_APPLE_SIGNING_IDENTITY"
+            if [ -n "${APPLE_CERTIFICATE:-}" ] && [ -n "${APPLE_CERTIFICATE_PASSWORD:-}" ] && [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
               echo "macOS code signing is configured."
             else
               echo "::warning::macOS signing secrets are incomplete; building an unsigned app."
             fi
 
-            if [ -n "$MACOS_APPLE_ID" ] && [ -n "$MACOS_APPLE_PASSWORD" ] && [ -n "$MACOS_APPLE_TEAM_ID" ]; then
-              export APPLE_ID="$MACOS_APPLE_ID"
-              export APPLE_PASSWORD="$MACOS_APPLE_PASSWORD"
-              export APPLE_TEAM_ID="$MACOS_APPLE_TEAM_ID"
+            if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
               echo "macOS notarization is configured."
             else
               echo "::warning::macOS notarization secrets are incomplete; downloaded DMGs may be blocked by Gatekeeper."
