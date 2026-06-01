@@ -35,6 +35,31 @@ def _path_size(path) -> int:
     except OSError:
         return 0
 
+def _part_content_exists(
+    output_dir,
+    repo: ArchiveRepository,
+    story: Story,
+    part: Part,
+) -> bool:
+    row = repo.db.execute(
+        "SELECT status, body_text, raw_html FROM parts WHERE story_id = ? AND part_id = ?",
+        (story.story_id, part.part_id),
+    ).fetchone()
+    if row and row["status"] == "done" and (row["body_text"] or row["raw_html"]):
+        return True
+    if row and row["status"] == "done":
+        paragraph = repo.db.execute(
+            "SELECT 1 FROM paragraphs WHERE part_id = ? LIMIT 1",
+            (part.part_id,),
+        ).fetchone()
+        if paragraph is not None:
+            return True
+    parts_dir = store.story_dir(output_dir, story) / "parts"
+    if not parts_dir.exists():
+        return False
+    prefix = f"{part.ordinal:02d}_{part.part_id}_"
+    return any(path.is_file() and path.stat().st_size > 0 for path in parts_dir.glob(f"{prefix}*.txt"))
+
 
 def _part_id_from_url(url: str) -> str:
     path = urlsplit(url).path
@@ -224,7 +249,7 @@ def archive_story(
     pending_parts = []
     for part in story.parts:
         existing = manifest.get_part(story.story_id, part.part_id)
-        if existing and existing["status"] == "done":
+        if existing and existing["status"] == "done" and _part_content_exists(cfg.output_dir, repo, story, part):
             emit("part.skipped", {"part_id": part.part_id, "ordinal": part.ordinal})
             continue
         emit(

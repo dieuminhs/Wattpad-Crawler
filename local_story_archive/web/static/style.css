@@ -664,6 +664,31 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   font-size: 1.35em;
   text-shadow: 0 1px 3px rgb(0 0 0 / 40%);
 }
+.library-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.75rem 0.8rem 0.2rem;
+  min-height: 3.15rem;
+}
+.library-bookmark-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.45rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgb(245 158 11 / 36%);
+  border-radius: 999px;
+  background: rgb(245 158 11 / 16%);
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
 .library-menu {
     position: absolute;
     top: 0.35em;
@@ -732,6 +757,67 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   transform: none;
 }
 .library-menu-items .danger-button { color: var(--accent); }
+.confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+}
+.confirm-modal.is-hidden { display: none; }
+.confirm-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(31 31 31 / 48%);
+  backdrop-filter: blur(4px);
+}
+.confirm-modal-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem 1rem;
+  width: min(31rem, calc(100vw - 2rem));
+  padding: 1.15rem;
+  border: 1px solid rgb(255 97 34 / 22%);
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 24px 70px rgb(31 31 31 / 28%);
+  outline: none;
+}
+.confirm-modal-icon {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 900;
+}
+.confirm-modal-copy h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+.confirm-modal-copy p {
+  margin: 0;
+  color: var(--muted);
+}
+.confirm-modal-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+.danger-confirm-button {
+  background: #dc2626;
+  color: #fff;
+  box-shadow: 0 8px 18px rgb(220 38 38 / 20%);
+}
+.danger-confirm-button:hover { background: #b91c1c; }
 .library-item img,
 .library-cover-placeholder {
   width: 100%;
@@ -744,11 +830,10 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
     var(--surface-soft);
 }
 .library-item .title {
-    padding: 0.75rem 0.8rem 0.2rem;
     font-size: 0.95rem;
     font-weight: 750;
     line-height: 1.25;
-    min-height: 3.15rem;
+    min-width: 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;

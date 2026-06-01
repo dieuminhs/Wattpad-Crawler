@@ -500,6 +500,16 @@ class ArchiveRepository:
         return cur.rowcount > 0
 
     def remove_story(self, story_id: str) -> bool:
+        part_ids = [
+            row["part_id"]
+            for row in self.db.execute("SELECT part_id FROM parts WHERE story_id = ?", (story_id,))
+        ]
+        if part_ids:
+            self.db.executemany("DELETE FROM comments WHERE part_id = ?", [(part_id,) for part_id in part_ids])
+            self.db.executemany("DELETE FROM paragraphs WHERE part_id = ?", [(part_id,) for part_id in part_ids])
+        self.db.execute("DELETE FROM parts WHERE story_id = ?", (story_id,))
+        self.db.execute("DELETE FROM story_tags WHERE story_id = ?", (story_id,))
+        self.db.execute("DELETE FROM artifacts WHERE story_id = ?", (story_id,))
         cur = self.db.execute("DELETE FROM stories WHERE story_id = ?", (story_id,))
         return cur.rowcount > 0
 

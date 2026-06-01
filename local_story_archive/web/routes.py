@@ -946,6 +946,11 @@ def _remove_story_archive(cfg, story_id: str) -> bool:
                 repo.remove_story(story_id)
     finally:
         repo.close()
+    manifest = Manifest(cfg.output_dir).connect()
+    try:
+        manifest.remove_story(story_id)
+    finally:
+        manifest.close()
     return True
 
 

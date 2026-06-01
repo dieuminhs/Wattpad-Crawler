@@ -156,6 +156,13 @@ class Manifest:
             )
         return True
 
+    def remove_story(self, story_id: str) -> bool:
+        """Remove story and part crawl state from the manifest."""
+        with self.db:
+            self.db.execute("DELETE FROM parts WHERE story_id = ?", (story_id,))
+            cur = self.db.execute("DELETE FROM stories WHERE story_id = ?", (story_id,))
+        return cur.rowcount > 0
+
     def reset_failed_story_work(self, story_id: str) -> int:
         """Mark only failed parts pending so the next archive run retries them."""
         with self.db:

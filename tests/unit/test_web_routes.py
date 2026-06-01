@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from local_story_archive.archive.repository import ArchiveRepository
+from local_story_archive.archive.state import Manifest
 from local_story_archive.auth import AuthError
 from local_story_archive.config import Config, load_config
 from local_story_archive.models import Part, Story
@@ -77,6 +78,30 @@ def test_library_bulk_selection_shows_selected_count(output_dir: Path):
     assert "0 selected" in r.text
     assert "updateSelectedCount" in r.text
     assert "selectAll.indeterminate" in r.text
+
+def test_library_remove_uses_custom_confirm_dialog(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    story_dir = output_dir / "stories" / "alice" / "42_my-tale"
+    story_dir.mkdir(parents=True)
+    (story_dir / "metadata.json").write_text(json.dumps({
+        "story_id": "42",
+        "title": "My Tale",
+        "author_username": "alice",
+        "tags": [],
+        "description": "",
+        "parts": [],
+    }))
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    r = client.get("/library")
+
+    assert r.status_code == 200
+    assert 'data-remove-story-form' in r.text
+    assert 'id="remove-story-modal"' in r.text
+    assert 'id="remove-story-confirm"' in r.text
+    assert "return confirm" not in r.text
+    assert "confirm(" not in r.text
 
 
 def test_reader_comment_button_hover_scales_without_dropping(output_dir: Path):
@@ -1038,6 +1063,8 @@ def test_library_filters_bookmarked_and_cover_status(output_dir: Path):
     assert "Saved One" in bookmarked.text
     assert "Plain One" not in bookmarked.text
     assert "1 of 2 stories" in bookmarked.text
+    assert 'class="library-bookmark-badge"' in bookmarked.text
+    assert "★ Bookmarked" in bookmarked.text
 
     has_cover = client.get("/library?filter=has_cover")
     assert "Saved One" in has_cover.text
@@ -1100,9 +1127,13 @@ def test_library_bookmark_story_toggles_flag(output_dir: Path):
 def test_library_remove_story_deletes_db_and_story_folder(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     repo = ArchiveRepository(output_dir).connect()
+    manifest = Manifest(output_dir).connect()
+    story = Story(story_id="42", title="My Tale", author_username="alice")
     with repo.transaction():
-        repo.upsert_story(Story(story_id="42", title="My Tale", author_username="alice"))
+        repo.upsert_story(story)
+    manifest.upsert_story(story)
     repo.close()
+    manifest.close()
     sd = output_dir / "stories" / "alice" / "42_my-tale"
     sd.mkdir(parents=True)
     (sd / "metadata.json").write_text("{}")
@@ -1117,6 +1148,9 @@ def test_library_remove_story_deletes_db_and_story_folder(output_dir: Path):
     repo = ArchiveRepository(output_dir).connect()
     assert repo.get_story("42") is None
     repo.close()
+    manifest = Manifest(output_dir).connect()
+    assert manifest.get_story("42") is None
+    manifest.close()
 
 
 def test_library_remove_story_deletes_file_only_story_folder(output_dir: Path):

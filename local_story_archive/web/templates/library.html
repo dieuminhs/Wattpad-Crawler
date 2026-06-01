@@ -108,8 +108,11 @@
                 <span class="library-continue-button" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</span>
               {% endif %}
             </div>
-            {% if e.bookmarked %}<span class="bookmark-star" aria-label="Bookmarked">★</span>{% endif %}
-            <div class="title">{{ e.title }}</div>
+            {% if e.bookmarked %}<span class="bookmark-star" aria-hidden="true">★</span>{% endif %}
+            <div class="library-card-heading">
+              <div class="title">{{ e.title }}</div>
+              {% if e.bookmarked %}<span class="library-bookmark-badge" aria-label="Bookmarked story">★ Bookmarked</span>{% endif %}
+            </div>
             <div class="author">by {{ e.author }}</div>
             {% if e.last_archived %}<div class="muted">Last archived {{ e.last_archived }}</div>{% endif %}
             <div class="library-health library-health--{{ e.health_status }}">
@@ -149,13 +152,27 @@
                 <input type="hidden" name="story_id" value="{{ e.story_id }}">
                 <button type="submit">Refresh comments</button>
               </form>
-              <form method="post" action="/library/remove/{{ e.story_id }}" onsubmit="return confirm('Remove this story from the archive?');">
+              <form method="post" action="/library/remove/{{ e.story_id }}" data-remove-story-form data-story-title="{{ e.title }}">
                 <button type="submit" class="danger-button">Remove from archive</button>
               </form>
             </div>
           </details>
         </div>
       {% endfor %}
+    </div>
+    <div class="confirm-modal is-hidden" id="remove-story-modal" role="dialog" aria-modal="true" aria-labelledby="remove-story-title" aria-describedby="remove-story-message">
+      <div class="confirm-modal-backdrop" data-remove-cancel></div>
+      <section class="confirm-modal-card" tabindex="-1">
+        <div class="confirm-modal-icon" aria-hidden="true">!</div>
+        <div class="confirm-modal-copy">
+          <h2 id="remove-story-title">Remove story?</h2>
+          <p id="remove-story-message">This removes <strong id="remove-story-name">this story</strong> from your local archive. This cannot be undone.</p>
+        </div>
+        <div class="confirm-modal-actions">
+          <button type="button" class="btn btn-light" data-remove-cancel>Cancel</button>
+          <button type="button" class="danger-confirm-button" id="remove-story-confirm">Remove from archive</button>
+        </div>
+      </section>
     </div>
     {% if total_pages > 1 %}
       <nav class="pagination" aria-label="Library pages">
@@ -164,6 +181,45 @@
         {% if next_page_url %}<a href="{{ next_page_url }}">Next</a>{% else %}<span>Next</span>{% endif %}
       </nav>
     {% endif %}
+    <script>
+      (function () {
+        const modal = document.getElementById('remove-story-modal');
+        if (!modal) return;
+        const card = modal.querySelector('.confirm-modal-card');
+        const storyName = document.getElementById('remove-story-name');
+        const confirmButton = document.getElementById('remove-story-confirm');
+        let pendingForm = null;
+
+        const hideModal = () => {
+          modal.classList.add('is-hidden');
+          pendingForm = null;
+        };
+        const showModal = (form) => {
+          pendingForm = form;
+          if (storyName) storyName.textContent = form.dataset.storyTitle || 'this story';
+          modal.classList.remove('is-hidden');
+          if (card) card.focus();
+        };
+
+        document.querySelectorAll('[data-remove-story-form]').forEach((form) => {
+          form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            showModal(form);
+          });
+        });
+        modal.querySelectorAll('[data-remove-cancel]').forEach((button) => {
+          button.addEventListener('click', hideModal);
+        });
+        if (confirmButton) {
+          confirmButton.addEventListener('click', () => {
+            if (pendingForm) pendingForm.submit();
+          });
+        }
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && !modal.classList.contains('is-hidden')) hideModal();
+        });
+      })();
+    </script>
     <script>
       (function () {
         const selectAll = document.getElementById('library-select-all');

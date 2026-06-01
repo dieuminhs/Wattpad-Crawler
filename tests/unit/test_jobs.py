@@ -131,6 +131,28 @@ def test_archive_story_skips_already_done_parts(output_dir: Path):
     assert deps.fetch_chapter_html.call_count == fetch_call_count_after_first
     manifest.close()
 
+def test_archive_story_refetches_done_part_when_content_is_missing(output_dir: Path):
+    cfg = Config(output_dir=output_dir)
+    manifest = Manifest(output_dir).connect()
+    story = Story(
+        story_id="42", title="Hi", author_username="bob",
+        parts=[Part(part_id="100", ordinal=1, title="One", url="https://w/100")],
+    )
+    fake_client = MagicMock()
+    deps = _make_deps(story)
+    manifest.upsert_story(story)
+    manifest.upsert_parts(story)
+    manifest.set_part_status("42", "100", "done", body_hash="old")
+
+    archive_story(cfg, fake_client, manifest, "42", deps=deps)
+
+    assert deps.fetch_chapter_html.call_count == 1
+    repo = ArchiveRepository(output_dir).connect()
+    [paragraph] = repo.list_paragraphs("100")
+    assert paragraph["text"] == "One body."
+    repo.close()
+    manifest.close()
+
 
 def test_archive_story_marks_failed_on_chapter_error(output_dir: Path):
     cfg = Config(output_dir=output_dir)
