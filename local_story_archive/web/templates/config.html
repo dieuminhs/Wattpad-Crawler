@@ -55,15 +55,25 @@
       </label><br>
       <span class="muted">Leave off for much faster story archives. You can still refresh comments later from the Library story actions.</span>
     </p>
+    {% set export_preset_descriptions = {
+      "classic": "Balanced spacing for comfortable default reading.",
+      "compact": "Smaller text and tighter spacing to fit more on each page.",
+      "cozy": "Larger text with extra line spacing for relaxed reading."
+    } %}
     <fieldset class="export-preset-fieldset">
       <legend><strong>Export style</strong></legend>
       <p class="muted">Used for future or regenerated EPUB and HTML output. TXT stays plain.</p>
-      {% for preset in export_presets %}
-        <label class="export-preset-option">
-          <input type="radio" name="export_preset" value="{{ preset }}" {% if cfg.export_preset == preset %}checked{% endif %}>
-          <span>{{ preset | title }}</span>
-        </label>
-      {% endfor %}
+      <div class="export-preset-options">
+        {% for preset in export_presets %}
+          <label class="export-preset-option">
+            <span class="export-preset-choice">
+              <input type="radio" name="export_preset" value="{{ preset }}" {% if cfg.export_preset == preset %}checked{% endif %}>
+              <span>{{ preset | title }}</span>
+            </span>
+            <span class="export-preset-description">{{ export_preset_descriptions[preset] }}</span>
+          </label>
+        {% endfor %}
+      </div>
     </fieldset>
     <p><button type="submit">Save settings</button></p>
   </form>
@@ -85,12 +95,12 @@
     {% endif %}
     <div class="backup-restore-actions">
       <form method="post" action="/config/backup">
-        <button type="submit">Download backup zip</button>
+        <button type="submit" class="backup-action-button"><span aria-hidden="true">ZIP</span><span>Download backup zip</span></button>
       </form>
       <form method="post" action="/config/restore" enctype="multipart/form-data">
-        <label for="backup_file"><strong>Restore from backup</strong></label>
+        <label for="backup_file"><strong>Restore from backup</strong><span class="muted">Choose a backup zip from this app.</span></label>
         <input type="file" id="backup_file" name="backup_file" accept=".zip,application/zip" required>
-        <button type="submit">Restore backup</button>
+        <button type="submit" class="backup-action-button"><span aria-hidden="true">ZIP</span><span>Restore backup</span></button>
       </form>
     </div>
   </section>

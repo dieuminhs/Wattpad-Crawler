@@ -20,7 +20,7 @@
       <p class="eyebrow">Archive folder</p>
       <h2>Choose where your files live</h2>
       <p class="muted">Current archive: <code>{{ output_dir }}</code></p>
-      <p><a class="btn btn-light" href="/config">Review archive settings</a></p>
+      <p class="wizard-card-action"><a class="btn btn-light" href="/config">Review archive settings</a></p>
     </article>
 
     <article class="wizard-card">
@@ -28,7 +28,7 @@
       <p class="eyebrow">Wattpad access</p>
       <h2>{% if has_cookie %}Cookie saved{% else %}Save your Wattpad cookie{% endif %}</h2>
       <p class="muted">{% if has_cookie %}Your cookie is configured. Refresh it later from Setup if private or login-required stories stop working.{% else %}Paste your Wattpad <code>token</code> cookie on the Setup page so the app can access your library and login-required stories.{% endif %}</p>
-      <p><a class="btn btn-light" href="/setup">{% if has_cookie %}Review cookie setup{% else %}Open cookie setup{% endif %}</a></p>
+      <p class="wizard-card-action"><a class="btn btn-light" href="/setup">{% if has_cookie %}Review cookie setup{% else %}Open cookie setup{% endif %}</a></p>
     </article>
   </section>
 

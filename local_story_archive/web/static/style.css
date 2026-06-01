@@ -147,29 +147,64 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
     var(--surface);
 }
 .acceptable-use-card h2 { margin-bottom: 0.5rem; }
-.backup-restore-card { border-color: rgb(255 97 34 / 24%); }
+.backup-restore-card {
+  border-color: rgb(255 97 34 / 18%);
+  background:
+    radial-gradient(circle at top right, rgb(255 97 34 / 8%), transparent 20rem),
+    var(--surface);
+}
+.backup-restore-card > .muted { max-width: 66rem; }
 .backup-restore-actions {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+  margin-top: 1.25rem;
 }
 .backup-restore-actions form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  min-height: 10rem;
   margin: 0;
-  padding: 1rem;
-  background: var(--surface-soft);
+  padding: 1.15rem;
+  background: rgb(255 250 246 / 72%);
   border: 1px solid var(--border);
   border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 78%);
+}
+.backup-restore-actions label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 .backup-restore-actions input[type=file] {
-  display: block;
   width: 100%;
-  margin: 0.6rem 0;
+  padding: 0.65rem;
+  border: 1px dashed rgb(255 97 34 / 36%);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+}
+.backup-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.backup-action-button [aria-hidden="true"] {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+  font-weight: 900;
+  line-height: 1;
 }
 .export-preset-fieldset {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
   margin: 1.1rem 0;
   padding: 1rem;
   border: 1px solid var(--border);
@@ -177,18 +212,34 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   background: var(--surface-soft);
 }
 .export-preset-fieldset legend { padding: 0 0.35rem; }
-.export-preset-fieldset .muted { flex-basis: 100%; margin: 0; }
+.export-preset-fieldset .muted { margin: 0 0 0.85rem; }
+.export-preset-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
 .export-preset-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.8rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+}
+.export-preset-choice {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.45rem 0.65rem;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-weight: 700;
+  font-weight: 800;
 }
 .export-preset-option input { width: auto; }
+.export-preset-description {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
 .hero-card {
   display: flex;
   align-items: center;
@@ -257,6 +308,8 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .wizard-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 18rem;
   padding: 1.25rem;
   background: var(--surface);
@@ -264,6 +317,12 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   border-radius: 22px;
   box-shadow: var(--shadow-soft);
 }
+.wizard-card-action {
+  margin-top: auto;
+  margin-bottom: 0;
+  padding-top: 1rem;
+}
+.wizard-card-action .btn { text-align: center; }
 .wizard-card::before {
   content: "";
   position: absolute;
@@ -1256,6 +1315,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   .welcome-next { align-items: flex-start; flex-direction: column; }
   .three-buttons,
   .archive-grid,
+  .export-preset-options,
   .library-health-summary,
   .wizard-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1266,6 +1326,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   .library-search-form button,
   .library-search-form .btn { width: 100%; text-align: center; }
   .library-search-box { align-items: flex-start; }
+  .export-preset-options,
   .library-health-summary,
   .wizard-steps { grid-template-columns: 1fr; }
   .backup-restore-actions { grid-template-columns: 1fr; }
