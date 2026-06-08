@@ -1883,6 +1883,18 @@ def test_setup_post_shows_masked_attempted(output_dir: Path, monkeypatch):
         f"Expected masked cookie {expected_mask!r} in response body; got: {resp.text[:500]!r}"
 
 
+def test_setup_form_does_not_submit_masked_saved_cookie(output_dir: Path):
+    cfg = Config(output_dir=output_dir, cookie="AbCdEfGh12345678")
+    app = build_app(cfg)
+    client = TestClient(app)
+
+    resp = client.get("/setup")
+
+    assert resp.status_code == 200
+    assert "AbCd…5678" in resp.text
+    assert 'name="cookie" value=""' in resp.text
+
+
 def test_setup_remove_cookie_enables_offline_mode(output_dir: Path):
     cfg = Config(output_dir=output_dir, cookie="old-cookie-value")
     output_dir.mkdir(parents=True, exist_ok=True)

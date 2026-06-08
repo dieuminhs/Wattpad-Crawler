@@ -38,7 +38,10 @@
   <form method="post" action="/setup">
     <p>
       <label for="cookie"><strong>Wattpad <code>token</code> cookie:</strong></label><br>
-      <input type="password" id="cookie" name="cookie" value="{{ attempted_cookie_masked or current_cookie_masked }}" required>
+      {% if current_cookie_masked %}
+        <span class="muted">Saved token: <code>{{ current_cookie_masked }}</code></span><br>
+      {% endif %}
+      <input type="password" id="cookie" name="cookie" value="" autocomplete="off" required>
     </p>
     <p>
       <button type="submit">Save</button>

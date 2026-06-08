@@ -55,14 +55,19 @@ def test_validate_cookie_raises_on_login_redirect(tmp_path):
 
 
 def test_validate_cookie_passes_on_200(tmp_path):
-    transport = httpx.MockTransport(
-        lambda req: httpx.Response(200, json={"stories": []})
-    )
+    seen = {}
+
+    def handler(req):
+        seen["url"] = str(req.url)
+        return httpx.Response(200, json={"username": "alice"})
+
+    transport = httpx.MockTransport(handler)
     rlc = make_client(tmp_path, transport)
     try:
         # Returns None on success (does not raise).
         result = validate_cookie(rlc)
         assert result is None
+        assert seen["url"] == "https://www.wattpad.com/api/v3/users/me"
     finally:
         rlc.close()
 
@@ -107,8 +112,7 @@ def test_validate_cookie_raises_on_400_permission_denied(tmp_path):
     """Wattpad's actual unauth response — HTTP 400 + error_type:'PermissionDenied'.
 
     Verified manually 2026-05-03 against live Wattpad API: both no-cookie and
-    bogus-cookie requests to users/wattpad/library?limit=1 return this shape,
-    NOT 401/403/redirect. See 02-01-PLAN.md Task 1 resolution.
+    bogus-cookie requests return this shape, NOT 401/403/redirect.
     """
     transport = httpx.MockTransport(
         lambda req: httpx.Response(

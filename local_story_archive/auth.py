@@ -1,8 +1,7 @@
 """Cookie validation and auth-failure exception types.
 
-Probes a Wattpad endpoint to verify the configured session cookie is accepted.
-See .planning/phases/02-auth-hardening/02-RESEARCH.md §"Probe Endpoint Decision"
-for the rationale behind _PROBE_URL.
+Probes Wattpad's current-user endpoint to verify the configured session cookie
+is accepted.
 """
 import logging
 from typing import TYPE_CHECKING
@@ -14,10 +13,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Probe URL — see RESEARCH §"Probe Endpoint Decision" for rationale.
-# users/wattpad/library?limit=1 is documented as auth-required; returns 401
-# or 3xx-to-/login on invalid cookie. One-line update if Wattpad changes.
-_PROBE_URL = "https://www.wattpad.com/api/v3/users/wattpad/library?limit=1"
+# Probe URL used by the web UI before saving cookies and before auth-required
+# jobs. Use the logged-in-user endpoint instead of another user's library:
+# valid tokens can be rejected by user-scoped library privacy rules even though
+# they work for the owner's own library.
+_PROBE_URL = "https://www.wattpad.com/api/v3/users/me"
 
 
 class AuthError(Exception):
