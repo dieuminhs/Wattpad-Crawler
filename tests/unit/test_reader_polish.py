@@ -45,6 +45,17 @@ def test_library_continue_still_uses_last_read_storage():
     assert "data-continue-story" in template
 
 
+
+def test_story_info_template_has_metadata_exports_and_chapter_list():
+    template = _template("reader.html")
+
+    assert 'class="story-info-hero"' in template
+    assert 'class="story-info-cover"' in template
+    assert 'class="story-info-stats"' in template
+    assert 'class="story-info-exports"' in template
+    assert '/library/output/{{ author }}/{{ dir_name }}/epub' in template
+    assert 'class="story-chapter-list"' in template
+    assert 'Back to story info' in template
 def test_reader_theme_css_classes_served(output_dir: Path):
     app = build_app(Config(output_dir=output_dir))
     client = TestClient(app)

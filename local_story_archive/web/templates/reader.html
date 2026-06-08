@@ -3,32 +3,66 @@
 {% block content %}
   <div class="reader">
     {% if not chapter %}
-      <h1>
-        {{ meta.title }}
-        {% if meta.bookmarked %}<span class="bookmark-badge" aria-label="Bookmarked" title="Bookmarked">★</span>{% endif %}
-      </h1>
-      <p class="muted">by {{ meta.author_username }}</p>
-      {% if meta.description %}<p>{{ meta.description }}</p>{% endif %}
-      {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
-      {% if first_ord %}
-        <p class="reader-nav-actions">
-          <a class="btn btn-light" href="/library">&larr; Library</a>
-          <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
-          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
-          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
-        </p>
-      {% endif %}
-      <h2>Chapters</h2>
-      <ol>
-        {% for p in meta.parts %}
-          <li>
-            <a href="/read/{{ author }}/{{ dir_name }}/{{ p.ordinal }}">{{ p.title }}</a>
-          </li>
-        {% endfor %}
-      </ol>
+      <section class="story-info-hero" aria-labelledby="story-info-title">
+        <div class="story-info-cover-wrap">
+          {% if has_cover %}
+            <img class="story-info-cover" src="/library/cover/{{ author }}/{{ dir_name }}" alt="Cover for {{ meta.title }}">
+          {% else %}
+            <div class="story-info-cover story-info-cover-placeholder" aria-hidden="true"></div>
+          {% endif %}
+        </div>
+        <div class="story-info-main">
+          <p class="story-info-eyebrow">Story information</p>
+          <h1 id="story-info-title">
+            {{ meta.title }}
+            {% if meta.bookmarked %}<span class="bookmark-badge" aria-label="Bookmarked" title="Bookmarked">&#9733;</span>{% endif %}
+          </h1>
+          <p class="story-info-author">by {{ meta.author_username }}</p>
+          {% if meta.description %}<p class="story-info-description">{{ meta.description }}</p>{% endif %}
+          {% if meta.tags %}
+            <div class="story-info-tags" aria-label="Story tags">
+              {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+            </div>
+          {% endif %}
+          <dl class="story-info-stats" aria-label="Archive details">
+            <div><dt>Story ID</dt><dd>{{ meta.story_id }}</dd></div>
+            <div><dt>Chapters</dt><dd>{{ meta.parts | length }}</dd></div>
+            <div><dt>Status</dt><dd>{% if meta.completed %}Complete{% else %}Incomplete{% endif %}</dd></div>
+          </dl>
+          <div class="reader-nav-actions story-info-actions">
+            <a class="btn btn-light" href="/library">&larr; Library</a>
+            {% if first_ord %}
+              <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
+              <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
+              <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
+            {% endif %}
+          </div>
+          {% if has_epub or has_html or has_txt %}
+            <div class="story-info-exports" aria-label="Available exports">
+              <span>Exports</span>
+              {% if has_epub %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
+              {% if has_html %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
+              {% if has_txt %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
+            </div>
+          {% endif %}
+        </div>
+      </section>
+      <section class="story-info-chapters" aria-labelledby="story-chapters-title">
+        <h2 id="story-chapters-title">Chapters</h2>
+        <ol class="story-chapter-list">
+          {% for p in meta.parts %}
+            <li>
+              <a href="/read/{{ author }}/{{ dir_name }}/{{ p.ordinal }}">
+                <span>{{ p.ordinal }}.</span>
+                <strong>{{ p.title }}</strong>
+              </a>
+            </li>
+          {% endfor %}
+        </ol>
+      </section>
     {% else %}
       <p class="reader-nav-actions">
-        <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">&larr; {{ meta.title }}</a>
+        <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">&larr; Back to story info</a>
       </p>
       <section class="reader-toolbar" aria-label="Reader settings">
         <div class="reader-toolbar-group">

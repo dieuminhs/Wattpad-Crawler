@@ -163,7 +163,7 @@ def test_reader_chapter_back_to_story_uses_button_style(output_dir: Path):
     ).read_text(encoding="utf-8")
 
     assert '<a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}">' in template
-    assert "&larr; {{ meta.title }}" in template
+    assert "&larr; Back to story info" in template
     assert "`r`n" not in template
 
 def test_reader_end_comments_show_more_reveals_ten_at_a_time(output_dir: Path):

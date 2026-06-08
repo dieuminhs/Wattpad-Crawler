@@ -1156,6 +1156,7 @@ def reader_toc(request: Request, author: str, dir_name: str) -> HTMLResponse:
             "has_epub": any(out.glob("*.epub")) if out.exists() else False,
             "has_html": any(out.glob("*.html")) if out.exists() else False,
             "has_txt": any(out.glob("*.txt")) if out.exists() else False,
+            "has_cover": (sd / "cover.jpg").exists(),
             "first_ord": min(ords) if ords else None,
             "last_ord": max(ords) if ords else None,
         },
