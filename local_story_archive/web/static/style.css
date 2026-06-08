@@ -1078,6 +1078,22 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   font-size: 1.08rem;
   line-height: 1.7;
 }
+.reader .chapter-body img,
+.reader .reader-paragraph img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.25rem auto;
+  object-fit: contain;
+}
+
+.reader .chapter-body figure,
+.reader .reader-paragraph figure {
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  overflow: hidden;
+}
 .reader-action-form { margin: 0 0 1.25rem; }
 .reader .chapter-body pre { white-space: pre-wrap; font-family: inherit; margin: 1em 0; }
 .reader-floating-nav {

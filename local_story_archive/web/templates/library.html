@@ -105,7 +105,7 @@
                 <div class="library-cover-placeholder" aria-hidden="true"></div>
               {% endif %}
               {% if e.first_ordinal %}
-                <span class="library-continue-button" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</span>
+                <span class="library-continue-button" role="link" tabindex="0" data-continue-story="{{ e.story_id }}" data-default-continue="/read/{{ e.author }}/{{ e.dir_name }}/{{ e.first_ordinal }}">Continue</span>
               {% endif %}
             </div>
             {% if e.bookmarked %}<span class="bookmark-star" aria-hidden="true">★</span>{% endif %}
@@ -280,8 +280,16 @@
         try { lastRead = JSON.parse(localStorage.getItem('lastReadByStory') || '{}'); } catch (_) { lastRead = {}; }
         document.querySelectorAll('[data-continue-story]').forEach((button) => {
           const storyId = button.dataset.continueStory;
-          const item = button.closest('.library-item');
-          if (item) item.href = lastRead[storyId] || button.dataset.defaultContinue;
+          const continueUrl = lastRead[storyId] || button.dataset.defaultContinue;
+          const openContinueUrl = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            window.location.href = continueUrl;
+          };
+          button.addEventListener('click', openContinueUrl);
+          button.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') openContinueUrl(event);
+          });
         });
       })();
     </script>
