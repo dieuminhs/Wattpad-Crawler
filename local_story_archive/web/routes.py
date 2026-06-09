@@ -151,6 +151,20 @@ def _setup_auth_redirect(exc: HTTPException) -> RedirectResponse:
 def _toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
+def _normalize_cookie_input(value: str) -> str:
+    """Extract the Wattpad token value from common browser/curl paste shapes."""
+    text = value.strip().strip("'\"")
+    if not text:
+        return ""
+    if text.lower().startswith("cookie:"):
+        text = text.split(":", 1)[1].strip()
+    if "token=" in text:
+        for part in text.split(";"):
+            name, sep, raw_value = part.strip().partition("=")
+            if sep and name == "token":
+                return raw_value.strip().strip("'\"")
+    return text
+
 
 def _save_cookie(output_dir: Path, cookie: str) -> None:
     """Write/update the cookie line in _config.toml atomically.
@@ -163,7 +177,7 @@ def _save_cookie(output_dir: Path, cookie: str) -> None:
     neither corrupts the target).
     """
     config_path = output_dir / "_config.toml"
-    cookie = cookie.strip()
+    cookie = _normalize_cookie_input(cookie)
     encrypted_cookie = encrypt_cookie(cookie)
     if config_path.exists():
         text = config_path.read_text(encoding="utf-8")
@@ -293,7 +307,7 @@ def setup_post(
 ) -> RedirectResponse | HTMLResponse:
     cfg = request.app.state.cfg
     templates = request.app.state.templates
-    submitted = cookie.strip()
+    submitted = _normalize_cookie_input(cookie)
 
     # D-12: validate BEFORE saving. Build a transient Config + client around
     # the submitted cookie; do not mutate request.app.state.cfg yet.

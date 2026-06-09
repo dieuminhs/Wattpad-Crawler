@@ -15,6 +15,9 @@ def test_client_sets_user_agent(tmp_path: Path):
     client = build_client(cfg)
     try:
         assert client.headers["User-Agent"] == "ua/1"
+        assert client.headers["Accept"] == "application/json, text/plain, */*"
+        assert client.headers["Accept-Language"] == "en-US,en;q=0.9"
+        assert client.headers["Referer"] == "https://www.wattpad.com/"
     finally:
         client.close()
 

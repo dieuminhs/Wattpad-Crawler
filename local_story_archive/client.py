@@ -14,7 +14,12 @@ def build_client(cfg: Config) -> httpx.Client:
     if cfg.cookie:
         jar.set("token", cfg.cookie, domain="wattpad.com")
     return httpx.Client(
-        headers={"User-Agent": cfg.user_agent},
+        headers={
+            "User-Agent": cfg.user_agent,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.wattpad.com/",
+        },
         cookies=jar,
         timeout=httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=30.0),
         follow_redirects=True,

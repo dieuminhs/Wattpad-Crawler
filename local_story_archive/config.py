@@ -21,7 +21,10 @@ class Config:
     compact_after_archive: bool = True
     archive_comments: bool = False
     export_preset: str = "classic"
-    user_agent: str = "local-story-archive/0.1 (+local archive tool)"
+    user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) "
+        "Gecko/20100101 Firefox/151.0"
+    )
 
 
 _DEFAULT_TOML = (

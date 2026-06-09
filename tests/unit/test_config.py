@@ -108,3 +108,8 @@ def test_config_is_frozen():
     cfg = Config(output_dir=_P("/tmp"))
     with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.cookie = "mutated"
+def test_default_user_agent_is_browser_shaped():
+    cfg = Config(output_dir=Path("/tmp"))
+
+    assert cfg.user_agent.startswith("Mozilla/5.0")
+    assert "local-story-archive" not in cfg.user_agent

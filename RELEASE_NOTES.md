@@ -7,6 +7,8 @@ This patch release collects the UI and reliability fixes made after 0.2.1, with 
 ### Highlights
 
 - Fixed Wattpad cookie validation so setup can detect rejected cookies more reliably before archive work starts.
+- Accepted common Wattpad cookie paste shapes in Setup, including raw token values, `token=...`, and full `Cookie:` headers.
+- Changed Wattpad HTTP requests to use browser-shaped headers so working browser cookies are less likely to be rejected by API probes.
 - Improved settings/setup polish around saved cookies, offline mode, and cookie removal feedback.
 - Fixed Library story-card navigation so clicking a story opens story information first, while the cover Continue pill remains the chapter shortcut.
 - Added a richer story information view with cover/placeholder, story metadata, description, tags, export links, and a clearer chapter list.

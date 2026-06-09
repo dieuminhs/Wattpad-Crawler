@@ -16,7 +16,7 @@ from local_story_archive.models import Part, Story
 from local_story_archive.scrape.chapter_html import ChapterContent
 from local_story_archive.web import runner
 from local_story_archive.web.app import build_app
-from local_story_archive.web.routes import _save_cookie
+from local_story_archive.web.routes import _normalize_cookie_input, _save_cookie
 
 
 @pytest.fixture(autouse=True)
@@ -318,6 +318,33 @@ def test_setup_post_strips_whitespace(output_dir: Path, monkeypatch):
     assert "tok-abc-123" not in text
     assert load_config(output_dir).cookie == "tok-abc-123"
 
+
+def test_setup_post_extracts_token_from_cookie_header(output_dir: Path, monkeypatch):
+    cfg = Config(output_dir=output_dir)
+    app = build_app(cfg)
+    client = TestClient(app)
+    monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda c: None)
+    encoded_token = "288057395%3A2%3A1779766705%3Afake-session-value"
+
+    response = client.post(
+        "/setup",
+        data={"cookie": f"locale=en_US; token={encoded_token}; remix="},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert load_config(output_dir).cookie == encoded_token
+
+def test_normalize_cookie_input_accepts_common_paste_shapes():
+    encoded_token = "288057395%3A2%3A1779766705%3Afake-session-value"
+
+    assert _normalize_cookie_input(encoded_token) == encoded_token
+    assert _normalize_cookie_input(f'"{encoded_token}"') == encoded_token
+    assert _normalize_cookie_input(f"token={encoded_token}") == encoded_token
+    assert (
+        _normalize_cookie_input(f"Cookie: locale=en_US; token={encoded_token}; remix=")
+        == encoded_token
+    )
 
 def test_save_cookie_escapes_toml_sensitive_characters(output_dir: Path):
     cookie = 'token-prefix"quoted\\tail'
