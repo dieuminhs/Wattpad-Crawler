@@ -12,12 +12,17 @@ This patch release collects the UI and reliability fixes made after 0.2.1, with 
 - Added a richer story information view with cover/placeholder, story metadata, description, tags, export links, and a clearer chapter list.
 - Added a clearer chapter-page `Back to story info` navigation button.
 - Constrained reader images and figures to the reader width so large chapter images no longer overflow on macOS.
+- Tightened the backup/restore controls so the actions, ZIP badge, and file picker read cleanly in the Config page.
+- Restyled Job History into a contained table with readable timestamps, status badges, and a proper empty state.
+- Fixed the Setup cookie label so the `token` word no longer renders smaller than the surrounding label text.
 - Kept the release discussion notes for future web enhancement groups while excluding a separate primary Continue button and reader image display modes.
 
 ### Validation
 
 - Focused web route suite passed: `94 passed`.
 - Focused reader polish and web route suites passed: `99 passed`.
+- Focused backup and web route suites passed: `98 passed`.
+
 ## 0.2.1 - Speed, Storage, And Desktop Release Fixes
 
 This patch release improves long-story archive performance, reduces local SQLite storage growth, improves desktop distribution readiness, and polishes library/remove flows.

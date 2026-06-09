@@ -37,7 +37,7 @@
 
   <form method="post" action="/setup">
     <p>
-      <label for="cookie"><strong>Wattpad <code>token</code> cookie:</strong></label><br>
+      <label for="cookie"><strong>Wattpad <span class="cookie-name">token</span> cookie:</strong></label><br>
       {% if current_cookie_masked %}
         <span class="muted">Saved token: <code>{{ current_cookie_masked }}</code></span><br>
       {% endif %}

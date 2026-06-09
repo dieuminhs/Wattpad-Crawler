@@ -95,12 +95,16 @@
     {% endif %}
     <div class="backup-restore-actions">
       <form method="post" action="/config/backup">
-        <button type="submit" class="backup-action-button"><span aria-hidden="true">ZIP</span><span>Download backup zip</span></button>
+        <div class="backup-action-copy">
+          <strong>Download backup</strong>
+          <span class="muted">Save a portable archive zip.</span>
+        </div>
+        <button type="submit" class="backup-action-button"><span class="backup-action-icon" aria-hidden="true">ZIP</span><span>Download zip</span></button>
       </form>
       <form method="post" action="/config/restore" enctype="multipart/form-data">
-        <label for="backup_file"><strong>Restore from backup</strong><span class="muted">Choose a backup zip from this app.</span></label>
+        <label for="backup_file" class="backup-action-copy"><strong>Restore from backup</strong><span class="muted">Choose a backup zip from this app.</span></label>
         <input type="file" id="backup_file" name="backup_file" accept=".zip,application/zip" required>
-        <button type="submit" class="backup-action-button"><span aria-hidden="true">ZIP</span><span>Restore backup</span></button>
+        <button type="submit" class="backup-action-button"><span class="backup-action-icon" aria-hidden="true">ZIP</span><span>Restore backup</span></button>
       </form>
     </div>
   </section>
