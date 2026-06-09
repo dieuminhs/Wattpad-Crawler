@@ -1071,24 +1071,20 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 .library-read-actions,
 .story-info-hero {
   display: grid;
-  grid-template-columns: minmax(9rem, 15rem) minmax(0, 1fr);
-  gap: clamp(1.25rem, 3vw, 2rem);
+  grid-template-columns: minmax(11rem, 16rem) minmax(0, 1fr);
+  gap: clamp(1.75rem, 4vw, 2.6rem);
   align-items: start;
-  margin-bottom: 2rem;
-}
-.story-info-cover-wrap {
-  position: sticky;
-  top: calc(var(--topbar-offset) + 1rem);
+  margin-bottom: 1.35rem;
 }
 .story-info-cover {
   display: block;
   width: 100%;
   aspect-ratio: 2 / 3;
   object-fit: cover;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid var(--border);
   background: linear-gradient(135deg, var(--accent-soft), #fff);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 16px 35px rgb(89 45 21 / 12%);
 }
 .story-info-cover-placeholder::before {
   display: grid;
@@ -1099,62 +1095,34 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   font-weight: 800;
 }
 .story-info-eyebrow {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.65rem;
   color: var(--accent-dark);
   font-size: 0.78rem;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .story-info-author {
-  margin: -0.25rem 0 1rem;
+  margin: 0 0 1.25rem;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 800;
 }
 .story-info-description {
-  max-width: 65ch;
-  margin: 0 0 1rem;
+  max-width: 42rem;
+  margin: 0 0 1.2rem;
+  color: #151515;
+  font-size: 1.05rem;
+  line-height: 1.65;
   white-space: pre-wrap;
 }
 .story-info-tags,
-.story-info-actions,
-.story-info-exports {
+.story-info-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
   align-items: center;
 }
-.story-info-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 1.25rem 0;
-}
-.story-info-stats div {
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 72%);
-}
-.story-info-stats dt {
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-.story-info-stats dd {
-  margin: 0.15rem 0 0;
-  font-weight: 900;
-}
-.story-info-exports {
-  margin-top: 0.85rem;
-}
-.story-info-exports > span {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
+.story-info-actions { margin: 0 0 1.75rem; }
 .story-info-chapters {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;

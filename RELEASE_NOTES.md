@@ -12,6 +12,7 @@ This patch release collects the UI and reliability fixes made after 0.2.1, with 
 - Improved settings/setup polish around saved cookies, offline mode, and cookie removal feedback.
 - Fixed Library story-card navigation so clicking a story opens story information first, while the cover Continue pill remains the chapter shortcut.
 - Added a richer story information view with cover/placeholder, story metadata, description, tags, export links, and a clearer chapter list.
+- Simplified the story information view into a Wattpad-like cover-first intro layout before actions and chapters.
 - Added a clearer chapter-page `Back to story info` navigation button.
 - Constrained reader images and figures to the reader width so large chapter images no longer overflow on macOS.
 - Tightened the backup/restore controls so the actions, ZIP badge, and file picker read cleanly in the Config page.

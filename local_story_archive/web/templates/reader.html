@@ -24,29 +24,19 @@
               {% for tag in meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
             </div>
           {% endif %}
-          <dl class="story-info-stats" aria-label="Archive details">
-            <div><dt>Story ID</dt><dd>{{ meta.story_id }}</dd></div>
-            <div><dt>Chapters</dt><dd>{{ meta.parts | length }}</dd></div>
-            <div><dt>Status</dt><dd>{% if meta.completed %}Complete{% else %}Incomplete{% endif %}</dd></div>
-          </dl>
-          <div class="reader-nav-actions story-info-actions">
-            <a class="btn btn-light" href="/library">&larr; Library</a>
-            {% if first_ord %}
-              <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
-              <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
-              <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
-            {% endif %}
-          </div>
-          {% if has_epub or has_html or has_txt %}
-            <div class="story-info-exports" aria-label="Available exports">
-              <span>Exports</span>
-              {% if has_epub %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
-              {% if has_html %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
-              {% if has_txt %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
-            </div>
-          {% endif %}
         </div>
       </section>
+      <div class="reader-nav-actions story-info-actions">
+        <a class="btn btn-light" href="/library">&larr; Library</a>
+        {% if first_ord %}
+          <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
+          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
+          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
+        {% endif %}
+        {% if has_epub %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
+        {% if has_html %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
+        {% if has_txt %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
+      </div>
       <section class="story-info-chapters" aria-labelledby="story-chapters-title">
         <h2 id="story-chapters-title">Chapters</h2>
         <ol class="story-chapter-list">
