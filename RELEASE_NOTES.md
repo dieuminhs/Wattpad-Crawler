@@ -1,5 +1,23 @@
 # Release Notes
 
+## 0.2.2 - Reader, Library, And Cookie Polish
+
+This patch release collects the UI and reliability fixes made after 0.2.1, with a focus on safer cookie handling, clearer library navigation, and a more useful story information page.
+
+### Highlights
+
+- Fixed Wattpad cookie validation so setup can detect rejected cookies more reliably before archive work starts.
+- Improved settings/setup polish around saved cookies, offline mode, and cookie removal feedback.
+- Fixed Library story-card navigation so clicking a story opens story information first, while the cover Continue pill remains the chapter shortcut.
+- Added a richer story information view with cover/placeholder, story metadata, description, tags, export links, and a clearer chapter list.
+- Added a clearer chapter-page `Back to story info` navigation button.
+- Constrained reader images and figures to the reader width so large chapter images no longer overflow on macOS.
+- Kept the release discussion notes for future web enhancement groups while excluding a separate primary Continue button and reader image display modes.
+
+### Validation
+
+- Focused web route suite passed: `94 passed`.
+- Focused reader polish and web route suites passed: `99 passed`.
 ## 0.2.1 - Speed, Storage, And Desktop Release Fixes
 
 This patch release improves long-story archive performance, reduces local SQLite storage growth, improves desktop distribution readiness, and polishes library/remove flows.
