@@ -29,7 +29,7 @@
       <div class="reader-nav-actions story-info-actions">
         <a class="btn btn-light" href="/library">&larr; Library</a>
         {% if first_ord %}
-          <a class="btn" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
+          <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Read first</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
         {% endif %}

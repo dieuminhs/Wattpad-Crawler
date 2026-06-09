@@ -1122,6 +1122,10 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   gap: 0.55rem;
   align-items: center;
 }
+.story-info-actions .btn {
+  overflow-wrap: anywhere;
+  text-align: center;
+}
 .story-info-actions { margin: 0 0 1.75rem; }
 .story-info-chapters {
   border-top: 1px solid var(--border);
@@ -1560,7 +1564,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   .search-icon { width: 2.1rem; height: 2.1rem; border-radius: 14px; }
   .story-info-hero { grid-template-columns: 1fr; }
   .story-info-cover-wrap { position: static; max-width: 13rem; }
-  .story-info-stats { grid-template-columns: 1fr; }
+  .story-info-actions .btn { flex: 1 1 9rem; }
   .reader { padding-right: 2.5rem; }
   .comment-count-button { right: -2.35rem; }
 }
