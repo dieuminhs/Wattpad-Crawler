@@ -2,6 +2,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+
+def has_cover_file(story_dir: Path) -> bool:
+    """Return True when a story has a usable local cover image."""
+    cover_path = story_dir / "cover.jpg"
+    try:
+        return cover_path.is_file() and cover_path.stat().st_size > 0
+    except OSError:
+        return False
+
 @dataclass
 class LibraryEntry:
     story_id: str

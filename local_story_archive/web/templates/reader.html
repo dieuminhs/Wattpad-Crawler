@@ -33,9 +33,6 @@
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ last_ord }}">Read last</a>
           <a class="btn btn-light" href="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}" data-continue-story="{{ meta.story_id }}" data-default-continue="/read/{{ author }}/{{ dir_name }}/{{ first_ord }}">Continue</a>
         {% endif %}
-        {% if has_epub %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/epub">EPUB</a>{% endif %}
-        {% if has_html %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/html">HTML</a>{% endif %}
-        {% if has_txt %}<a class="btn btn-light" href="/library/output/{{ author }}/{{ dir_name }}/txt">TXT</a>{% endif %}
       </div>
       <section class="story-info-chapters" aria-labelledby="story-chapters-title">
         <h2 id="story-chapters-title">Chapters</h2>

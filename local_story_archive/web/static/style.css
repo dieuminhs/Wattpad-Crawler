@@ -236,6 +236,11 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   font: inherit;
   letter-spacing: 0;
 }
+.setup-page code {
+  font-family: inherit;
+  font-size: 0.95em;
+  font-weight: 750;
+}
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -252,36 +257,31 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .acceptable-use-card h2 { margin-bottom: 0.5rem; }
 .backup-restore-card {
-  border-color: rgb(255 97 34 / 18%);
-  background:
-    radial-gradient(circle at top right, rgb(255 97 34 / 8%), transparent 20rem),
-    var(--surface);
+  border-color: var(--border);
+  background: var(--surface);
 }
 .backup-restore-card > .muted { max-width: 66rem; }
 .backup-restore-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.85rem;
+  gap: 1rem;
   align-items: start;
   margin-top: 1.25rem;
 }
 .backup-restore-actions form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.85rem;
   margin: 0;
-  padding: 1rem;
-  background: rgb(255 250 246 / 72%);
+  padding: 1rem 1.1rem;
+  background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 78%);
+  box-shadow: none;
 }
 .backup-restore-actions form:nth-child(2) {
   grid-template-columns: 1fr;
-}
-.backup-restore-actions form:first-child {
-  align-items: center;
 }
 .backup-action-copy {
   display: flex;
@@ -292,8 +292,8 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 .backup-restore-actions input[type=file] {
   grid-column: 1 / -1;
   width: 100%;
-  padding: 0.65rem;
-  border: 1px dashed rgb(255 97 34 / 36%);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
   color: var(--muted);
@@ -303,7 +303,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   margin-right: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface-soft);
+  background: #fff;
   color: var(--accent-dark);
   padding: 0.45rem 0.75rem;
   font: inherit;
@@ -318,19 +318,30 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   align-items: center;
   justify-content: center;
   justify-self: start;
-  gap: 0.5rem;
-  min-height: 2.75rem;
+  gap: 0.45rem;
+  min-height: 2.45rem;
+  border: 1px solid rgb(255 97 34 / 24%);
+  background: #fff;
+  color: var(--accent-dark);
+  padding: 0.58rem 0.85rem;
   white-space: nowrap;
-  box-shadow: 0 8px 16px rgb(255 97 34 / 16%);
+  box-shadow: none;
+}
+.backup-action-button:hover {
+  background: var(--accent-soft);
+  box-shadow: none;
+  transform: none;
 }
 .backup-action-icon {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  min-height: 1.35rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 22%);
-  font-size: 0.78rem;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.68rem;
   font-weight: 900;
   line-height: 1;
 }
@@ -543,6 +554,27 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 .status-running { color: #2563eb; }
 .status-done { color: #15803d; }
 .status-failed { color: var(--accent); }
+.mode-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0 1.1rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 800;
+  box-shadow: var(--shadow-soft);
+}
+.mode-status::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+.mode-status--online { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+.mode-status--offline { color: #92400e; background: #fffbeb; border-color: #fde68a; }
 .event-log {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1464,16 +1496,33 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .comment-replies-toggle {
   appearance: none;
-  border: 0;
-  background: transparent;
-  color: #3b1497;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  border: 1px solid rgb(255 97 34 / 22%);
+  border-radius: 999px;
+  background: rgb(255 97 34 / 8%);
+  color: var(--accent-dark);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
-  margin: 0.35rem 0 0.2rem;
-  padding: 0;
+  margin: 0.55rem 0 0.3rem;
+  padding: 0.35rem 0.7rem;
+  box-shadow: none;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
-.comment-replies-toggle:hover { text-decoration: underline; }
+.comment-replies-toggle:hover,
+.comment-replies-toggle:focus-visible {
+  background: var(--accent-soft);
+  border-color: rgb(255 97 34 / 38%);
+  color: var(--accent-dark);
+  text-decoration: none;
+  transform: none;
+}
+.comment-replies-toggle:focus-visible {
+  outline: 3px solid rgb(255 97 34 / 22%);
+  outline-offset: 2px;
+}
 .comment-replies { margin-left: 1em; }
 .job-panel,
 .job-panel-bubble {

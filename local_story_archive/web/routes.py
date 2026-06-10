@@ -1,4 +1,3 @@
-import dataclasses
 import json
 import os
 import shutil
@@ -310,50 +309,16 @@ def setup_post(
     cookie: str = Form(...),
 ) -> RedirectResponse | HTMLResponse:
     cfg = request.app.state.cfg
-    templates = request.app.state.templates
     submitted = _normalize_cookie_input(cookie)
 
-    # D-12: validate BEFORE saving. Build a transient Config + client around
-    # the submitted cookie; do not mutate request.app.state.cfg yet.
-    transient_cfg = dataclasses.replace(cfg, cookie=submitted)
-    error_kind: str | None = None
-    error_message: str = ""
-    try:
-        with RateLimitedClient(transient_cfg) as transient_client:
-            validate_cookie(transient_client)
-    except AuthError as e:
-        error_kind = "auth"
-        error_message = str(e)
-    except httpx.RequestError as e:
-        error_kind = "network"
-        error_message = f"Could not reach Wattpad: {e}"
-    except Exception as e:
-        error_kind = "unexpected"
-        error_message = f"Validation failed: {e!r}"
-
-    if error_kind is not None:
-        # D-09: re-render the form with status 400; D-11: show masked attempted
-        return templates.TemplateResponse(
-            request=request,
-            name="setup.html",
-            context={
-                "current_cookie_masked": _mask(cfg.cookie),
-                "attempted_cookie_masked": _mask(submitted),
-                "error_kind": error_kind,
-                "error_message": error_message,
-                "output_dir": str(cfg.output_dir),
-                "saved": False,
-            },
-            status_code=400,
-        )
-
-    # Validation succeeded Ã¢â‚¬â€ persist atomically (D-19) and reload config.
+    # Save the cookie exactly as pasted. Wattpad endpoints do not all agree on
+    # what constitutes a valid browser session, so Setup must not block on one
+    # brittle probe endpoint. Auth-required jobs still validate before running.
     _save_cookie(cfg.output_dir, submitted)
     from local_story_archive.config import load_config
 
     request.app.state.cfg = load_config(cfg.output_dir)
     return RedirectResponse(url="/setup?saved=1", status_code=303)
-
 
 @router.post("/setup/remove-cookie")
 def setup_remove_cookie(request: Request) -> RedirectResponse:

@@ -1,9 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Setup — Local Story Archive{% endblock %}
 {% block content %}
+<section class="setup-page">
   <h1>Setup</h1>
   <p>Paste your Wattpad session cookie here. The tool uses it to access your library and any login-required stories.</p>
   <p class="muted">Offline/public mode works without a cookie. Remove the cookie if it expires or blocks public-story archiving.</p>
+
+  {% if current_cookie_masked %}
+    <p class="mode-status mode-status--online" role="status">
+      Online/auth mode is active. Saved Wattpad cookie: <code>{{ current_cookie_masked }}</code>
+    </p>
+  {% else %}
+    <p class="mode-status mode-status--offline" role="status">
+      Offline/public mode is active. No Wattpad cookie is saved.
+    </p>
+  {% endif %}
 
   <section class="card acceptable-use-card" aria-label="Acceptable use">
     <p class="eyebrow">Local personal archive</p>
@@ -38,10 +49,15 @@
   <form method="post" action="/setup">
     <p>
       <label for="cookie"><strong>Wattpad <span class="cookie-name">token</span> cookie:</strong></label><br>
-      {% if current_cookie_masked %}
-        <span class="muted">Saved token: <code>{{ current_cookie_masked }}</code></span><br>
-      {% endif %}
-      <input type="password" id="cookie" name="cookie" value="" autocomplete="off" required>
+      <input
+        type="password"
+        id="cookie"
+        name="cookie"
+        value=""
+        autocomplete="off"
+        placeholder="{% if current_cookie_masked %}Saved cookie hidden — paste to replace{% else %}Paste Wattpad token or full Cookie header{% endif %}"
+        required
+      >
     </p>
     <p>
       <button type="submit">Save</button>
@@ -49,13 +65,18 @@
   </form>
 
   {% if current_cookie_masked %}
-    <form method="post" action="/setup/remove-cookie" class="card setup-offline-card">
+    <form
+      method="post"
+      action="/setup/remove-cookie"
+      class="card setup-offline-card"
+      onsubmit="return confirm('Remove the saved Wattpad cookie and switch to offline/public mode?')"
+    >
       <h2>Offline/public mode</h2>
       <p class="muted">Remove the saved Wattpad cookie. Public story URLs can still be archived, but library, reading list, private-story, comment-refresh, and repair actions will ask for a valid cookie.</p>
       <button type="submit" class="btn btn-light">Remove cookie and use offline mode</button>
     </form>
   {% else %}
-    <p class="status-done">Offline/public mode is active. No Wattpad cookie is saved.</p>
+    <p class="status-done">No cookie is saved. Public story URLs can still be archived.</p>
   {% endif %}
 
   {% if saved %}
@@ -66,4 +87,5 @@
   {% endif %}
 
   <p class="muted">Output directory: <code>{{ output_dir }}</code></p>
+</section>
 {% endblock %}

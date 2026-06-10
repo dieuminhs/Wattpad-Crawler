@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from local_story_archive.archive.health import check_story_archive
-from local_story_archive.archive.library import LibraryEntry
+from local_story_archive.archive.library import LibraryEntry, has_cover_file
 from local_story_archive.archive.store import slugify, story_dir
 from local_story_archive.models import Comment, Part, Story
 from local_story_archive.scrape.chapter_html import ChapterContent
@@ -480,7 +480,7 @@ class ArchiveRepository:
                     tags=story["tags"],
                     parts_count=row["parts_count"],
                     dir_name=f"{story['story_id']}_{slugify(story['title'])}",
-                    has_cover=(story_path / "cover.jpg").exists(),
+                    has_cover=has_cover_file(story_path),
                     storage_path=story_path,
                     bookmarked=story["bookmarked"],
                     first_ordinal=row["first_ordinal"],

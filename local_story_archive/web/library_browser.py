@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from local_story_archive.archive.health import check_story_archive
-from local_story_archive.archive.library import LibraryEntry
+from local_story_archive.archive.library import LibraryEntry, has_cover_file
 from local_story_archive.archive.repository import ArchiveRepository
 
 
@@ -61,7 +61,7 @@ def scan_library(output_dir: Path) -> list[LibraryEntry]:
                         tags=list(meta.get("tags", []) or []),
                         parts_count=len(meta.get("parts", []) or []),
                         dir_name=story_dir.name,
-                        has_cover=(story_dir / "cover.jpg").exists(),
+                        has_cover=has_cover_file(story_dir),
                         storage_path=story_dir,
                         first_ordinal=min(ordinals) if ordinals else None,
                         last_ordinal=max(ordinals) if ordinals else None,

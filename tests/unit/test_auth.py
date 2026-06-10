@@ -72,6 +72,23 @@ def test_validate_cookie_passes_on_200(tmp_path):
         rlc.close()
 
 
+def test_validate_cookie_sends_exact_encoded_token(tmp_path):
+    token = "288057395%3A2%3A1779766705%3Afake-session-value"
+    seen = {}
+
+    def handler(req):
+        seen["cookie"] = req.headers.get("Cookie")
+        return httpx.Response(200, json={"username": "alice"})
+
+    transport = httpx.MockTransport(handler)
+    rlc = make_client(tmp_path, transport, cookie=token)
+    try:
+        validate_cookie(rlc)
+        assert seen["cookie"] == f"token={token}"
+    finally:
+        rlc.close()
+
+
 def test_validate_cookie_propagates_network_error(tmp_path):
     def handler(req):
         raise httpx.ConnectError("simulated DNS failure")

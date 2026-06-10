@@ -221,11 +221,18 @@ def test_setup_page_renders(output_dir: Path):
     client = TestClient(app)
     r = client.get("/setup")
     assert r.status_code == 200
+    assert 'class="setup-page"' in r.text
     assert "cookie" in r.text.lower()
     assert "wattpad" in r.text.lower()
     assert "Local personal archive" in r.text
     assert "Use only content you own or have permission to archive" in r.text
     assert "hosted scraping service" in r.text
+    assert "Offline/public mode is active" in r.text
+    assert "No Wattpad cookie is saved" in r.text
+    assert "Paste Wattpad token or full Cookie header" in r.text
+    css = (Path(__file__).parents[2] / "local_story_archive" / "web" / "static" / "style.css").read_text(encoding="utf-8")
+    assert ".setup-page code" in css
+    assert "font-family: inherit;" in css
 
 
 def test_acceptable_use_documented_for_distribution():
@@ -1077,11 +1084,15 @@ def test_library_filters_bookmarked_and_cover_status(output_dir: Path):
     with repo.transaction():
         repo.upsert_story(Story(story_id="42", title="Saved One", author_username="alice"))
         repo.upsert_story(Story(story_id="77", title="Plain One", author_username="bob"))
+        repo.upsert_story(Story(story_id="88", title="Empty Cover", author_username="cara"))
         repo.set_bookmarked("42", True)
     repo.close()
     cover_dir = output_dir / "stories" / "alice" / "42_saved-one"
     cover_dir.mkdir(parents=True)
     (cover_dir / "cover.jpg").write_bytes(b"jpg")
+    empty_cover_dir = output_dir / "stories" / "cara" / "88_empty-cover"
+    empty_cover_dir.mkdir(parents=True)
+    (empty_cover_dir / "cover.jpg").write_bytes(b"")
 
     app = build_app(cfg)
     client = TestClient(app)
@@ -1089,17 +1100,19 @@ def test_library_filters_bookmarked_and_cover_status(output_dir: Path):
     bookmarked = client.get("/library?filter=bookmarked")
     assert "Saved One" in bookmarked.text
     assert "Plain One" not in bookmarked.text
-    assert "1 of 2 stories" in bookmarked.text
+    assert "1 of 3 stories" in bookmarked.text
     assert 'class="library-bookmark-badge"' in bookmarked.text
     assert "★ Bookmarked" in bookmarked.text
 
     has_cover = client.get("/library?filter=has_cover")
     assert "Saved One" in has_cover.text
     assert "Plain One" not in has_cover.text
+    assert "Empty Cover" not in has_cover.text
 
     no_cover = client.get("/library?filter=no_cover")
     assert "Saved One" not in no_cover.text
     assert "Plain One" in no_cover.text
+    assert "Empty Cover" in no_cover.text
 
 
 def test_library_paginates_large_result_sets(output_dir: Path):
@@ -1313,7 +1326,11 @@ def test_reader_story_toc(output_dir: Path):
     cfg = Config(output_dir=output_dir)
     sd = output_dir / "stories" / "alice" / "42_my-tale"
     (sd / "parts").mkdir(parents=True)
+    (sd / "output").mkdir()
     (sd / "parts" / "01_100_one.txt").write_text("Body of chapter one.")
+    (sd / "output" / "my-tale.epub").write_bytes(b"epub")
+    (sd / "output" / "my-tale.html").write_text("<html></html>", encoding="utf-8")
+    (sd / "output" / "my-tale.txt").write_text("text", encoding="utf-8")
     (sd / "metadata.json").write_text(json.dumps({
         "story_id": "42", "title": "My Tale", "author_username": "alice",
         "tags": [], "description": "",
@@ -1331,6 +1348,10 @@ def test_reader_story_toc(output_dir: Path):
     assert 'href="/read/alice/42_my-tale/1"' in r.text
     assert 'href="/read/alice/42_my-tale/2"' in r.text
     assert 'data-continue-story="42"' in r.text
+    assert "/library/output/alice/42_my-tale" not in r.text
+    assert ">EPUB<" not in r.text
+    assert ">HTML<" not in r.text
+    assert ">TXT<" not in r.text
 
 
 def test_reader_story_toc_marks_bookmarked_story(output_dir: Path):
@@ -1820,33 +1841,25 @@ def test_save_cookie_cleans_up_tmp_on_failure(output_dir: Path, monkeypatch):
 # ---- AUTH-03 /setup UX tests (Phase 2 / Plan 05) ----
 
 
-def test_setup_post_invalid_cookie_rerenders(output_dir: Path, monkeypatch):
-    """AUTH-03 / ROADMAP success criterion #2: invalid cookie POST re-renders 400 with
-    error banner and does NOT modify _config.toml."""
+def test_setup_post_saves_without_auth_probe(output_dir: Path, monkeypatch):
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
     client = TestClient(app)
 
-    config_path = output_dir / "_config.toml"
-    original = 'cookie = "old-cookie"\nrate_limit_per_sec = 2.0\nworkers_per_story = 3\n'
-    config_path.write_text(original, encoding="utf-8")
+    def fail_if_called(_client):
+        pytest.fail("Setup should save pasted cookies without calling Wattpad validation")
 
-    monkeypatch.setattr(
-        "local_story_archive.web.routes.validate_cookie",
-        lambda c: (_ for _ in ()).throw(AuthError("cookie rejected")),
-    )
+    monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", fail_if_called)
 
-    resp = client.post("/setup", data={"cookie": "new-bad-cookie"})
-    assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
-    body_lower = resp.text.lower()
-    assert "rejected" in body_lower, "Auth-error banner missing in response body"
-    # _config.toml MUST be unchanged.
-    assert config_path.read_text(encoding="utf-8") == original, \
-        "_config.toml was modified despite validation failure"
+    resp = client.post("/setup", data={"cookie": "new-browser-cookie"}, follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert "/setup?saved=1" in resp.headers.get("location", "")
+    assert load_config(output_dir).cookie == "new-browser-cookie"
 
 
 def test_setup_post_valid_cookie_saves(output_dir: Path, monkeypatch):
-    """AUTH-03 / D-12: valid cookie POST atomically saves and 303-redirects to /setup?saved=1."""
+    """Setup atomically saves and 303-redirects to /setup?saved=1."""
     cfg = Config(output_dir=output_dir)
     app = build_app(cfg)
     client = TestClient(app)
@@ -1859,7 +1872,7 @@ def test_setup_post_valid_cookie_saves(output_dir: Path, monkeypatch):
 
     monkeypatch.setattr(
         "local_story_archive.web.routes.validate_cookie",
-        lambda c: None,  # success
+        lambda c: pytest.fail("Setup should not call validation before saving"),
     )
 
     resp = client.post("/setup", data={"cookie": "new-good-cookie"}, follow_redirects=False)
@@ -1871,45 +1884,6 @@ def test_setup_post_valid_cookie_saves(output_dir: Path, monkeypatch):
     assert "new-good-cookie" not in after
     assert load_config(output_dir).cookie == "new-good-cookie"
 
-
-def test_setup_post_network_error(output_dir: Path, monkeypatch):
-    """AUTH-03 / D-10: network error during validation renders banner with error_kind=network."""
-    cfg = Config(output_dir=output_dir)
-    app = build_app(cfg)
-    client = TestClient(app)
-
-    monkeypatch.setattr(
-        "local_story_archive.web.routes.validate_cookie",
-        lambda c: (_ for _ in ()).throw(httpx.ConnectError("simulated DNS failure")),
-    )
-
-    resp = client.post("/setup", data={"cookie": "any-cookie"})
-    assert resp.status_code == 400
-    body = resp.text.lower()
-    assert "could not reach" in body or "network" in body or "connection" in body, \
-        "Network-error banner missing in response body"
-
-
-def test_setup_post_shows_masked_attempted(output_dir: Path, monkeypatch):
-    """AUTH-03 / D-11: on error, attempted_cookie_masked is rendered back to the user."""
-    cfg = Config(output_dir=output_dir)
-    app = build_app(cfg)
-    client = TestClient(app)
-
-    monkeypatch.setattr(
-        "local_story_archive.web.routes.validate_cookie",
-        lambda c: (_ for _ in ()).throw(AuthError("rejected")),
-    )
-
-    submitted = "AbCdEfGh12345678"  # length > 8 so _mask returns "AbCd…5678"
-    resp = client.post("/setup", data={"cookie": submitted})
-    assert resp.status_code == 400
-    # _mask("AbCdEfGh12345678") == "AbCd…5678" (4-char prefix + ellipsis + 4-char suffix).
-    expected_mask = "AbCd…5678"
-    assert expected_mask in resp.text, \
-        f"Expected masked cookie {expected_mask!r} in response body; got: {resp.text[:500]!r}"
-
-
 def test_setup_form_does_not_submit_masked_saved_cookie(output_dir: Path):
     cfg = Config(output_dir=output_dir, cookie="AbCdEfGh12345678")
     app = build_app(cfg)
@@ -1918,8 +1892,12 @@ def test_setup_form_does_not_submit_masked_saved_cookie(output_dir: Path):
     resp = client.get("/setup")
 
     assert resp.status_code == 200
-    assert "AbCd…5678" in resp.text
-    assert 'name="cookie" value=""' in resp.text
+    assert "Online/auth mode is active" in resp.text
+    assert "AbCd\u20265678" in resp.text
+    assert "Saved token:" not in resp.text
+    assert "Saved cookie hidden — paste to replace" in resp.text
+    assert "Remove the saved Wattpad cookie and switch to offline/public mode?" in resp.text
+    assert 'value=""' in resp.text
 
 
 def test_setup_remove_cookie_enables_offline_mode(output_dir: Path):

@@ -6,15 +6,19 @@ This patch release collects the UI and reliability fixes made after 0.2.1, with 
 
 ### Highlights
 
-- Fixed Wattpad cookie validation so setup can detect rejected cookies more reliably before archive work starts.
+- Changed Setup to save pasted Wattpad cookies without blocking on a brittle live probe endpoint; auth-required jobs still validate before running.
 - Accepted common Wattpad cookie paste shapes in Setup, including raw token values, `token=...`, and full `Cookie:` headers.
+- Preserved URL-encoded Wattpad token values exactly and split full browser `Cookie:` headers into real request cookies.
 - Changed Wattpad HTTP requests to use browser-shaped headers so working browser cookies are less likely to be rejected by API probes.
-- Improved settings/setup polish around saved cookies, offline mode, and cookie removal feedback.
+- Improved settings/setup polish with explicit online/offline status, clearer hidden saved-cookie placeholder text, consistent Setup typography, and confirmation before removing a saved cookie.
 - Fixed Library story-card navigation so clicking a story opens story information first, while the cover Continue pill remains the chapter shortcut.
-- Added a richer story information view with cover/placeholder, story metadata, description, tags, export links, and a clearer chapter list.
+- Added a richer story information view with cover/placeholder, story metadata, description, tags, and a clearer chapter list.
 - Simplified the story information view into a Wattpad-like cover-first intro layout before actions and chapters.
+- Removed the EPUB, HTML, and TXT artifact buttons from the story information page.
 - Added a clearer chapter-page `Back to story info` navigation button.
+- Restyled inline reply toggles into cleaner pill controls with softer hover/focus states.
 - Constrained reader images and figures to the reader width so large chapter images no longer overflow on macOS.
+- Fixed the Library `No cover` filter so empty or unusable local cover files no longer count as valid covers.
 - Tightened the backup/restore controls so the actions, ZIP badge, and file picker read cleanly in the Config page.
 - Restyled Job History into a contained table with readable timestamps, status badges, and a proper empty state.
 - Fixed the Setup cookie label so the `token` word no longer renders smaller than the surrounding label text.
