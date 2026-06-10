@@ -325,6 +325,7 @@ def test_setup_post_extracts_token_from_cookie_header(output_dir: Path, monkeypa
     client = TestClient(app)
     monkeypatch.setattr("local_story_archive.web.routes.validate_cookie", lambda c: None)
     encoded_token = "288057395%3A2%3A1779766705%3Afake-session-value"
+    decoded_token = "288057395:2:1779766705:fake-session-value"
 
     response = client.post(
         "/setup",
@@ -333,17 +334,18 @@ def test_setup_post_extracts_token_from_cookie_header(output_dir: Path, monkeypa
     )
 
     assert response.status_code == 303
-    assert load_config(output_dir).cookie == encoded_token
+    assert load_config(output_dir).cookie == decoded_token
 
 def test_normalize_cookie_input_accepts_common_paste_shapes():
     encoded_token = "288057395%3A2%3A1779766705%3Afake-session-value"
+    decoded_token = "288057395:2:1779766705:fake-session-value"
 
-    assert _normalize_cookie_input(encoded_token) == encoded_token
-    assert _normalize_cookie_input(f'"{encoded_token}"') == encoded_token
-    assert _normalize_cookie_input(f"token={encoded_token}") == encoded_token
+    assert _normalize_cookie_input(encoded_token) == decoded_token
+    assert _normalize_cookie_input(f'"{encoded_token}"') == decoded_token
+    assert _normalize_cookie_input(f"token={encoded_token}") == decoded_token
     assert (
         _normalize_cookie_input(f"Cookie: locale=en_US; token={encoded_token}; remix=")
-        == encoded_token
+        == decoded_token
     )
 
 def test_save_cookie_escapes_toml_sensitive_characters(output_dir: Path):

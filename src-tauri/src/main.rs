@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 const BACKEND_NAME: &str = "local-story-archive-desktop-backend";
 
@@ -154,6 +155,16 @@ fn wait_for_backend(url: &str, deadline: Instant) -> Result<(), String> {
     Err(format!("backend did not start listening at {url}"))
 }
 
+fn is_backend_url(url: &tauri::Url, backend_url: &tauri::Url) -> bool {
+    url.scheme() == backend_url.scheme()
+        && url.host_str() == backend_url.host_str()
+        && url.port_or_known_default() == backend_url.port_or_known_default()
+}
+
+fn is_external_web_url(url: &tauri::Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
+}
+
 fn start_backend() -> Result<(String, BackendProcess), String> {
     let startup_url_file = startup_url_file();
     let mut command = backend_command();
@@ -194,6 +205,7 @@ fn main() {
         start_backend().expect("Local Story Archive backend failed to start");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_main_window(app);
         }))
@@ -204,11 +216,24 @@ fn main() {
             }
         })
         .setup(move |app| {
+            let app_handle = app.handle().clone();
+            let parsed_backend_url: tauri::Url = backend_url.parse().expect("valid backend URL");
+            let navigation_backend_url = parsed_backend_url.clone();
             tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                tauri::WebviewUrl::External(backend_url.parse().expect("valid backend URL")),
+                tauri::WebviewUrl::External(parsed_backend_url),
             )
+            .on_navigation(move |url| {
+                if is_backend_url(url, &navigation_backend_url) {
+                    return true;
+                }
+                if is_external_web_url(url) {
+                    let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
+                    return false;
+                }
+                true
+            })
             .title("Local Story Archive")
             .inner_size(1200.0, 800.0)
             .build()?;

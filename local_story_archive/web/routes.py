@@ -7,7 +7,7 @@ import threading
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -162,8 +162,8 @@ def _normalize_cookie_input(value: str) -> str:
         for part in text.split(";"):
             name, sep, raw_value = part.strip().partition("=")
             if sep and name == "token":
-                return raw_value.strip().strip("'\"")
-    return text
+                return unquote(raw_value.strip().strip("'\""))
+    return unquote(text)
 
 
 def _save_cookie(output_dir: Path, cookie: str) -> None:

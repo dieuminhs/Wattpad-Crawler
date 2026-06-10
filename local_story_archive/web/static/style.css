@@ -11,8 +11,8 @@
   --accent-fg: #fff;
   --shadow: 0 18px 45px rgb(89 45 21 / 12%);
   --shadow-soft: 0 8px 24px rgb(89 45 21 / 10%);
-  --max-width: 72em;
-  --reading-width: 42em;
+  --max-width: 90rem;
+  --reading-width: 72rem;
   --topbar-offset: 4.4rem;
 }
 * { box-sizing: border-box; }
@@ -29,7 +29,7 @@ body {
 .container {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 2rem 1.25rem 5rem;
+  padding: clamp(1.5rem, 2.2vw, 2.5rem) clamp(1rem, 2.4vw, 2rem) 5rem;
 }
 nav.topbar {
   position: sticky;
@@ -825,7 +825,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
 }
 .library-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1.25rem;
     align-items: stretch;
   }
@@ -1112,7 +1112,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   font-weight: 800;
 }
 .story-info-description {
-  max-width: 42rem;
+  max-width: 68rem;
   margin: 0 0 1.2rem;
   color: #151515;
   font-size: 1.05rem;
@@ -1194,7 +1194,7 @@ input[type=text]:focus, input[type=password]:focus, textarea:focus {
   background: rgb(255 255 255 / 74%);
   border: 1px solid var(--border);
   border-radius: 28px;
-  padding: clamp(1rem, 3vw, 2.5rem);
+  padding: clamp(1.5rem, 3vw, 3.25rem);
   box-shadow: var(--shadow-soft);
 }
 .reader h1 {
