@@ -53,7 +53,9 @@ def test_story_info_template_has_intro_cover_actions_and_chapter_list():
     assert 'class="story-info-cover"' in template
     assert 'class="story-info-description"' in template
     assert 'class="reader-nav-actions story-info-actions"' in template
-    assert '/library/output/{{ author }}/{{ dir_name }}/epub' in template
+    assert '/library/output/{{ author }}/{{ dir_name }}/epub' not in template
+    assert '/library/output/{{ author }}/{{ dir_name }}/html' not in template
+    assert '/library/output/{{ author }}/{{ dir_name }}/txt' not in template
     assert 'class="story-chapter-list"' in template
     assert 'Back to story info' in template
 def test_reader_theme_css_classes_served(output_dir: Path):
