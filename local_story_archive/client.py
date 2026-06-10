@@ -8,11 +8,32 @@ from local_story_archive.config import Config
 
 logger = logging.getLogger(__name__)
 
+_COOKIE_DOMAIN = "wattpad.com"
+
+
+def _cookie_parts(raw_cookie: str) -> list[tuple[str, str]]:
+    """Parse either a token value or a browser Cookie header into cookie pairs."""
+    text = raw_cookie.strip()
+    if not text:
+        return []
+    if text.lower().startswith("cookie:"):
+        text = text.split(":", 1)[1].strip()
+    if ";" not in text and not text.startswith("token="):
+        return [("token", text)]
+
+    pairs = []
+    for part in text.split(";"):
+        name, sep, value = part.strip().partition("=")
+        if sep and name:
+            pairs.append((name, value))
+    return pairs
+
 
 def build_client(cfg: Config) -> httpx.Client:
     jar = httpx.Cookies()
     if cfg.cookie:
-        jar.set("token", cfg.cookie, domain="wattpad.com")
+        for name, value in _cookie_parts(cfg.cookie):
+            jar.set(name, value, domain=_COOKIE_DOMAIN)
     return httpx.Client(
         headers={
             "User-Agent": cfg.user_agent,
@@ -93,7 +114,7 @@ class RateLimitedClient:
                 )
                 raise AuthFailedError(
                     f"Wattpad returned HTTP {resp.status_code} for {url} — "
-                    "cookie likely expired",
+                    "cookie was rejected",
                     status_code=resp.status_code,
                     url=url,
                 )
@@ -120,7 +141,7 @@ class RateLimitedClient:
                     )
                     raise AuthFailedError(
                         f"Wattpad returned HTTP 400 PermissionDenied for "
-                        f"{url} — cookie likely expired",
+                        f"{url} — cookie was rejected",
                         status_code=400,
                         url=url,
                     )

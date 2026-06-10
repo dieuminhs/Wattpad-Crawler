@@ -78,7 +78,7 @@ def validate_cookie(client: "RateLimitedClient") -> None:
             if "/login" in location.lower():
                 raise AuthError(
                     f"Wattpad redirected probe to login (HTTP {status}, "
-                    f"Location={location!r}) — cookie likely expired"
+                    f"Location={location!r}) — cookie was rejected"
                 ) from e
             logger.warning(
                 "Probe redirected to %r (status %d) — not /login, treating as success",
@@ -101,10 +101,10 @@ def validate_cookie(client: "RateLimitedClient") -> None:
                     f"Wattpad rejected probe (HTTP 400, "
                     f"error_type={body.get('error_type')!r}, "
                     f"error_code={body.get('error_code')!r}) — "
-                    "cookie likely missing/expired"
+                    "cookie was rejected or incomplete"
                 ) from e
         raise AuthError(
-            f"Wattpad rejected probe (HTTP {status}) — cookie likely expired"
+            f"Wattpad rejected probe (HTTP {status}) — cookie was rejected"
         ) from e
 
     if 200 <= resp.status_code < 300:

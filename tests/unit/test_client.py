@@ -34,6 +34,31 @@ def test_client_attaches_cookie(tmp_path: Path):
         client.close()
 
 
+def test_client_attaches_full_cookie_header(tmp_path: Path):
+    token = "288057395%3A2%3A1779766705%3Afake-session-value"
+    cfg = Config(output_dir=tmp_path, cookie=f"locale=en_US; token={token}; remix=1")
+    client = build_client(cfg)
+    try:
+        assert client.cookies.get("locale", domain="wattpad.com") == "en_US"
+        assert client.cookies.get("token", domain="wattpad.com") == token
+        assert client.cookies.get("remix", domain="wattpad.com") == "1"
+        request = client.build_request("GET", "https://api.wattpad.com/v3/users/me")
+        assert f"token={token}" in request.headers["Cookie"]
+        assert "locale=en_US" in request.headers["Cookie"]
+    finally:
+        client.close()
+
+
+def test_client_attaches_token_pair_cookie(tmp_path: Path):
+    token = "288057395%3A2%3A1779766705%3Afake-session-value"
+    cfg = Config(output_dir=tmp_path, cookie=f"token={token}")
+    client = build_client(cfg)
+    try:
+        assert client.cookies.get("token", domain="wattpad.com") == token
+    finally:
+        client.close()
+
+
 def test_client_no_cookie_when_empty(tmp_path: Path):
     cfg = Config(output_dir=tmp_path, cookie="")
     client = build_client(cfg)

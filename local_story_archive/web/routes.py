@@ -7,7 +7,7 @@ import threading
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
-from urllib.parse import unquote, urlencode
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -152,18 +152,22 @@ def _toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 def _normalize_cookie_input(value: str) -> str:
-    """Extract the Wattpad token value from common browser/curl paste shapes."""
+    """Normalize common browser/curl cookie paste shapes without rewriting values."""
     text = value.strip().strip("'\"")
     if not text:
         return ""
     if text.lower().startswith("cookie:"):
-        text = text.split(":", 1)[1].strip()
-    if "token=" in text:
+        return text.split(":", 1)[1].strip().strip("'\"")
+    if text.startswith("-H ") and "cookie:" in text.lower():
+        return text.split(":", 1)[1].strip().strip("'\"")
+    if ";" in text:
+        return text
+    if text.startswith("token="):
         for part in text.split(";"):
             name, sep, raw_value = part.strip().partition("=")
             if sep and name == "token":
-                return unquote(raw_value.strip().strip("'\""))
-    return unquote(text)
+                return raw_value.strip().strip("'\"")
+    return text
 
 
 def _save_cookie(output_dir: Path, cookie: str) -> None:
