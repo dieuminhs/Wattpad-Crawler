@@ -3,7 +3,34 @@ from pathlib import Path
 
 import pytest
 
-from local_story_archive.api.story import parse_part_page_story_id, parse_part_story_id, parse_story
+from local_story_archive.api.story import (
+    fetch_story,
+    parse_part_page_story_id,
+    parse_part_story_id,
+    parse_story,
+)
+
+class FakeResponse:
+    def __init__(
+        self,
+        text: str,
+        *,
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
+    ):
+        self.text = text
+        self.status_code = status_code
+        self.headers = headers or {}
+
+    def json(self):
+        return json.loads(self.text)
+
+class FakeClient:
+    def __init__(self, response: FakeResponse):
+        self.response = response
+
+    def get(self, url: str):
+        return self.response
 
 
 def test_parse_story_basic(fixtures_dir: Path):
@@ -88,6 +115,12 @@ def test_parse_story_missing_optional_fields():
     assert s.reads == 0
     assert s.completed is False
     assert s.last_modified is None
+
+def test_fetch_story_raises_clear_error_on_non_json_response():
+    client = FakeClient(FakeResponse("", headers={"content-type": "text/html"}))
+
+    with pytest.raises(ValueError, match="non-JSON story response.*<empty response>"):
+        fetch_story(client, "392287247")
 
 
 def test_parse_part_story_id_prefers_group_id():

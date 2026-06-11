@@ -1,4 +1,5 @@
 import re
+from json import JSONDecodeError
 from typing import Any
 
 from local_story_archive.client import RateLimitedClient
@@ -59,7 +60,17 @@ def parse_story(raw: dict[str, Any]) -> Story:
 
 def fetch_story(client: RateLimitedClient, story_id: str) -> Story:
     resp = client.get(STORY_URL.format(story_id=story_id))
-    return parse_story(resp.json())
+    try:
+        raw = resp.json()
+    except JSONDecodeError as exc:
+        content_type = resp.headers.get("content-type", "unknown")
+        snippet = resp.text.strip().replace("\n", " ")[:200] or "<empty response>"
+        raise ValueError(
+            "Wattpad returned a non-JSON story response for "
+            f"story {story_id} (HTTP {resp.status_code}, content-type: {content_type}). "
+            f"Response starts with: {snippet}"
+        ) from exc
+    return parse_story(raw)
 
 
 def parse_part_story_id(raw: dict[str, Any]) -> str:

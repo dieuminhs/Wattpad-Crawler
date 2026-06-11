@@ -8,6 +8,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use tauri::webview::NewWindowResponse;
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 
@@ -217,6 +218,7 @@ fn main() {
         })
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            let new_window_app_handle = app.handle().clone();
             let parsed_backend_url: tauri::Url = backend_url.parse().expect("valid backend URL");
             let navigation_backend_url = parsed_backend_url.clone();
             tauri::WebviewWindowBuilder::new(
@@ -233,6 +235,14 @@ fn main() {
                     return false;
                 }
                 true
+            })
+            .on_new_window(move |url, _features| {
+                if is_external_web_url(&url) {
+                    let _ = new_window_app_handle
+                        .opener()
+                        .open_url(url.as_str(), None::<&str>);
+                }
+                NewWindowResponse::Deny
             })
             .title("Local Story Archive")
             .inner_size(1200.0, 800.0)
